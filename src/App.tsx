@@ -4,27 +4,33 @@
 import Editor from "./components/Editor.tsx";
 import "./App.css";
 import { Sidebar } from "./components/Sidebar.tsx";
-import { useState } from "react";
+import { useEffect } from "react";
+import useUiStore from "./store/UiStore.ts";
+import { CommandPalette } from "./components/CommandPalette.tsx";
 
 function App() {
-  // const [greetMsg, setGreetMsg] = useState("");
-  // const [name, setName] = useState("");
-  //
-  // async function greet() {
-  //   // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-  //   setGreetMsg(await invoke("greet", { name }));
-  // }
+  const { openCommandPalette } = useUiStore();
 
-  const [isCommandPalleteOpen, setIsCommandPalleteOpen] = useState(false);
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.altKey) && event.key === 'p') {
+        event.preventDefault();
+        openCommandPalette();
+      }
+    };
 
-  const toggleCommandPallete = () => {
-    setIsCommandPalleteOpen(!isCommandPalleteOpen);
-  };
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [openCommandPalette]);
 
   return (
     <div className="bg-zinc-950 flex h-screen overflow-hidden">
+      <CommandPalette />
       <div className="h-full flex-shrink-0">
-        <Sidebar toggleCommandPallete={toggleCommandPallete} />
+        <Sidebar />
       </div>
       <div className="flex-1 min-w-0 overflow-y-auto">
         <Editor />

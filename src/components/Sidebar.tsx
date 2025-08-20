@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { FileMinus, PencilRuler } from 'lucide-react';
 import { Resizable } from 're-resizable';
-import { Settings } from 'lucide-react';
+import { ListTodo } from 'lucide-react';
 
 import { BiEditAlt } from 'react-icons/bi';
 import { GoPersonFill } from 'react-icons/go';
@@ -14,12 +14,9 @@ import { RiDeleteBin6Line } from 'react-icons/ri';
 import { Description, Dialog, DialogPanel, DialogTitle } from '@headlessui/react';
 import { useNotesStore } from '../store/notesStore';
 import { Note } from '../types/Note';
+import useUiStore from '../store/UiStore';
 
-interface SidebarProps {
-  toggleCommandPallete: () => void;
-}
-
-export const Sidebar = ({ toggleCommandPallete }: SidebarProps) => {
+export const Sidebar = () => {
   const {
     notes,
     currentNote,
@@ -31,11 +28,14 @@ export const Sidebar = ({ toggleCommandPallete }: SidebarProps) => {
     updateNote,
   } = useNotesStore();
 
+  const { openCommandPalette } = useUiStore();
+
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [renamingNoteId, setRenamingNoteId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; note: Note } | null>(null);
-
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isSupportOpen, setIsSupportOpen] = useState(false);
 
   useEffect(() => {
     loadNotes();
@@ -98,12 +98,11 @@ export const Sidebar = ({ toggleCommandPallete }: SidebarProps) => {
         {/* Search button */}
         <div className='mb-3 px-4'>
           <button
-            onClick={toggleCommandPallete}
-            className='bg-zinc-800 rounded-lg w-full py-2 text-zinc-300 hover:text-white 
-            cursor-pointer focus:outline-none flex items-center justify-center transition-colors duration-200'
+            onClick={openCommandPalette}
+            className='w-full bg-zinc-800/50 border border-zinc-700 hover:bg-zinc-800 transition-colors text-zinc-400 text-sm flex items-center gap-2 p-2 rounded-md'
           >
-            <CiSearch size={19} className='mr-2 text-zinc-300' />
-            <span>Search (Alt + P)</span>
+            <CiSearch size={18} />
+            Search...
           </button>
         </div>
 
@@ -203,8 +202,41 @@ export const Sidebar = ({ toggleCommandPallete }: SidebarProps) => {
             </div>
           )}
         </div>
-        <div className='flex justify-around border-t border-zinc-700 text-zinc-400 py-2 mt-2 px-3'>
-          <Settings />Settings
+        {/* Settings and Support */}
+        <div className="mb-1 mt-4 border-t border-zinc-700 font-bold">
+          <div className="w-full">
+            <button
+              className={`w-full text-zinc-400 hover:text-white cursor-pointer focus:outline-none p-2
+transition-all duration-200 ${isSettingsOpen ? 'bg-zinc-800' : ''}`}
+              onClick={() => setIsSettingsOpen(true)}
+            >
+              <span className="flex items-center">
+                <ListTodo className="mr-2" /> Kanban Board
+              </span>
+            </button>
+          </div>
+          <div className="w-full">
+            <button
+              className={`w-full text-zinc-400 hover:text-white cursor-pointer focus:outline-none p-2
+transition-all duration-200 ${isSettingsOpen ? 'bg-zinc-800' : ''}`}
+              onClick={() => setIsSettingsOpen(true)}
+            >
+              <span className="flex items-center">
+                <IoSettingsOutline className="mr-2" /> Settings
+              </span>
+            </button>
+          </div>
+
+          <div className="w-full">
+            <button
+              className={`w-full text-left text-zinc-400 hover:text-white cursor-pointer focus:outline-none p-2 transition-all duration-200 ${isSupportOpen ? 'bg-zinc-800' : ''}`}
+              onClick={() => setIsSupportOpen(true)}
+            >
+              <span className="flex items-center">
+                <GoPersonFill className="mr-2" /> Support
+              </span>
+            </button>
+          </div>
         </div>
       </Resizable>
 
