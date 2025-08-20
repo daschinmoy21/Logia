@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { File } from 'lucide-react';
+import { FileMinus, PencilRuler } from 'lucide-react';
 import { Resizable } from 're-resizable';
 import { Settings } from 'lucide-react';
 
@@ -13,6 +13,7 @@ import { Bot, Plus } from 'lucide-react';
 import { RiDeleteBin6Line } from 'react-icons/ri';
 import { Description, Dialog, DialogPanel, DialogTitle } from '@headlessui/react';
 import { useNotesStore } from '../store/notesStore';
+import { Note } from '../types/Note';
 
 interface SidebarProps {
   toggleCommandPallete: () => void;
@@ -27,17 +28,28 @@ export const Sidebar = ({ toggleCommandPallete }: SidebarProps) => {
     selectNote,
     deleteNote,
     createNote,
+    updateNote,
   } = useNotesStore();
 
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [renamingNoteId, setRenamingNoteId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; note: Note } | null>(null);
+
 
   useEffect(() => {
     loadNotes();
   }, [loadNotes]);
 
-  const handleCreateNote = async () => {
+  useEffect(() => {
+    const handleClickOutside = () => setContextMenu(null);
+    window.addEventListener('click', handleClickOutside);
+    return () => window.removeEventListener('click', handleClickOutside);
+  }, []);
+
+  const handleCreateNote = async (noteType: 'text' | 'canvas' = 'text') => {
     try {
-      await createNote();
+      await createNote(noteType);
     } catch (error) {
       console.error("Error creating note", error);
     }
@@ -57,6 +69,14 @@ export const Sidebar = ({ toggleCommandPallete }: SidebarProps) => {
         console.log("Failed to delete note", error);
       }
     }
+  };
+
+  const handleRename = () => {
+    if (renamingNoteId && renameValue.trim()) {
+      updateNote(renamingNoteId, { title: renameValue.trim() });
+    }
+    setRenamingNoteId(null);
+    setRenameValue('');
   };
 
   const formatDate = (dateString: string) => {
@@ -98,6 +118,7 @@ export const Sidebar = ({ toggleCommandPallete }: SidebarProps) => {
           <button
             title="Canvas"
             className='p-2 text-zinc-400 hover:text-white cursor-pointer focus:outline-none'
+            onClick={() => handleCreateNote('canvas')}
           >
             <AiOutlineLayout size={20} />
           </button>
@@ -110,7 +131,7 @@ export const Sidebar = ({ toggleCommandPallete }: SidebarProps) => {
           <button
             title="New note"
             className='p-2 text-zinc-400 hover:text-white cursor-pointer focus:outline-none'
-            onClick={handleCreateNote}
+            onClick={() => handleCreateNote('text')}
           >
             <Plus size={20} />
           </button>
@@ -130,6 +151,10 @@ export const Sidebar = ({ toggleCommandPallete }: SidebarProps) => {
                 <div
                   key={note.id}
                   onClick={() => selectNote(note)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setContextMenu({ x: e.clientX, y: e.clientY, note });
+                  }}
                   className={`
                     group relative font-small p-1 ml-1 rounded-xs cursor-pointer transition-all duration-200
                     ${currentNote?.id === note.id
@@ -144,20 +169,24 @@ export const Sidebar = ({ toggleCommandPallete }: SidebarProps) => {
                         font-small text-sm truncate flex items-start
                         ${currentNote?.id === note.id ? 'text-white' : 'text-zinc-300'}
                       `}>
-                        <File size={15} className='mr-2' />
-                        {note.title || 'Untitled'}
+                        {note.note_type === 'canvas' ? <PencilRuler size={17} className='mr-2 flex-shrink-0' /> : <FileMinus size={15} className='mr-2 flex-shrink-0' />}
+                        {renamingNoteId === note.id ? (
+                          <input
+                            type="text"
+                            value={renameValue}
+                            onChange={(e) => setRenameValue(e.target.value)}
+                            onBlur={handleRename}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleRename();
+                              if (e.key === 'Escape') setRenamingNoteId(null);
+                            }}
+                            className="w-full bg-zinc-700 text-white text-sm p-0 border-none outline-none focus:ring-0"
+                            autoFocus
+                          />
+                        ) : (
+                          note.title || 'Untitled'
+                        )}
                       </div>
-
-                      {/* <div className='text-zinc-500 text-xs mb-2 line-clamp-2 leading-relaxed'> */}
-                      {/*   {note.content.length > 0 */}
-                      {/*     ? note.content.substring(0, 80) + (note.content.length > 80 ? '...' : '') */}
-                      {/*     : 'No content' */}
-                      {/*   } */}
-                      {/* </div> */}
-                      {/**/}
-                      {/* <div className='text-zinc-600 text-xs'> */}
-                      {/*   {formatDate(note.updated_at)} */}
-                      {/* </div> */}
                     </div>
 
                     <button
@@ -216,6 +245,24 @@ export const Sidebar = ({ toggleCommandPallete }: SidebarProps) => {
           </DialogPanel>
         </div>
       </Dialog>
+
+      {contextMenu && (
+        <div
+          style={{ top: contextMenu.y, left: contextMenu.x }}
+          className="absolute z-50 bg-zinc-800 border border-zinc-700 rounded-md shadow-lg py-1"
+        >
+          <button
+            onClick={() => {
+              setRenamingNoteId(contextMenu.note.id);
+              setRenameValue(contextMenu.note.title);
+              setContextMenu(null);
+            }}
+            className="block w-full text-left px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-700"
+          >
+            Rename
+          </button>
+        </div>
+      )}
     </>
   );
 };

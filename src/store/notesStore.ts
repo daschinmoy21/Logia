@@ -1,13 +1,6 @@
 import { create } from 'zustand';
 import { invoke } from '@tauri-apps/api/core';
-
-interface Note {
-  id: string;
-  title: string;
-  content: string;
-  created_at: string;
-  updated_at: string;
-}
+import { Note } from '../types/Note';
 
 interface NotesState {
   notes: Note[];
@@ -16,7 +9,7 @@ interface NotesState {
   saveTimeout: NodeJS.Timeout | null;
   loadNotes: () => Promise<void>;
   selectNote: (note: Note) => void;
-  createNote: () => Promise<Note>;
+  createNote: (noteType?: 'text' | 'canvas') => Promise<Note>;
   updateNote: (id: string, updates: Partial<Note>) => Promise<void>;
   deleteNote: (id: string) => Promise<void>;
   updateCurrentNoteContent: (content: string) => void;
@@ -30,7 +23,7 @@ export const useNotesStore = create<NotesState>()(
     currentNote: null,
     isLoading: false,
     saveTimeout: null,
-    
+
     loadNotes: async () => {
       set({ isLoading: true });
       try {
@@ -42,39 +35,38 @@ export const useNotesStore = create<NotesState>()(
         set({ isLoading: false });
       }
     },
-    
+
     selectNote: (note) => set({ currentNote: note }),
-    
-    createNote: async () => {
+
+    createNote: async (noteType = 'text') => {
       try {
         // Create note via Tauri backend
-        const newNote: Note = await invoke('create_note', { title: 'Untitled' });
-        
+        const newNote: Note = await invoke('create_note', { title: 'Untitled', noteType });
+
         set((state) => ({
           notes: [newNote, ...state.notes],
-          currentNote: newNote,
         }));
-        
+
         return newNote;
       } catch (error) {
         console.error('Failed to create note:', error);
         throw error;
       }
     },
-    
+
     updateNote: async (id, updates) => {
       try {
         // Find the note to update
         const state = get();
         const noteToUpdate = state.notes.find(note => note.id === id);
         if (!noteToUpdate) throw new Error('Note not found');
-        
+
         // Create updated note
         const updatedNote = { ...noteToUpdate, ...updates, updated_at: new Date().toISOString() };
-        
+
         // Save via Tauri backend
         await invoke('save_note', { note: updatedNote });
-        
+
         // Update state
         set((state) => ({
           notes: state.notes.map((note) =>
@@ -87,12 +79,12 @@ export const useNotesStore = create<NotesState>()(
         throw error;
       }
     },
-    
+
     deleteNote: async (id) => {
       try {
         // Delete via Tauri backend
         await invoke('delete_note', { noteId: id });
-        
+
         // Update state
         set((state) => ({
           notes: state.notes.filter((note) => note.id !== id),
@@ -103,7 +95,7 @@ export const useNotesStore = create<NotesState>()(
         throw error;
       }
     },
-    
+
     updateCurrentNoteContent: (content: string) => {
       const state = get();
       if (!state.currentNote) return;
@@ -126,45 +118,45 @@ export const useNotesStore = create<NotesState>()(
         saveTimeout: newTimeout,
       });
     },
-    
+
     updateCurrentNoteTitle: (title: string) => {
       const state = get();
       if (!state.currentNote) return;
-      
+
       // Update the current note title locally
       const updatedNote = { ...state.currentNote, title };
-      
+
       // Clear existing timeout
       if (state.saveTimeout) {
         clearTimeout(state.saveTimeout);
       }
-      
+
       // Schedule auto-save
       const newTimeout = setTimeout(() => {
         get().saveCurrentNote();
       }, 2000);
-      
+
       set({
         currentNote: updatedNote,
         saveTimeout: newTimeout,
       });
     },
-    
+
     saveCurrentNote: async () => {
       const state = get();
       if (!state.currentNote) return;
-      
+
       try {
         // Save via Tauri backend
         await invoke('save_note', { note: state.currentNote });
-        
+
         // Update the note in the notes list
         set((state) => ({
           notes: state.notes.map((note) =>
             note.id === state.currentNote?.id ? state.currentNote : note
           ),
         }));
-        
+
         console.log('Note saved:', state.currentNote);
       } catch (error) {
         console.error('Failed to save note:', error);

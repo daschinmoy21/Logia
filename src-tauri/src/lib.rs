@@ -20,6 +20,12 @@ pub struct Note {
     content: String,
     created_at: String,
     updated_at: String,
+    #[serde(default = "default_note_type")]
+    note_type: String,
+}
+
+fn default_note_type() -> String {
+    "text".to_string()
 }
 
 fn get_notes_directory(app_handle: &tauri::AppHandle) -> Result<PathBuf, String> {
@@ -43,7 +49,11 @@ async fn get_notes_path(app_handle: tauri::AppHandle) -> Result<String, String> 
 }
 
 #[tauri::command]
-async fn create_note(title: String, app_handle: tauri::AppHandle) -> Result<Note, String> {
+async fn create_note(
+    title: String,
+    note_type: String,
+    app_handle: tauri::AppHandle,
+) -> Result<Note, String> {
     let notes_dir = get_notes_directory(&app_handle)?;
     let note_id = Uuid::new_v4().to_string();
     let now = chrono::Utc::now().to_rfc3339();
@@ -54,6 +64,7 @@ async fn create_note(title: String, app_handle: tauri::AppHandle) -> Result<Note
         content: String::new(),
         created_at: now.clone(),
         updated_at: now,
+        note_type,
     };
 
     let file_path = notes_dir.join(format!("{}.json", note_id));
