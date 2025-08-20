@@ -1,0 +1,5 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: Inter, Avenir, Helvetica, Arial, sans-serif;
+}

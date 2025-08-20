@@ -1,0 +1,47 @@
+{
+  "name": "kortex",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@ai-sdk/google": "^2.0.6",
+    "@ai-sdk/groq": "^2.0.10",
+    "@ai-sdk/openai": "^2.0.15",
+    "@ai-sdk/react": "^2.0.15",
+    "@blocknote/code-block": "^0.35.0",
+    "@blocknote/core": "^0.35.0",
+    "@blocknote/mantine": "^0.35.0",
+    "@blocknote/react": "^0.35.0",
+    "@blocknote/xl-ai": "^0.35.0",
+    "@excalidraw/excalidraw": "^0.18.0",
+    "@headlessui/react": "^2.2.7",
+    "@tailwindcss/vite": "^4.1.12",
+    "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-fs": "~2",
+    "@tauri-apps/plugin-opener": "^2",
+    "ai": "^5.0.15",
+    "liquid-glass-react": "^1.1.1",
+    "lucide-react": "^0.539.0",
+    "re-resizable": "^6.11.2",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "tailwindcss": "^4.1.12",
+    "zod": "^4.0.17",
+    "zustand": "^5.0.7"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "@vitejs/plugin-react": "^4.6.0",
+    "babel-plugin-react-compiler": "^19.1.0-rc.2",
+    "typescript": "~5.8.3",
+    "vite": "^7.0.4"
+  }
+}
