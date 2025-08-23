@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Recording Overlay</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            -webkit-app-region: drag;
+            background: transparent;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .overlay-container {
+            position: relative;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 22px;
+            padding: 8px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 220px;
+            height: 44px;
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 0 6px rgba(0,0,0,0.03), 0 2px 6px rgba(0,0,0,0.08),
+                        inset 3px 3px 0.5px -3px rgba(0,0,0,0.9),
+                        inset -3px -3px 0.5px -3px rgba(0,0,0,0.85),
+                        inset 1px 1px 1px -0.5px rgba(0,0,0,0.6),
+                        inset -1px -1px 1px -0.5px rgba(0,0,0,0.6),
+                        inset 0 0 6px 6px rgba(0,0,0,0.12),
+                        inset 0 0 2px 2px rgba(0,0,0,0.06),
+                        0 0 12px rgba(255,255,255,0.15);
+            transition: all 0.3s;
+        }
+        .overlay-container:hover {
+            transform: scale(1.05);
+        }
+        .recording-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .recording-dot {
+            width: 8px;
+            height: 8px;
+            background: #ff3333;
+            border-radius: 50%;
+            animation: pulse 1.5s infinite;
+            z-index: 10;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .timer {
+            color: #ffffff;
+            font-size: 13px;
+            font-weight: 600;
+            font-variant-numeric: tabular-nums;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+            z-index: 10;
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', monospace;
+        }
+        .stop-btn {
+            -webkit-app-region: no-drag;
+            position: relative;
+            width: 28px;
+            height: 28px;
+            border-radius: 14px;
+            background: rgba(255, 51, 51, 0.8);
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            box-shadow: 0 0 4px rgba(0,0,0,0.03),
+                       inset 2px 2px 0.5px -2px rgba(0,0,0,0.7),
+                       inset -2px -2px 0.5px -2px rgba(0,0,0,0.7);
+        }
+        .stop-btn:hover {
+            background: rgba(255, 51, 51, 1);
+            transform: scale(1.05);
+            box-shadow: 0 0 8px rgba(255,255,255,0.15);
+        }
+        .stop-btn svg {
+            width: 12px;
+            height: 12px;
+            fill: #ffffff;
+            filter: drop-shadow(0 1px 1px rgba(0,0,0,0.5));
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+    <div class="overlay-container">
+        <!-- Left side: Recording dot and timer -->
+        <div class="recording-info">
+            <div class="recording-dot"></div>
+            <div class="timer" id="timer">00:00</div>
+        </div>
+        
+        <!-- Right side: Stop button -->
+        <button class="stop-btn" id="stopBtn">
+            <svg viewBox="0 0 16 16">
+                <rect x="4" y="4" width="8" height="8" rx="1" />
+            </svg>
+        </button>
+    </div>
+    <script src="overlay.js"></script>
+</body>
+</html>

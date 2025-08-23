@@ -24,6 +24,9 @@ export const CommandPalette = () => {
             selectNote(searchResults[selectedIndex]);
             closeCommandPalette();
           }
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          closeCommandPalette();
         }
       };
 
@@ -48,7 +51,7 @@ export const CommandPalette = () => {
         <div className="command-palette-content">
           <input
             type="text"
-            placeholder="Search notes..."
+            placeholder="Search notes (Esc to close)"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value, notes)}
             autoFocus
