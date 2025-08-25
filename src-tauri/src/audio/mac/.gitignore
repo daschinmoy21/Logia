@@ -1,0 +1,12 @@
+# macOS-specific files
+.DS_Store
+
+# Build artifacts and temporary files
+.build/
+output.pcm
+output.wav
+
+# Swift Package Manager build files
+.build/
+*.xcworkspace/
+*.xcodeproj/

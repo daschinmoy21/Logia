@@ -1,0 +1,16 @@
+# Windows-specific files
+Thumbs.db
+desktop.ini
+
+# Build artifacts and temporary files
+bin/
+obj/
+output.wav
+
+# Python virtual environment
+model/venv/
+
+# .NET build files
+*.csproj.user
+*.suo
+*.cache

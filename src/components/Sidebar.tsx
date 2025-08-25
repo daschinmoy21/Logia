@@ -1,6 +1,4 @@
 import { useState, useEffect } from 'react';
-import { CircleStop } from 'lucide-react';
-import { ShimmeringText } from './animate-ui/text/shimmering';
 import { FileMinus, PencilRuler } from 'lucide-react';
 import { Resizable } from 're-resizable';
 import { ListTodo } from 'lucide-react';
@@ -13,8 +11,9 @@ import { RiDeleteBin6Line } from 'react-icons/ri';
 import { Description, Dialog, DialogPanel, DialogTitle } from '@headlessui/react';
 import { useNotesStore } from '../store/notesStore';
 import { Note } from '../types/Note';
-import { SineWaveCanvas } from './Wave';
+import RecStatus from './RecStatus';
 import useUiStore from '../store/UiStore';
+import { formatTime } from '../lib/utils';
 
 export const Sidebar = () => {
   const {
@@ -37,19 +36,7 @@ export const Sidebar = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isSupportOpen, setIsSupportOpen] = useState(false);
   const [isRecording, setIsRecording] = useState(true);
-  const [elapsedTime, setElapsedTime] = useState(0);
 
-  useEffect(() => {
-    let timer: NodeJS.Timeout;
-    if (isRecording) {
-      timer = setInterval(() => {
-        setElapsedTime(prev => prev + 1);
-      }, 1000);
-    } else {
-      setElapsedTime(0);
-    }
-    return () => clearInterval(timer);
-  }, [isRecording]);
 
   useEffect(() => {
     loadNotes();
@@ -98,11 +85,7 @@ export const Sidebar = () => {
     return date.toLocaleDateString();
   };
 
-  const formatTime = (totalSeconds: number) => {
-    const minutes = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
-    const seconds = (totalSeconds % 60).toString().padStart(2, '0');
-    return `${minutes}:${seconds}`;
-  };
+  
 
   return (
     <>
@@ -157,23 +140,7 @@ export const Sidebar = () => {
         </div>
         {/* Recording animation div visible when capturing system audio */}
         {isRecording &&
-          <div className='flex items-center justify-between h-10 px-2 mb-2 bg-black/60 border-y border-zinc-700/50'>
-            <span className='font-mono text-sm text-zinc-100 w-16 text-center'>
-              <ShimmeringText
-                text={formatTime(elapsedTime)}
-                shimmeringColor='#ffffff'
-              />
-            </span>
-            <div className='flex-1 h-full mx-2'>
-              <SineWaveCanvas isRunning={isRecording} />
-            </div>
-            <button
-              onClick={() => setIsRecording(false)}
-              className='text-sm flex items-center gap-1.5 bg-red-600/70 text-white px-2 py-1 rounded-lg hover:bg-red-600 transition-colors'
-            >
-              <CircleStop />
-            </button>
-          </div>
+          <RecStatus isRecording={isRecording} onStop={() => setIsRecording(false)} />
         }
 
 
