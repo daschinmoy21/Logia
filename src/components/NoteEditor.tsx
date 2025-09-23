@@ -16,6 +16,13 @@ export function NoteEditor({
 }) {
   const { editor } = useEditorContext();
 
+  const handleTitleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      editor?.focus();
+    }
+  };
+
   return (
     <div className="flex flex-col w-full h-full bg-zinc-950">
       {/* Note title input */}
@@ -24,6 +31,7 @@ export function NoteEditor({
           type="text"
           value={currentNote.title}
           onChange={(e) => updateCurrentNoteTitle(e.target.value)}
+          onKeyDown={handleTitleKeyDown}
           placeholder="Untitled Note"
           className="w-full bg-transparent text-white text-6xl font-semibold 
           placeholder-zinc-500 border-none outline-none focus:ring-0"

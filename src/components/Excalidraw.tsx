@@ -61,8 +61,12 @@ function Canvas() {
         UIOptions={{
           canvasActions: {
             changeViewBackgroundColor: true,
+          },
+          tools: {
+            image: false, // Controls visibility of image tool
           }
         }}
+
       >
         <MainMenu>
           <MainMenu.DefaultItems.LoadScene />

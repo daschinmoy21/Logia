@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { FileMinus, PencilRuler } from 'lucide-react';
 import { Resizable } from 're-resizable';
 import { ListTodo } from 'lucide-react';
 import { GoPersonFill } from 'react-icons/go';
 import { IoSettingsOutline } from 'react-icons/io5';
-import { AiOutlineCheckSquare, AiOutlineLayout, AiOutlineFolderAdd } from 'react-icons/ai';
+import { AiOutlineLayout, AiOutlineFolderAdd } from 'react-icons/ai';
 import { CiSearch } from 'react-icons/ci';
 import { Bot, Plus } from 'lucide-react';
 import { RiDeleteBin6Line } from 'react-icons/ri';
@@ -13,29 +13,35 @@ import { useNotesStore } from '../store/notesStore';
 import { Note } from '../types/Note';
 import RecStatus from './RecStatus';
 import useUiStore from '../store/UiStore';
-import { formatTime } from '../lib/utils';
 
 export const Sidebar = () => {
+  // Subscribing to state changes individually
+  const notes = useNotesStore((state) => state.notes);
+  const currentNote = useNotesStore((state) => state.currentNote);
+  const isLoading = useNotesStore((state) => state.isLoading);
+
+  // Getting actions (they don't cause re-renders)
+  const { loadNotes, selectNote, deleteNote, createNote, updateNote } = useNotesStore.getState();
+
+  // Subscribing to UI state changes individually
+  const deleteConfirmId = useUiStore((state) => state.deleteConfirmId);
+  const renamingNoteId = useUiStore((state) => state.renamingNoteId);
+  const renameValue = useUiStore((state) => state.renameValue);
+  const contextMenu = useUiStore((state) => state.contextMenu);
+  const isSettingsOpen = useUiStore((state) => state.isSettingsOpen);
+  const isSupportOpen = useUiStore((state) => state.isSupportOpen);
+  const isRecording = useUiStore((state) => state.isRecording);
+
+  // Getting UI actions
   const {
-    notes,
-    currentNote,
-    isLoading,
-    loadNotes,
-    selectNote,
-    deleteNote,
-    createNote,
-    updateNote,
-  } = useNotesStore();
-
-  const { openCommandPalette } = useUiStore();
-
-  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-  const [renamingNoteId, setRenamingNoteId] = useState<string | null>(null);
-  const [renameValue, setRenameValue] = useState('');
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; note: Note } | null>(null);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isSupportOpen, setIsSupportOpen] = useState(false);
-  const [isRecording, setIsRecording] = useState(true);
+    openCommandPalette,
+    setDeleteConfirmId,
+    startRenaming,
+    finishRenaming,
+    setRenameValue,
+    setContextMenu,
+    setIsSettingsOpen, setIsSupportOpen, setIsRecording,
+  } = useUiStore.getState();
 
 
   useEffect(() => {
@@ -46,7 +52,7 @@ export const Sidebar = () => {
     const handleClickOutside = () => setContextMenu(null);
     window.addEventListener('click', handleClickOutside);
     return () => window.removeEventListener('click', handleClickOutside);
-  }, []);
+  }, [setContextMenu]);
 
   const handleCreateNote = async (noteType: 'text' | 'canvas' = 'text') => {
     try {
@@ -76,30 +82,22 @@ export const Sidebar = () => {
     if (renamingNoteId && renameValue.trim()) {
       updateNote(renamingNoteId, { title: renameValue.trim() });
     }
-    setRenamingNoteId(null);
-    setRenameValue('');
+    finishRenaming();
   };
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString();
-  };
-
-  
 
   return (
     <>
       <Resizable
         as="aside"
-        className="bg-zinc-900 py-4 border-r border-zinc-850 flex flex-col h-full"
+        className="bg-zinc-900 py-2 border-r border-zinc-850 flex flex-col h-full"
         defaultSize={{ width: 270, height: '100%' }}
-        minWidth={250}
+        minWidth={230}
         maxWidth={340}
         enable={{ right: true }}
         handleClasses={{ right: 'w-1 bg-zinc-850 hover:bg-zinc-700 transition-colors' }}
       >
         {/* Search button */}
-        <div className='mb-3 px-4'>
+        <div className='mb-2 px-2'>
           <button
             onClick={openCommandPalette}
             className='w-full bg-zinc-800/50 border border-zinc-700 hover:bg-zinc-800 transition-colors text-zinc-400 text-sm flex items-center gap-2 p-2 rounded-md'
@@ -110,7 +108,7 @@ export const Sidebar = () => {
         </div>
 
         {/* Action buttons row */}
-        <div className='bg-zinc-900 flex justify-around text-sm mb-2 pb-2 border-b border-zinc-700'>
+        <div className='bg-zinc-900 flex justify-around text-sm mb-1 pb-2 border-b border-zinc-700'>
           <button
             title="Notes Agent"
             className='p-2 text-zinc-400 hover:text-orange-600 cursor-pointer focus:outline-none'
@@ -145,7 +143,7 @@ export const Sidebar = () => {
 
 
         {/* Notes list */}
-        <div className='flex-1 overflow-y-auto px-1'>
+        <div className='flex-1 overflow-y-auto px-2'>
           {notes.length === 0 && !isLoading ? (
             <div className='text-center py-8 px-4'>
               <div className='text-zinc-500 text-sm mb-2'>No notes yet</div>
@@ -162,7 +160,7 @@ export const Sidebar = () => {
                     setContextMenu({ x: e.clientX, y: e.clientY, note });
                   }}
                   className={`
-                    group relative font-small p-1 ml-1 rounded-xs cursor-pointer transition-all duration-200
+                    group relative font-small px-2 py-1.5 rounded-lg cursor-pointer transition-all duration-200
                     ${currentNote?.id === note.id
                       ? 'bg-zinc-800 border border-zinc-700'
                       : 'hover:bg-zinc-800/50 border border-transparent'
@@ -184,7 +182,7 @@ export const Sidebar = () => {
                             onBlur={handleRename}
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') handleRename();
-                              if (e.key === 'Escape') setRenamingNoteId(null);
+                              if (e.key === 'Escape') finishRenaming();
                             }}
                             className="w-full bg-zinc-700 text-white text-sm p-0 border-none outline-none focus:ring-0"
                             autoFocus
@@ -210,10 +208,10 @@ export const Sidebar = () => {
           )}
         </div>
         {/* Settings and Support */}
-        <div className="mb-1 mt-4 border-t border-zinc-700 font-bold">
+        <div className="mt-auto border-t border-zinc-700 font-bold">
           <div className="w-full">
             <button
-              className={`w-full text-zinc-400 hover:text-white cursor-pointer focus:outline-none p-2
+              className={`w-full text-zinc-400 hover:text-white cursor-pointer focus:outline-none px-4 py-2
 transition-all duration-200 ${isSettingsOpen ? 'bg-zinc-800' : ''}`}
               onClick={() => setIsSettingsOpen(true)}
             >
@@ -224,7 +222,7 @@ transition-all duration-200 ${isSettingsOpen ? 'bg-zinc-800' : ''}`}
           </div>
           <div className="w-full">
             <button
-              className={`w-full text-zinc-400 hover:text-white cursor-pointer focus:outline-none p-2
+              className={`w-full text-zinc-400 hover:text-white cursor-pointer focus:outline-none px-4 py-2
 transition-all duration-200 ${isSettingsOpen ? 'bg-zinc-800' : ''}`}
               onClick={() => setIsSettingsOpen(true)}
             >
@@ -236,7 +234,7 @@ transition-all duration-200 ${isSettingsOpen ? 'bg-zinc-800' : ''}`}
 
           <div className="w-full">
             <button
-              className={`w-full text-left text-zinc-400 hover:text-white cursor-pointer focus:outline-none p-2 transition-all duration-200 ${isSupportOpen ? 'bg-zinc-800' : ''}`}
+              className={`w-full text-left text-zinc-400 hover:text-white cursor-pointer focus:outline-none px-4 py-2 transition-all duration-200 ${isSupportOpen ? 'bg-zinc-800' : ''}`}
               onClick={() => setIsSupportOpen(true)}
             >
               <span className="flex items-center">
@@ -292,8 +290,7 @@ transition-all duration-200 ${isSettingsOpen ? 'bg-zinc-800' : ''}`}
         >
           <button
             onClick={() => {
-              setRenamingNoteId(contextMenu.note.id);
-              setRenameValue(contextMenu.note.title);
+              startRenaming(contextMenu.note.id, contextMenu.note.title || 'Untitled');
               setContextMenu(null);
             }}
             className="block w-full text-left px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-700"
