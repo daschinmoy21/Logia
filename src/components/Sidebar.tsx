@@ -10,7 +10,6 @@ import { Bot, Plus } from 'lucide-react';
 import { RiDeleteBin6Line } from 'react-icons/ri';
 import { Description, Dialog, DialogPanel, DialogTitle } from '@headlessui/react';
 import { useNotesStore } from '../store/notesStore';
-import { Note } from '../types/Note';
 import RecStatus from './RecStatus';
 import useUiStore from '../store/UiStore';
 
@@ -29,6 +28,7 @@ export const Sidebar = () => {
   const renameValue = useUiStore((state) => state.renameValue);
   const contextMenu = useUiStore((state) => state.contextMenu);
   const isSettingsOpen = useUiStore((state) => state.isSettingsOpen);
+  const isKanbanOpen = useUiStore((state) => state.isKanbanOpen);
   const isSupportOpen = useUiStore((state) => state.isSupportOpen);
   const isRecording = useUiStore((state) => state.isRecording);
 
@@ -40,7 +40,10 @@ export const Sidebar = () => {
     finishRenaming,
     setRenameValue,
     setContextMenu,
-    setIsSettingsOpen, setIsSupportOpen, setIsRecording,
+    setIsSettingsOpen,
+    setIsKanbanOpen,
+    setIsSupportOpen,
+    setIsRecording,
   } = useUiStore.getState();
 
 
@@ -110,27 +113,29 @@ export const Sidebar = () => {
         {/* Action buttons row */}
         <div className='bg-zinc-900 flex justify-around text-sm mb-1 pb-2 border-b border-zinc-700'>
           <button
-            title="Notes Agent"
-            className='p-2 text-zinc-400 hover:text-orange-600 cursor-pointer focus:outline-none'
+            title="Notes Agent (Coming Soon)"
+            className='p-2 text-zinc-500 cursor-not-allowed focus:outline-none'
+            disabled
           >
             <Bot size={20} />
           </button>
           <button
-            title="Canvas"
-            className='p-2 text-zinc-400 hover:text-white cursor-pointer focus:outline-none'
+            title="New Canvas"
+            className='p-2 text-zinc-400 hover:text-blue-400 cursor-pointer focus:outline-none transition-colors'
             onClick={() => handleCreateNote('canvas')}
           >
             <AiOutlineLayout size={20} />
           </button>
           <button
-            title="Add folder"
-            className='p-2 text-zinc-400 hover:text-white cursor-pointer focus:outline-none'
+            title="Add Folder (Coming Soon)"
+            className='p-2 text-zinc-500 cursor-not-allowed focus:outline-none'
+            disabled
           >
             <AiOutlineFolderAdd size={20} />
           </button>
           <button
-            title="New note"
-            className='p-2 text-zinc-400 hover:text-white cursor-pointer focus:outline-none'
+            title="New Note"
+            className='p-2 text-zinc-400 hover:text-green-400 cursor-pointer focus:outline-none transition-colors'
             onClick={() => handleCreateNote('text')}
           >
             <Plus size={20} />
@@ -207,38 +212,55 @@ export const Sidebar = () => {
             </div>
           )}
         </div>
-        {/* Settings and Support */}
-        <div className="mt-auto border-t border-zinc-700 font-bold">
-          <div className="w-full">
+        {/* Bottom Actions */}
+        <div className="mt-auto border-t border-zinc-700">
+          <div className="px-2 py-1">
             <button
-              className={`w-full text-zinc-400 hover:text-white cursor-pointer focus:outline-none px-4 py-2
-transition-all duration-200 ${isSettingsOpen ? 'bg-zinc-800' : ''}`}
-              onClick={() => setIsSettingsOpen(true)}
+              className="w-full text-left text-zinc-400 hover:text-blue-400 hover:bg-zinc-800/50 cursor-pointer focus:outline-none px-3 py-2.5 rounded-md transition-all duration-200 active:scale-95"
+              onClick={() => {
+                setIsKanbanOpen(!isKanbanOpen);
+                setIsSettingsOpen(false);
+                setIsSupportOpen(false);
+              }}
+              title="Kanban Board"
             >
-              <span className="flex items-center">
-                <ListTodo className="mr-2" /> Kanban Board
-              </span>
-            </button>
-          </div>
-          <div className="w-full">
-            <button
-              className={`w-full text-zinc-400 hover:text-white cursor-pointer focus:outline-none px-4 py-2
-transition-all duration-200 ${isSettingsOpen ? 'bg-zinc-800' : ''}`}
-              onClick={() => setIsSettingsOpen(true)}
-            >
-              <span className="flex items-center">
-                <IoSettingsOutline className="mr-2" /> Settings
+              <span className="flex items-center text-sm">
+                <ListTodo className="mr-3" size={18} />
+                Kanban Board
               </span>
             </button>
           </div>
 
-          <div className="w-full">
+          <div className="px-2 py-1">
             <button
-              className={`w-full text-left text-zinc-400 hover:text-white cursor-pointer focus:outline-none px-4 py-2 transition-all duration-200 ${isSupportOpen ? 'bg-zinc-800' : ''}`}
-              onClick={() => setIsSupportOpen(true)}
+              className="w-full text-left text-zinc-400 hover:text-white hover:bg-zinc-800/50 cursor-pointer focus:outline-none px-3 py-2.5 rounded-md transition-all duration-200 active:scale-95"
+              onClick={() => {
+                setIsSettingsOpen(!isSettingsOpen);
+                setIsKanbanOpen(false);
+                setIsSupportOpen(false);
+              }}
+              title="Settings"
             >
-              <span className="flex items-center">
-                <GoPersonFill className="mr-2" /> Support
+              <span className="flex items-center text-sm">
+                <IoSettingsOutline className="mr-3" size={18} />
+                Settings
+              </span>
+            </button>
+          </div>
+
+          <div className="px-2 py-1">
+            <button
+              className="w-full text-left text-zinc-400 hover:text-purple-400 hover:bg-zinc-800/50 cursor-pointer focus:outline-none px-3 py-2.5 rounded-md transition-all duration-200 active:scale-95"
+              onClick={() => {
+                setIsSupportOpen(!isSupportOpen);
+                setIsKanbanOpen(false);
+                setIsSettingsOpen(false);
+              }}
+              title="Support"
+            >
+              <span className="flex items-center text-sm">
+                <GoPersonFill className="mr-3" size={18} />
+                Support
               </span>
             </button>
           </div>

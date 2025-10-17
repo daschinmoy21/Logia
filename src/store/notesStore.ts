@@ -17,6 +17,18 @@ interface NotesState {
   saveCurrentNote: () => Promise<void>;
 }
 
+// Auto-save on window blur to ensure changes are saved
+if (typeof window !== 'undefined') {
+  window.addEventListener('blur', () => {
+    // Get the current state and save if there's a pending timeout
+    const timeout = useNotesStore.getState().saveTimeout;
+    if (timeout) {
+      clearTimeout(timeout);
+      useNotesStore.getState().saveCurrentNote();
+    }
+  });
+}
+
 export const useNotesStore = create<NotesState>()(
   (set, get) => ({
     notes: [],
@@ -36,7 +48,15 @@ export const useNotesStore = create<NotesState>()(
       }
     },
 
-    selectNote: (note) => set({ currentNote: note }),
+    selectNote: async (note) => {
+      // Save current note before switching
+      const currentState = get();
+      if (currentState.saveTimeout) {
+        clearTimeout(currentState.saveTimeout);
+        await get().saveCurrentNote();
+      }
+      set({ currentNote: note });
+    },
 
     createNote: async (noteType = 'text') => {
       try {
@@ -108,10 +128,10 @@ export const useNotesStore = create<NotesState>()(
       // Update the current note content locally
       const updatedNote = { ...state.currentNote, content };
 
-      // Schedule auto-save (increased to 2 seconds for BlockNote)
+      // Schedule auto-save with shorter debounce for real-time feel
       const newTimeout = setTimeout(() => {
         get().saveCurrentNote();
-      }, 2000);
+      }, 500); // Reduced from 2000ms to 500ms
 
       set({
         currentNote: updatedNote,
@@ -131,15 +151,13 @@ export const useNotesStore = create<NotesState>()(
         clearTimeout(state.saveTimeout);
       }
 
-      // Schedule auto-save
-      const newTimeout = setTimeout(() => {
-        get().saveCurrentNote();
-      }, 2000);
-
+      // Save title changes immediately for instant feedback
       set({
         currentNote: updatedNote,
-        saveTimeout: newTimeout,
       });
+
+      // Save immediately without debounce
+      get().saveCurrentNote();
     },
 
     saveCurrentNote: async () => {

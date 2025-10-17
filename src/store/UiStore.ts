@@ -29,6 +29,7 @@ interface UiState {
   setRenameValue: (value: string) => void;
   setContextMenu: (contextMenu: { x: number; y: number; note: Note } | null) => void;
   setIsSettingsOpen: (isOpen: boolean) => void;
+  setIsKanbanOpen: (isOpen: boolean) => void;
   setIsSupportOpen: (isOpen: boolean) => void;
   setIsRecording: (isRecording: boolean) => void;
 }
@@ -61,6 +62,7 @@ const useUiStore = create<UiState>((set) => ({
   renameValue: '',
   contextMenu: null,
   isSettingsOpen: false,
+  isKanbanOpen: false,
   isSupportOpen: false,
   isRecording: false,
 
@@ -71,6 +73,7 @@ const useUiStore = create<UiState>((set) => ({
   setRenameValue: (value) => set({ renameValue: value }),
   setContextMenu: (contextMenu) => set({ contextMenu }),
   setIsSettingsOpen: (isOpen) => set({ isSettingsOpen: isOpen }),
+  setIsKanbanOpen: (isOpen) => set({ isKanbanOpen: isOpen }),
   setIsSupportOpen: (isOpen) => set({ isSupportOpen: isOpen }),
   setIsRecording: (isRecording) => set({ isRecording }),
 }));
