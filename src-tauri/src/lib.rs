@@ -14,6 +14,16 @@ fn greet(name: &str) -> String {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Folder {
+    id: String,
+    name: String,
+    #[serde(default)]
+    parent_id: Option<String>,
+    created_at: String,
+    updated_at: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Note {
     id: String,
     title: String,
@@ -22,6 +32,8 @@ pub struct Note {
     updated_at: String,
     #[serde(default = "default_note_type")]
     note_type: String,
+    #[serde(default)]
+    folder_id: Option<String>,
 }
 
 fn default_note_type() -> String {
@@ -42,6 +54,20 @@ fn get_notes_directory(app_handle: &tauri::AppHandle) -> Result<PathBuf, String>
     Ok(documents_dir)
 }
 
+fn get_folders_directory(app_handle: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let documents_dir = app_handle
+        .path()
+        .resolve("Kortex/folders", BaseDirectory::Document)
+        .map_err(|_| "Could not find document directory")?;
+
+    if !documents_dir.exists() {
+        fs::create_dir_all(&documents_dir)
+            .map_err(|e| format!("Failed to create folders directory:{}", e))?;
+    }
+
+    Ok(documents_dir)
+}
+
 #[tauri::command]
 async fn get_notes_path(app_handle: tauri::AppHandle) -> Result<String, String> {
     let notes_dir = get_notes_directory(&app_handle)?;
@@ -52,6 +78,7 @@ async fn get_notes_path(app_handle: tauri::AppHandle) -> Result<String, String> 
 async fn create_note(
     title: String,
     note_type: String,
+    folder_id: Option<String>,
     app_handle: tauri::AppHandle,
 ) -> Result<Note, String> {
     let notes_dir = get_notes_directory(&app_handle)?;
@@ -65,6 +92,7 @@ async fn create_note(
         created_at: now.clone(),
         updated_at: now,
         note_type,
+        folder_id,
     };
 
     let file_path = notes_dir.join(format!("{}.json", note_id));
@@ -125,6 +153,78 @@ async fn delete_note(note_id: String, app_handle: tauri::AppHandle) -> Result<()
     Ok(())
 }
 
+#[tauri::command]
+async fn create_folder(name: String, parent_id: Option<String>, app_handle: tauri::AppHandle) -> Result<Folder, String> {
+    let folders_dir = get_folders_directory(&app_handle)?;
+    let folder_id = Uuid::new_v4().to_string();
+    let now = chrono::Utc::now().to_rfc3339();
+
+    let folder = Folder {
+        id: folder_id.clone(),
+        name,
+        parent_id,
+        created_at: now.clone(),
+        updated_at: now,
+    };
+
+    let file_path = folders_dir.join(format!("{}.json", folder_id));
+    let folder_json = serde_json::to_string_pretty(&folder)
+        .map_err(|e| format!("Failed to serialize folder: {}", e))?;
+
+    fs::write(&file_path, folder_json).map_err(|e| format!("Failed to write folder file: {}", e))?;
+
+    Ok(folder)
+}
+
+#[tauri::command]
+async fn get_all_folders(app_handle: tauri::AppHandle) -> Result<Vec<Folder>, String> {
+    let folders_dir = get_folders_directory(&app_handle)?;
+    let mut folders = Vec::new();
+
+    if let Ok(entries) = fs::read_dir(&folders_dir) {
+        for entry in entries {
+            if let Ok(entry) = entry {
+                let path = entry.path();
+                if path.extension().and_then(|s| s.to_str()) == Some("json") {
+                    if let Ok(content) = fs::read_to_string(&path) {
+                        if let Ok(folder) = serde_json::from_str::<Folder>(&content) {
+                            folders.push(folder);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Sort by created_at
+    folders.sort_by(|a, b| a.created_at.cmp(&b.created_at));
+    Ok(folders)
+}
+
+#[tauri::command]
+async fn update_folder(folder: Folder, app_handle: tauri::AppHandle) -> Result<(), String> {
+    let folders_dir = get_folders_directory(&app_handle)?;
+    let file_path = folders_dir.join(format!("{}.json", folder.id));
+
+    let mut updated_folder = folder;
+    updated_folder.updated_at = chrono::Utc::now().to_rfc3339();
+
+    let folder_json = serde_json::to_string_pretty(&updated_folder)
+        .map_err(|e| format!("Failed to serialize folder: {}", e))?;
+
+    fs::write(&file_path, folder_json).map_err(|e| format!("Failed to write folder file: {}", e))?;
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn delete_folder(folder_id: String, app_handle: tauri::AppHandle) -> Result<(), String> {
+    let folders_dir = get_folders_directory(&app_handle)?;
+    let file_path = folders_dir.join(format!("{}.json", folder_id));
+    fs::remove_file(&file_path).map_err(|e| format!("Failed to delete folder file: {}", e))?;
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -135,6 +235,10 @@ pub fn run() {
             get_all_notes,
             save_note,
             delete_note,
+            create_folder,
+            get_all_folders,
+            update_folder,
+            delete_folder,
             greet
         ])
         .plugin(tauri_plugin_opener::init())

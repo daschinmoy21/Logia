@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import Fuse from 'fuse.js';
-import { Note } from '../types/Note';
+import { Note, Folder } from '../types/Note';
 
 interface UiState {
   isSearchActive: boolean;
@@ -16,7 +16,7 @@ interface UiState {
   deleteConfirmId: string | null;
   renamingNoteId: string | null;
   renameValue: string;
-  contextMenu: { x: number; y: number; note: Note } | null;
+  contextMenu: { x: number; y: number; note?: Note; folder?: Folder } | null;
   isSettingsOpen: boolean;
   isKanbanOpen: boolean;
   isSupportOpen: boolean;
@@ -27,7 +27,7 @@ interface UiState {
   startRenaming: (noteId: string, currentTitle: string) => void;
   finishRenaming: () => void;
   setRenameValue: (value: string) => void;
-  setContextMenu: (contextMenu: { x: number; y: number; note: Note } | null) => void;
+  setContextMenu: (contextMenu: { x: number; y: number; note?: Note; folder?: Folder } | null) => void;
   setIsSettingsOpen: (isOpen: boolean) => void;
   setIsKanbanOpen: (isOpen: boolean) => void;
   setIsSupportOpen: (isOpen: boolean) => void;

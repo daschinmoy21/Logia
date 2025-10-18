@@ -1,23 +1,20 @@
-import React from 'react';
 import { useState, useEffect } from 'react';
 import { Excalidraw, MainMenu, WelcomeScreen } from '@excalidraw/excalidraw';
 import '@excalidraw/excalidraw/index.css';
 import { useNotesStore } from '../store/notesStore';
-import { ExcalidrawElement } from '@excalidraw/excalidraw/types/element/types';
-import { AppState } from '@excalidraw/excalidraw/types/types';
 
 function Canvas() {
   const { currentNote, updateCurrentNoteContent } = useNotesStore();
 
-  const [elements, setElements] = useState<readonly ExcalidrawElement[]>([]);
-  const [appState, setAppState] = useState<AppState | null>(null);
+  const [elements, setElements] = useState<any[]>([]);
+  const [appState, setAppState] = useState<any>(null);
 
   useEffect(() => {
     if (currentNote && currentNote.content) {
       try {
         const scene = JSON.parse(currentNote.content);
         setElements(scene.elements || []);
-        setAppState({ ...scene.appState, collaborators: new Map() }); // Always set collaborators to a new Map
+        setAppState({ ...scene.appState, collaborators: new Map() });
       } catch (e) {
         console.error("Error parsing excalidraw content", e);
         setElements([]);
@@ -30,13 +27,13 @@ function Canvas() {
   }, [currentNote]);
 
   const handleExcalidrawChange = (
-    elements: readonly ExcalidrawElement[],
-    appState: AppState
+    elements: any,
+    appState: any
   ) => {
     if (!currentNote) return;
 
     const appStateForSaving = { ...appState };
-    delete appStateForSaving.collaborators; // Don't save collaborators
+    delete appStateForSaving.collaborators;
 
     const scene = {
       elements,
@@ -63,10 +60,9 @@ function Canvas() {
             changeViewBackgroundColor: true,
           },
           tools: {
-            image: false, // Controls visibility of image tool
+            image: false,
           }
         }}
-
       >
         <MainMenu>
           <MainMenu.DefaultItems.LoadScene />
@@ -80,7 +76,7 @@ function Canvas() {
         </WelcomeScreen>
       </Excalidraw>
     </div>
-  )
+  );
 }
 
 export default Canvas;

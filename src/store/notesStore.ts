@@ -1,17 +1,22 @@
 import { create } from 'zustand';
 import { invoke } from '@tauri-apps/api/core';
-import { Note } from '../types/Note';
+import { Note, Folder } from '../types/Note';
 
 interface NotesState {
   notes: Note[];
+  folders: Folder[];
   currentNote: Note | null;
   isLoading: boolean;
   saveTimeout: NodeJS.Timeout | null;
   loadNotes: () => Promise<void>;
+  loadFolders: () => Promise<void>;
   selectNote: (note: Note) => void;
-  createNote: (noteType?: 'text' | 'canvas') => Promise<Note>;
+  createNote: (noteType?: 'text' | 'canvas', folderId?: string) => Promise<Note>;
+  createFolder: (name: string, parentId?: string) => Promise<Folder>;
   updateNote: (id: string, updates: Partial<Note>) => Promise<void>;
+  updateFolder: (id: string, updates: Partial<Folder>) => Promise<void>;
   deleteNote: (id: string) => Promise<void>;
+  deleteFolder: (id: string) => Promise<void>;
   updateCurrentNoteContent: (content: string) => void;
   updateCurrentNoteTitle: (title: string) => void;
   saveCurrentNote: () => Promise<void>;
@@ -32,6 +37,7 @@ if (typeof window !== 'undefined') {
 export const useNotesStore = create<NotesState>()(
   (set, get) => ({
     notes: [],
+    folders: [],
     currentNote: null,
     isLoading: false,
     saveTimeout: null,
@@ -48,6 +54,15 @@ export const useNotesStore = create<NotesState>()(
       }
     },
 
+    loadFolders: async () => {
+      try {
+        const folders: Folder[] = await invoke('get_all_folders');
+        set({ folders });
+      } catch (error) {
+        console.error('Failed to load folders:', error);
+      }
+    },
+
     selectNote: async (note) => {
       // Save current note before switching
       const currentState = get();
@@ -58,10 +73,10 @@ export const useNotesStore = create<NotesState>()(
       set({ currentNote: note });
     },
 
-    createNote: async (noteType = 'text') => {
+    createNote: async (noteType = 'text', folderId) => {
       try {
         // Create note via Tauri backend
-        const newNote: Note = await invoke('create_note', { title: 'Untitled', noteType });
+        const newNote: Note = await invoke('create_note', { title: 'Untitled', noteType, folderId });
 
         set((state) => ({
           notes: [newNote, ...state.notes],
@@ -70,6 +85,21 @@ export const useNotesStore = create<NotesState>()(
         return newNote;
       } catch (error) {
         console.error('Failed to create note:', error);
+        throw error;
+      }
+    },
+
+    createFolder: async (name, parentId) => {
+      try {
+        const newFolder: Folder = await invoke('create_folder', { name, parentId });
+
+        set((state) => ({
+          folders: [...state.folders, newFolder],
+        }));
+
+        return newFolder;
+      } catch (error) {
+        console.error('Failed to create folder:', error);
         throw error;
       }
     },
@@ -100,6 +130,27 @@ export const useNotesStore = create<NotesState>()(
       }
     },
 
+    updateFolder: async (id, updates) => {
+      try {
+        const state = get();
+        const folderToUpdate = state.folders.find(folder => folder.id === id);
+        if (!folderToUpdate) throw new Error('Folder not found');
+
+        const updatedFolder = { ...folderToUpdate, ...updates, updated_at: new Date().toISOString() };
+
+        await invoke('update_folder', { folder: updatedFolder });
+
+        set((state) => ({
+          folders: state.folders.map((folder) =>
+            folder.id === id ? updatedFolder : folder
+          ),
+        }));
+      } catch (error) {
+        console.error('Failed to update folder:', error);
+        throw error;
+      }
+    },
+
     deleteNote: async (id) => {
       try {
         // Delete via Tauri backend
@@ -112,6 +163,22 @@ export const useNotesStore = create<NotesState>()(
         }));
       } catch (error) {
         console.error('Failed to delete note:', error);
+        throw error;
+      }
+    },
+
+    deleteFolder: async (id) => {
+      try {
+        await invoke('delete_folder', { folderId: id });
+
+        set((state) => ({
+          folders: state.folders.filter((folder) => folder.id !== id),
+          // Also remove notes in this folder
+          notes: state.notes.filter((note) => note.folder_id !== id),
+          currentNote: state.currentNote?.folder_id === id ? null : state.currentNote,
+        }));
+      } catch (error) {
+        console.error('Failed to delete folder:', error);
         throw error;
       }
     },

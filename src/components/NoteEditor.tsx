@@ -24,9 +24,9 @@ export function NoteEditor({
   };
 
   return (
-    <div className="flex flex-col w-full h-full bg-zinc-950">
+    <div className="flex flex-col w-full h-full bg-zinc-930">
       {/* Note title input */}
-      <div className="ml-7 px-6 pt-6 pb-4 border-b border-zinc-800">
+      <div className="ml-7 px-6 pt-6 pb-4 border-b border-zinc-700">
         <input
           type="text"
           value={currentNote.title}
