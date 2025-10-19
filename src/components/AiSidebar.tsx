@@ -135,7 +135,7 @@ const AiSidebar = ({ isOpen, onClose }: AiSidebarProps) => {
             </div>
           )}
           {isLoading && !streamingMessage && (
-            <div className="flex justify-start p-3 text-zinc-300">
+            <div className="flex justify-start p-1 text-zinc-300">
               <Loader /> 
             </div>
           )}
