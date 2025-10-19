@@ -154,7 +154,11 @@ async fn delete_note(note_id: String, app_handle: tauri::AppHandle) -> Result<()
 }
 
 #[tauri::command]
-async fn create_folder(name: String, parent_id: Option<String>, app_handle: tauri::AppHandle) -> Result<Folder, String> {
+async fn create_folder(
+    name: String,
+    parent_id: Option<String>,
+    app_handle: tauri::AppHandle,
+) -> Result<Folder, String> {
     let folders_dir = get_folders_directory(&app_handle)?;
     let folder_id = Uuid::new_v4().to_string();
     let now = chrono::Utc::now().to_rfc3339();
@@ -171,7 +175,8 @@ async fn create_folder(name: String, parent_id: Option<String>, app_handle: taur
     let folder_json = serde_json::to_string_pretty(&folder)
         .map_err(|e| format!("Failed to serialize folder: {}", e))?;
 
-    fs::write(&file_path, folder_json).map_err(|e| format!("Failed to write folder file: {}", e))?;
+    fs::write(&file_path, folder_json)
+        .map_err(|e| format!("Failed to write folder file: {}", e))?;
 
     Ok(folder)
 }
@@ -212,7 +217,8 @@ async fn update_folder(folder: Folder, app_handle: tauri::AppHandle) -> Result<(
     let folder_json = serde_json::to_string_pretty(&updated_folder)
         .map_err(|e| format!("Failed to serialize folder: {}", e))?;
 
-    fs::write(&file_path, folder_json).map_err(|e| format!("Failed to write folder file: {}", e))?;
+    fs::write(&file_path, folder_json)
+        .map_err(|e| format!("Failed to write folder file: {}", e))?;
 
     Ok(())
 }
@@ -225,8 +231,17 @@ async fn delete_folder(folder_id: String, app_handle: tauri::AppHandle) -> Resul
     Ok(())
 }
 
+#[tauri::command]
+fn get_google_api_key() -> Result<String, String> {
+    std::env::var("GOOGLE_GENERATIVE_AI_API_KEY")
+        .map_err(|_| "GOOGLE_GENERATIVE_AI_API_KEY environment variable not set".to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Load .env file
+    dotenvy::dotenv().ok();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_fs::init())
         .invoke_handler(tauri::generate_handler![
@@ -239,6 +254,7 @@ pub fn run() {
             get_all_folders,
             update_folder,
             delete_folder,
+            get_google_api_key,
             greet
         ])
         .plugin(tauri_plugin_opener::init())

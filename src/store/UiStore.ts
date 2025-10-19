@@ -21,6 +21,7 @@ interface UiState {
   isKanbanOpen: boolean;
   isSupportOpen: boolean;
   isRecording: boolean;
+  isAiSidebarOpen: boolean;
 
   // Actions for new states
   setDeleteConfirmId: (id: string | null) => void;
@@ -32,6 +33,7 @@ interface UiState {
   setIsKanbanOpen: (isOpen: boolean) => void;
   setIsSupportOpen: (isOpen: boolean) => void;
   setIsRecording: (isRecording: boolean) => void;
+  setIsAiSidebarOpen: (isOpen: boolean) => void;
 }
 
 const useUiStore = create<UiState>((set) => ({
@@ -65,6 +67,7 @@ const useUiStore = create<UiState>((set) => ({
   isKanbanOpen: false,
   isSupportOpen: false,
   isRecording: false,
+  isAiSidebarOpen: false,
 
   // Actions for new states
   setDeleteConfirmId: (id) => set({ deleteConfirmId: id }),
@@ -76,6 +79,7 @@ const useUiStore = create<UiState>((set) => ({
   setIsKanbanOpen: (isOpen) => set({ isKanbanOpen: isOpen }),
   setIsSupportOpen: (isOpen) => set({ isSupportOpen: isOpen }),
   setIsRecording: (isRecording) => set({ isRecording }),
+  setIsAiSidebarOpen: (isOpen) => set({ isAiSidebarOpen: isOpen }),
 }));
 
 export default useUiStore;
