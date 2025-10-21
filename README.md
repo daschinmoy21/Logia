@@ -51,7 +51,7 @@ A powerful, AI-enhanced notes application built with Tauri and React, designed f
 - **AI Assistance**: Access AI features through the AI sidebar for content generation and editing
 - **Drawing**: Click the drawing tool to open Excalidraw for visual notes
 - **Recording**: Use the recording feature to capture audio and automatically transcribe it
-- **Search**: Press `Ctrl+K` to open the command palette and search across all content
+- **Search**: Press `Alt+P` or `Meta/Cmd+P`(for Mac) to open the command palette and search across all content
 
 ## Configuration
 
