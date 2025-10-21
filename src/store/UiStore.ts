@@ -14,6 +14,7 @@ interface UiState {
 
   // States moved from Sidebar
   deleteConfirmId: string | null;
+  deleteConfirmFolderId: string | null;
   renamingNoteId: string | null;
   renameValue: string;
   contextMenu: { x: number; y: number; note?: Note; folder?: Folder } | null;
@@ -25,6 +26,7 @@ interface UiState {
 
   // Actions for new states
   setDeleteConfirmId: (id: string | null) => void;
+  setDeleteConfirmFolderId: (id: string | null) => void;
   startRenaming: (noteId: string, currentTitle: string) => void;
   finishRenaming: () => void;
   setRenameValue: (value: string) => void;
@@ -68,9 +70,11 @@ const useUiStore = create<UiState>((set) => ({
   isSupportOpen: false,
   isRecording: false,
   isAiSidebarOpen: false,
+  deleteConfirmFolderId:null,
 
   // Actions for new states
   setDeleteConfirmId: (id) => set({ deleteConfirmId: id }),
+  setDeleteConfirmFolderId: (id) => set({ deleteConfirmFolderId: id }),
   startRenaming: (noteId, currentTitle) => set({ renamingNoteId: noteId, renameValue: currentTitle }),
   finishRenaming: () => set({ renamingNoteId: null, renameValue: '' }),
   setRenameValue: (value) => set({ renameValue: value }),

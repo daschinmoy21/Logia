@@ -24,6 +24,15 @@ pub struct Folder {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct KanbanTask {
+    id: String,
+    name: String,
+    column: String,
+    created_at: String,
+    updated_at: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Note {
     id: String,
     title: String,
@@ -63,6 +72,20 @@ fn get_folders_directory(app_handle: &tauri::AppHandle) -> Result<PathBuf, Strin
     if !documents_dir.exists() {
         fs::create_dir_all(&documents_dir)
             .map_err(|e| format!("Failed to create folders directory:{}", e))?;
+    }
+
+    Ok(documents_dir)
+}
+
+fn get_kanban_directory(app_handle: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let documents_dir = app_handle
+        .path()
+        .resolve("Kortex/kanban", BaseDirectory::Document)
+        .map_err(|_| "Could not find document directory")?;
+
+    if !documents_dir.exists() {
+        fs::create_dir_all(&documents_dir)
+            .map_err(|e| format!("Failed to create kanban directory:{}", e))?;
     }
 
     Ok(documents_dir)
@@ -232,6 +255,35 @@ async fn delete_folder(folder_id: String, app_handle: tauri::AppHandle) -> Resul
 }
 
 #[tauri::command]
+async fn get_kanban_data(app_handle: tauri::AppHandle) -> Result<Vec<KanbanTask>, String> {
+    let kanban_dir = get_kanban_directory(&app_handle)?;
+    let file_path = kanban_dir.join("data.json");
+
+    if file_path.exists() {
+        let content = fs::read_to_string(&file_path)
+            .map_err(|e| format!("Failed to read kanban data: {}", e))?;
+        let tasks: Vec<KanbanTask> = serde_json::from_str(&content)
+            .map_err(|e| format!("Failed to parse kanban data: {}", e))?;
+        Ok(tasks)
+    } else {
+        Ok(vec![])
+    }
+}
+
+#[tauri::command]
+async fn save_kanban_data(tasks: Vec<KanbanTask>, app_handle: tauri::AppHandle) -> Result<(), String> {
+    let kanban_dir = get_kanban_directory(&app_handle)?;
+    let file_path = kanban_dir.join("data.json");
+
+    let data_json = serde_json::to_string_pretty(&tasks)
+        .map_err(|e| format!("Failed to serialize kanban data: {}", e))?;
+
+    fs::write(&file_path, data_json).map_err(|e| format!("Failed to write kanban data: {}", e))?;
+
+    Ok(())
+}
+
+#[tauri::command]
 fn get_google_api_key() -> Result<String, String> {
     std::env::var("GOOGLE_GENERATIVE_AI_API_KEY")
         .map_err(|_| "GOOGLE_GENERATIVE_AI_API_KEY environment variable not set".to_string())
@@ -254,6 +306,8 @@ pub fn run() {
             get_all_folders,
             update_folder,
             delete_folder,
+            get_kanban_data,
+            save_kanban_data,
             get_google_api_key,
             greet
         ])

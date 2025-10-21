@@ -8,6 +8,7 @@ import { invoke } from '@tauri-apps/api/core';
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import Loader from "@/components/Ai-loader";
+import { ShimmeringText } from "../components/animate-ui/text/shimmering";
 
 interface AiSidebarProps {
   isOpen: boolean;
@@ -59,11 +60,11 @@ const AiSidebar = ({ isOpen, onClose }: AiSidebarProps) => {
 
     try {
       // Call Gemini with conversation history
-      const systemPrompt = 'You are KAi, a helpful AI assistant in a note-taking app called Kortex. Help users with their notes, writing, research, and general questions.';
+      const systemPrompt = 'You are KAi, a helpful AI assistant in a note-taking app called Kortex. Help users with their notes, writing, research, and general questions.Keep responses crisp unless specified.';
       const noteContext = currentNote ? `\n\nHere is the content of the current note for context:\n---\n${currentNote.content}\n---` : '';
 
       const result = await streamText({
-        model: google('gemini-2.5-flash'),
+        model: google('gemini-2.5-flash-lite'),
         system: systemPrompt + noteContext,
         messages: [...messages, userMessage], // Include all previous + current user
       });
@@ -107,7 +108,7 @@ const AiSidebar = ({ isOpen, onClose }: AiSidebarProps) => {
           </button>
         </div>
       </div>
-      <div className="flex-1 p-4 flex flex-col overflow-hidden">
+      <div className="flex-1 p-4 flex flex-col overflow-hidden text-sm">
         {/* Chat messages area */}
         <div ref={scrollableContainerRef} className="flex-1 mb-4 overflow-y-auto space-y-4">
           {messages.length === 0 && (
@@ -136,7 +137,12 @@ const AiSidebar = ({ isOpen, onClose }: AiSidebarProps) => {
           )}
           {isLoading && !streamingMessage && (
             <div className="flex justify-start p-1 text-zinc-300">
-              <Loader /> 
+              <Loader />      
+             <ShimmeringText
+            className="ml-2 text-xs font-semibold"
+            text="Thinking"
+            wave />
+ 
             </div>
           )}
         </div>

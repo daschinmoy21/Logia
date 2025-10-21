@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { FileMinus, PencilRuler, Folder, FolderOpen, ChevronRight, ChevronDown } from 'lucide-react';
+import { FileMinus, PencilRuler, Folder, FolderOpen, ChevronRight, ChevronDown, ListTodo, Clock, CheckCircle } from 'lucide-react';
 import { Resizable } from 're-resizable';
-import { ListTodo } from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { GoPersonFill } from 'react-icons/go';
 import { IoSettingsOutline } from 'react-icons/io5';
 import { AiOutlineLayout, AiOutlineFolderAdd } from 'react-icons/ai';
@@ -13,6 +13,23 @@ import { useNotesStore } from '../store/notesStore';
 import { Folder as FolderType } from '../types/Note';
 import RecStatus from './RecStatus';
 import useUiStore from '../store/UiStore';
+import {
+  KanbanProvider,
+  KanbanBoard,
+  KanbanHeader,
+  KanbanCards,
+  KanbanCard,
+} from './ui/shadcn-io/kanban';
+import { invoke } from '@tauri-apps/api/core';
+import { AnimatedFileTree } from './AnimatedFileTree';
+
+type KanbanTask = {
+  id: string;
+  name: string;
+  column: string;
+  created_at: string;
+  updated_at: string;
+};
 
 export const Sidebar = () => {
   // Subscribing to state changes individually
@@ -23,6 +40,7 @@ export const Sidebar = () => {
 
   // Subscribing to UI state changes individually
   const deleteConfirmId = useUiStore((state) => state.deleteConfirmId);
+  const deleteConfirmFolderId = useUiStore((state) => state.deleteConfirmFolderId);
   const renamingNoteId = useUiStore((state) => state.renamingNoteId);
   const renameValue = useUiStore((state) => state.renameValue);
   const contextMenu = useUiStore((state) => state.contextMenu);
@@ -37,10 +55,80 @@ export const Sidebar = () => {
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
 
+  // Kanban state
+  const [kanbanData, setKanbanData] = useState<KanbanTask[]>([]);
+
+  // Load kanban tasks
+  const loadKanbanTasks = async () => {
+    try {
+      const tasks = await invoke<KanbanTask[]>('get_kanban_data');
+      setKanbanData(tasks);
+    } catch (error) {
+      console.error('Failed to load kanban tasks:', error);
+    }
+  };
+
+  // Save kanban data
+  const saveKanbanData = async (data: KanbanTask[]) => {
+    try {
+      await invoke('save_kanban_data', { tasks: data });
+    } catch (error) {
+      console.error('Failed to save kanban data:', error);
+    }
+  };
+
+  useEffect(() => {
+    loadKanbanTasks();
+  }, []);
+  const kanbanColumns = [
+    { id: 'todo', name: 'To Do' },
+    { id: 'in-progress', name: 'In Progress' },
+    { id: 'done', name: 'Done' },
+  ];
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [editingTaskName, setEditingTaskName] = useState('');
+
+  const addTask = (columnId: string) => {
+    const newId = Date.now().toString();
+    const newTask: KanbanTask = { id: newId, name: 'New Task', column: columnId, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+    const newData = [...kanbanData, newTask];
+    setKanbanData(newData);
+    saveKanbanData(newData);
+  };
+
+  const deleteTask = (taskId: string) => {
+    const newData = kanbanData.filter(task => task.id !== taskId);
+    setKanbanData(newData);
+    saveKanbanData(newData);
+  };
+
+  const startEditingTask = (taskId: string, currentName: string) => {
+    setEditingTaskId(taskId);
+    setEditingTaskName(currentName);
+  };
+
+  const saveTaskName = () => {
+    if (editingTaskId && editingTaskName.trim()) {
+      const newData = kanbanData.map(task =>
+        task.id === editingTaskId ? { ...task, name: editingTaskName.trim(), updated_at: new Date().toISOString() } : task
+      );
+      setKanbanData(newData);
+      saveKanbanData(newData);
+    }
+    setEditingTaskId(null);
+    setEditingTaskName('');
+  };
+
+  const cancelEditing = () => {
+    setEditingTaskId(null);
+    setEditingTaskName('');
+  };
+
   // Getting UI actions
   const {
     openCommandPalette,
     setDeleteConfirmId,
+    setDeleteConfirmFolderId,
     startRenaming,
     finishRenaming,
     setRenameValue,
@@ -79,9 +167,25 @@ export const Sidebar = () => {
     }
   };
 
+  const handleDeleteFolder = async (folderId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setDeleteConfirmFolderId(folderId);
+  };
+
   const handleDeleteNote = async (noteId: string, e: React.MouseEvent) => {
     e.stopPropagation(); //to stop event bubbling 
     setDeleteConfirmId(noteId);
+  };
+
+  const confirmDeleteFolder = async () => {
+    if (deleteConfirmFolderId) {
+      try {
+        await deleteFolder(deleteConfirmFolderId);
+        setDeleteConfirmFolderId(null);
+      } catch (error) {
+        console.log("Failed to delete folder", error);
+      }
+    }
   };
 
   const confirmDelete = async () => {
@@ -127,221 +231,8 @@ export const Sidebar = () => {
     });
   };
 
-  // File Tree Component
-  const FileTree = () => {
-    // Get fresh state inside component to ensure re-renders
-    const currentNotes = useNotesStore((state) => state.notes);
-    const currentFolders = useNotesStore((state) => state.folders);
 
-    const getChildFolders = (parentId?: string) => {
-      if (parentId === undefined) {
-        return currentFolders.filter(f => f.parent_id == null);
-      }
-      return currentFolders.filter(f => f.parent_id === parentId);
-    };
 
-    const getNotesInFolder = (folderId?: string) => {
-      if (folderId === undefined) {
-        return currentNotes.filter(n => n.folder_id == null);
-      }
-      return currentNotes.filter(n => n.folder_id === folderId);
-    };
-
-    const renderTreeItem = (folder: FolderType, depth: number = 0) => {
-      const childFolders = getChildFolders(folder.id);
-      const folderNotes = getNotesInFolder(folder.id);
-      const isExpanded = expandedFolders.has(folder.id);
-      const isSelected = selectedFolderId === folder.id;
-      const hasChildren = childFolders.length > 0 || folderNotes.length > 0;
-
-      return (
-        <div key={folder.id}>
-          <div
-            className={`flex items-center py-1.5 px-1 rounded-md cursor-pointer group ${isSelected ? 'bg-zinc-800' : 'hover:bg-zinc-800/70'}`}
-            style={{ paddingLeft: `${depth * 8}px` }}
-            onClick={() => selectFolder(folder.id)}
-            onContextMenu={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              setContextMenu({ x: e.clientX, y: e.clientY, folder });
-            }}
-            onDoubleClick={() => {
-              setRenamingFolderId(folder.id);
-              setFolderRenameValue(folder.name);
-            }}
-          >
-            <div className="flex items-center mr-1">
-              {hasChildren ? (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggleFolder(folder.id);
-                  }}
-                  className="text-zinc-500 hover:text-zinc-300 p-0.5 active:scale-95"
-                >
-                  {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                </button>
-              ) : (
-                <div className="w-4" />
-              )}
-            </div>
-            {isExpanded ? <FolderOpen size={16} className="text-blue-400 mr-2" /> : <Folder size={16} className="text-blue-400 mr-2" />}
-            {renamingFolderId === folder.id ? (
-              <input
-                type="text"
-                value={folderRenameValue}
-                onChange={(e) => setFolderRenameValue(e.target.value)}
-                onBlur={handleFolderRename}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleFolderRename();
-                  if (e.key === 'Escape') {
-                    setRenamingFolderId(null);
-                    setFolderRenameValue('');
-                  }
-                }}
-                className="flex-1 bg-zinc-700 text-white text-sm px-1 py-0.5 border-none outline-none focus:ring-0"
-                autoFocus
-              />
-            ) : (
-              <span className="text-sm text-zinc-300 truncate flex-1">{folder.name}</span>
-            )}
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                deleteFolder(folder.id);
-              }}
-              className="opacity-0 group-hover:opacity-100 p-1 text-zinc-500 hover:text-red-400 ml-2 active:scale-95"
-              title="Delete folder"
-            >
-              <RiDeleteBin6Line size={12} />
-            </button>
-          </div>
-
-          {isExpanded && (
-            <div className="mt-1">
-              {childFolders.map(childFolder => renderTreeItem(childFolder, depth + 1))}
-              {folderNotes.map(note => (
-                <div
-                  key={note.id}
-                  onClick={() => selectNote(note)}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    setContextMenu({ x: e.clientX, y: e.clientY, note });
-                  }}
-                  className={`
-                    group relative font-small px-2 py-1.5 rounded-md cursor-pointer transition-all duration-200
-                    ${currentNote?.id === note.id
-                      ? 'bg-zinc-800'
-                      : 'hover:bg-zinc-800/50'
-                    }
-                  `}
-                  style={{ paddingLeft: `${(depth + 1) * 16 + 8}px` }}
-                >
-                  <div className='flex items-start justify-between'>
-                    <div className='flex-1 min-w-0 pr-2'>
-                      <div className={`
-                        font-small text-sm truncate flex items-start
-                        ${currentNote?.id === note.id ? 'text-white' : 'text-zinc-300'}
-                      `}>
-                        {note.note_type === 'canvas' ? <PencilRuler size={15} className='mr-2 flex-shrink-0 mt-0.5' /> : <FileMinus size={13} className='mr-2 flex-shrink-0 mt-0.5' />}
-                        {renamingNoteId === note.id ? (
-                          <input
-                            type="text"
-                            value={renameValue}
-                            onChange={(e) => setRenameValue(e.target.value)}
-                            onBlur={handleRename}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') handleRename();
-                              if (e.key === 'Escape') finishRenaming();
-                            }}
-                            className="w-full bg-zinc-700 text-white text-sm p-0 border-none outline-none focus:ring-0"
-                            autoFocus
-                          />
-                        ) : (
-                          note.title || 'Untitled'
-                        )}
-                      </div>
-                    </div>
-
-                    <button
-                      onClick={(e) => handleDeleteNote(note.id, e)}
-                      className='opacity-0 group-hover:opacity-100 p-1 text-zinc-500 hover:text-red-400
-                      hover:bg-zinc-700 rounded transition-all duration-200 flex-shrink-0 active:scale-95'
-                      title="Delete note"
-                    >
-                      <RiDeleteBin6Line size={12} />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      );
-    };
-
-    const rootFolders = getChildFolders(undefined);
-    const rootNotes = getNotesInFolder(undefined);
-
-    return (
-      <div className='space-y-1'>
-        {rootFolders.map(folder => renderTreeItem(folder))}
-        {rootNotes.map((note) => (
-          <div
-            key={note.id}
-            onClick={() => selectNote(note)}
-            onContextMenu={(e) => {
-              e.preventDefault();
-              setContextMenu({ x: e.clientX, y: e.clientY, note });
-            }}
-            className={`
-              group relative font-small px-2 py-1.5 rounded-lg cursor-pointer transition-all duration-200
-              ${currentNote?.id === note.id
-                ? 'bg-zinc-800 border border-zinc-700'
-                : 'hover:bg-zinc-800/50 border border-transparent'
-              }
-            `}
-          >
-            <div className='flex items-start justify-between'>
-              <div className='flex-1 min-w-0 pr-2'>
-                <div className={`
-                  font-small text-sm truncate flex items-start
-                  ${currentNote?.id === note.id ? 'text-white' : 'text-zinc-300'}
-                `}>
-                  {note.note_type === 'canvas' ? <PencilRuler size={17} className='mr-2 flex-shrink-0' /> : <FileMinus size={15} className='mr-2 flex-shrink-0' />}
-                  {renamingNoteId === note.id ? (
-                    <input
-                      type="text"
-                      value={renameValue}
-                      onChange={(e) => setRenameValue(e.target.value)}
-                      onBlur={handleRename}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') handleRename();
-                        if (e.key === 'Escape') finishRenaming();
-                      }}
-                      className="w-full bg-zinc-700 text-white text-sm p-0 border-none outline-none focus:ring-0"
-                      autoFocus
-                    />
-                  ) : (
-                    note.title || 'Untitled'
-                  )}
-                </div>
-              </div>
-
-              <button
-                onClick={(e) => handleDeleteNote(note.id, e)}
-                className='opacity-0 group-hover:opacity-100 p-1 text-zinc-500 hover:text-red-400
-                hover:bg-zinc-700 rounded transition-all duration-200 flex-shrink-0 active:scale-95'
-                title="Delete note"
-              >
-                <RiDeleteBin6Line size={14} />
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-    );
-  };
 
   return (
     <>
@@ -411,7 +302,33 @@ export const Sidebar = () => {
             setSelectedFolderId(null);
           }
         }}>
-          <FileTree />
+          <AnimatedFileTree
+            onSelectNote={selectNote}
+            onSelectFolder={selectFolder}
+            onContextMenu={(e, item) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setContextMenu({ x: e.clientX, y: e.clientY, ...item });
+            }}
+            onDeleteFolder={handleDeleteFolder}
+            onDeleteNote={handleDeleteNote}
+            selectedFolderId={selectedFolderId}
+            expandedFolders={expandedFolders}
+            onExpandedFoldersChange={setExpandedFolders}
+            renamingNoteId={renamingNoteId}
+            renamingFolderId={renamingFolderId}
+            renameValue={renameValue}
+            folderRenameValue={folderRenameValue}
+            onRename={handleRename}
+            onFolderRename={handleFolderRename}
+            onRenameValueChange={setRenameValue}
+            onFolderRenameValueChange={setFolderRenameValue}
+            onStartRenaming={startRenaming}
+            onStartFolderRenaming={(folderId, name) => {
+              setRenamingFolderId(folderId);
+              setFolderRenameValue(name);
+            }}
+          />
         </div>
         {/* Bottom Actions */}
         <div className="mt-auto border-t border-zinc-700/50 ">
@@ -469,13 +386,13 @@ export const Sidebar = () => {
         </div>
       </Resizable>
 
-      {/* Delete confirmation dialog */}
-      <Dialog
-        open={deleteConfirmId !== null}
-        onClose={() => setDeleteConfirmId(null)}
-        className="relative z-50"
-      >
-        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm" aria-hidden="true" />
+       {/* Delete confirmation dialog */}
+       <Dialog
+         open={deleteConfirmId !== null}
+         onClose={() => setDeleteConfirmId(null)}
+         className="relative z-[1000]"
+       >
+         <div className="fixed inset-0 bg-black/30 backdrop-blur-sm" onClick={() => setDeleteConfirmId(null)} />
 
         <div className="fixed inset-0 flex items-center justify-center p-4">
           <DialogPanel className="bg-zinc-800 border border-zinc-700 rounded-xl p-6 max-w-sm w-full">
@@ -498,6 +415,44 @@ export const Sidebar = () => {
               <button
                 onClick={confirmDelete}
                 className="px-4 py-2 text-sm bg-red-600 hover:bg-red-700 text-white 
+                rounded-lg transition-colors"
+              >
+                Delete
+              </button>
+            </div>
+          </DialogPanel>
+        </div>
+       </Dialog>
+
+       {/* Delete folder confirmation dialog */}
+       <Dialog
+         open={deleteConfirmFolderId !== null}
+         onClose={() => setDeleteConfirmFolderId(null)}
+         className="relative z-[1000]"
+       >
+         <div className="fixed inset-0 bg-black/30 backdrop-blur-sm" onClick={() => setDeleteConfirmFolderId(null)} />
+
+        <div className="fixed inset-0 flex items-center justify-center p-4">
+          <DialogPanel className="bg-zinc-800 border border-zinc-700 rounded-xl p-6 max-w-sm w-full">
+            <DialogTitle className="text-white font-medium mb-2">
+              Delete Folder
+            </DialogTitle>
+
+            <Description className="text-zinc-400 text-sm mb-6">
+              Are you sure you want to delete this folder and all its contents? This action cannot be undone.
+            </Description>
+
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setDeleteConfirmFolderId(null)}
+                className="px-4 py-2 text-sm text-zinc-400 hover:text-white
+                hover:bg-zinc-700 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDeleteFolder}
+                className="px-4 py-2 text-sm bg-red-600 hover:bg-red-700 text-white
                 rounded-lg transition-colors"
               >
                 Delete
@@ -556,6 +511,89 @@ export const Sidebar = () => {
             </>
           )}
         </div>
+      )}
+
+       {/* Kanban dialog */}
+       {isKanbanOpen && (
+         <Dialog
+           open={isKanbanOpen}
+           onClose={() => setIsKanbanOpen(false)}
+           className="relative z-[1000]"
+         >
+           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" />
+           <div className="fixed inset-0 flex items-center justify-center p-4" onClick={() => setIsKanbanOpen(false)}>
+             <DialogPanel className="bg-zinc-900 border border-zinc-700 rounded-xl p-6 w-full max-w-6xl h-[80vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
+              <div className="flex justify-between items-center mb-4">
+                <DialogTitle className="text-white font-medium">
+                  Kanban Board
+                </DialogTitle>
+                <button
+                  onClick={() => setIsKanbanOpen(false)}
+                  className="text-zinc-400 hover:text-white text-xl font-bold"
+                >
+                  ×
+                </button>
+              </div>
+               <KanbanProvider
+                 columns={kanbanColumns}
+                 data={kanbanData}
+                 onDataChange={(newData) => {
+                   setKanbanData(newData);
+                   saveKanbanData(newData);
+                 }}
+               >
+                {(column) => (
+                  <KanbanBoard id={column.id} className="flex-1">
+                    <KanbanHeader>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-zinc-200">
+                          {column.id === 'todo' && <ListTodo size={16} className="text-blue-400" />}
+                          {column.id === 'in-progress' && <Clock size={16} className="text-yellow-400" />}
+                          {column.id === 'done' && <CheckCircle size={16} className="text-green-400" />}
+                          <span className="font-semibold">{column.name}</span>
+                        </div>
+                        <button
+                          onClick={() => addTask(column.id)}
+                          className="p-1 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700 rounded transition-colors"
+                          title="Add Task"
+                        >
+                          <Plus size={14} />
+                        </button>
+                      </div>
+                    </KanbanHeader>
+                    <KanbanCards id={column.id}>
+                      {(item) => (
+                        <KanbanCard key={item.id} {...item} onDelete={deleteTask}>
+                          {editingTaskId === item.id ? (
+                            <input
+                              type="text"
+                              value={editingTaskName}
+                              onChange={(e) => setEditingTaskName(e.target.value)}
+                              onBlur={saveTaskName}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') saveTaskName();
+                                if (e.key === 'Escape') cancelEditing();
+                              }}
+                              className="bg-zinc-800 border border-zinc-400 rounded px-2 py-1 text-zinc-500 w-full outline-none focus:border-zinc-700"
+                              autoFocus
+                            />
+                          ) : (
+                            <p
+                              className="m-0 font-medium text-sm cursor-pointer"
+                              onDoubleClick={() => startEditingTask(item.id, item.name)}
+                            >
+                              {item.name}
+                            </p>
+                          )}
+                        </KanbanCard>
+                      )}
+                    </KanbanCards>
+                  </KanbanBoard>
+                )}
+              </KanbanProvider>
+            </DialogPanel>
+          </div>
+        </Dialog>
       )}
     </>
   );
