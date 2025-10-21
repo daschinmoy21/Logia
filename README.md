@@ -18,7 +18,7 @@ A powerful, AI-enhanced notes application built with Tauri and React, designed f
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/) (v18 or later)
+- [Bun](https://bun.com/)
 - [Rust](https://rustup.rs/) (latest stable)
 - [Tauri CLI](https://tauri.app/v1/guides/getting-started/prerequisites)
 
@@ -26,7 +26,7 @@ A powerful, AI-enhanced notes application built with Tauri and React, designed f
 
 1. Clone the repository:
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/daschinmoy21/Kortex.git
    cd kortex
    ```
 
@@ -60,7 +60,7 @@ Create a `.env` file in the root directory with your API keys:
 ```env
 OPENAI_API_KEY=your_openai_key
 GROQ_API_KEY=your_groq_key
-GOOGLE_AI_API_KEY=your_google_key
+GOOGLE_GENRATIVE_AI_API_KEY=your_google_key
 ```
 
 ## Development
@@ -80,12 +80,7 @@ GOOGLE_AI_API_KEY=your_google_key
 - `bun run tauri build` - Build the native application
 
 ## Contributing
-
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/your-feature`
-3. Make your changes and commit: `git commit -am 'Add new feature'`
-4. Push to the branch: `git push origin feature/your-feature`
-5. Submit a pull request
+DO NOT MAKE SPAM PRs
 
 ## License
 
