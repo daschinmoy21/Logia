@@ -23,6 +23,21 @@ export const CommandPalette = () => {
           if (searchResults[selectedIndex]) {
             selectNote(searchResults[selectedIndex]);
             closeCommandPalette();
+            
+            // Focus editor after a short delay to allow component to mount/update
+            setTimeout(() => {
+              // Try to find the BlockNote editor content editable area
+              const editorElement = document.querySelector('.bn-editor') as HTMLElement;
+              if (editorElement) {
+                editorElement.focus();
+              } else {
+                // Fallback for other editor types or if class is different
+                const contentEditable = document.querySelector('[contenteditable="true"]') as HTMLElement;
+                if (contentEditable) {
+                  contentEditable.focus();
+                }
+              }
+            }, 100);
           }
         } else if (e.key === 'Escape') {
           e.preventDefault();
@@ -64,6 +79,19 @@ export const CommandPalette = () => {
                 onClick={() => {
                   selectNote(note);
                   closeCommandPalette();
+                  
+                  // Focus editor after a short delay
+                  setTimeout(() => {
+                    const editorElement = document.querySelector('.bn-editor') as HTMLElement;
+                    if (editorElement) {
+                      editorElement.focus();
+                    } else {
+                      const contentEditable = document.querySelector('[contenteditable="true"]') as HTMLElement;
+                      if (contentEditable) {
+                        contentEditable.focus();
+                      }
+                    }
+                  }, 100);
                 }}
               >
                 {note.title}

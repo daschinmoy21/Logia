@@ -85,7 +85,10 @@ export const AnimatedFileTree: React.FC<AnimatedFileTreeProps> = ({
         <div
           className={`flex py-1.5 px-1 rounded-md cursor-pointer group ${isSelected ? 'bg-zinc-800' : 'hover:bg-zinc-800/70'}`}
           style={{ paddingLeft: `${depth * 8}px` }}
-
+          onClick={(e) => {
+            e.stopPropagation();
+            onSelectFolder(folder.id);
+          }}
           onContextMenu={(e) => onContextMenu(e, { folder })}
           onDoubleClick={() => onStartFolderRenaming(folder.id, folder.name)}
         >
