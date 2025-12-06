@@ -4,7 +4,7 @@ import { useNotesStore } from "../store/notesStore";
 import { NoteEditor } from "./NoteEditor";
 import { EditorProvider } from "./EditorProvider";
 import { EmptyState } from "./EmptyState";
-import Canvas from "./Excalidraw"; // Import Canvas
+import Canvas from "./Canvas"; // Import Canvas
 import './styles.css';
 
 function Editor() {

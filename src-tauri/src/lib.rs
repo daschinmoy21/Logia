@@ -307,6 +307,8 @@ async fn transcribe_audio(audio_path: String) -> Result<String, String> {
     serde_json::to_string(&result).map_err(|e| format!("Serialization error: {}", e))
 }
 
+
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Load .env file

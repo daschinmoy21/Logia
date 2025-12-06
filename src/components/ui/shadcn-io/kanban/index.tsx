@@ -24,7 +24,6 @@ import {
   useState,
 } from 'react';
 import { GripVertical, Trash2 } from 'lucide-react';
-import { Card } from '@/components/ui/card';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 
@@ -68,8 +67,8 @@ export const KanbanBoard = ({ id, children, className }: KanbanBoardProps) => {
   return (
     <div
       className={cn(
-        'flex size-full min-h-40 flex-col divide-y overflow-hidden rounded-md border bg-zinc-900 text-zinc-300 shadow-sm ring-2 transition-all border-zinc-700 divide-zinc-600',
-        isOver ? 'ring-blue-500' : 'ring-transparent',
+        'flex h-full min-h-[150px] flex-col rounded-xl border border-zinc-800/50 bg-zinc-950/30 text-zinc-300 transition-all duration-200',
+        isOver ? 'bg-zinc-900/80 ring-2 ring-blue-500/20' : '',
         className
       )}
       ref={setNodeRef}
@@ -109,37 +108,36 @@ export const KanbanCard = <T extends KanbanItemProps = KanbanItemProps>({
   };
 
   return (
-    <div style={style} ref={setNodeRef}>
-      <Card
+    <div style={style} ref={setNodeRef} className={cn("relative group", isDragging ? "z-50" : "z-0")}>
+      <div
         className={cn(
-          'gap-4 rounded-md p-3 shadow-sm bg-zinc-700 border-zinc-600 text-zinc-300',
-          isDragging && 'opacity-50',
+          'relative flex w-full items-center gap-3 rounded-lg border border-zinc-800 bg-zinc-900 p-3 shadow-sm transition-all duration-200',
+          'hover:border-zinc-700 hover:shadow-md',
+          isDragging ? 'cursor-grabbing opacity-90 ring-2 ring-blue-500/30 scale-105 rotate-1 shadow-xl' : 'cursor-grab',
           className
         )}
       >
-        <div className="flex items-center">
-          <div
-            className="cursor-grab p-1 hover:bg-zinc-700 rounded"
-            {...listeners}
-            {...attributes}
-          >
-            <GripVertical size={14} className="text-zinc-500" />
-          </div>
-          <div className="flex-1">
-            {children ?? <p className="m-0 font-medium text-sm">{name}</p>}
-          </div>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete?.(id);
-            }}
-            className="p-1 text-zinc-500 hover:text-red-400 hover:bg-zinc-700 rounded transition-colors"
-            title="Delete Task"
-          >
-            <Trash2 size={14} />
-          </button>
+        <div
+          className="cursor-grab p-1.5 text-zinc-600 hover:text-zinc-400 hover:bg-zinc-800 rounded-md transition-colors"
+          {...listeners}
+          {...attributes}
+        >
+          <GripVertical size={16} />
         </div>
-      </Card>
+        <div className="flex-1 min-w-0">
+          {children ?? <p className="m-0 font-medium text-sm truncate">{name}</p>}
+        </div>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete?.(id);
+          }}
+          className="opacity-0 group-hover:opacity-100 focus:opacity-100 p-1.5 text-zinc-500 hover:text-red-400 hover:bg-zinc-800 rounded-md transition-all"
+          title="Delete Task"
+        >
+          <Trash2 size={15} />
+        </button>
+      </div>
     </div>
   );
 };
@@ -159,9 +157,9 @@ export const KanbanCards = <T extends KanbanItemProps = KanbanItemProps>({
   const filteredData = data.filter((item) => item.column === id);
 
   return (
-    <ScrollArea className="overflow-hidden">
+    <ScrollArea className="flex-1">
       <div
-        className={cn('flex flex-grow flex-col gap-2 p-2', className)}
+        className={cn('flex flex-grow flex-col gap-3 p-3', className)}
       >
         {filteredData.map(children)}
       </div>
@@ -173,7 +171,10 @@ export const KanbanCards = <T extends KanbanItemProps = KanbanItemProps>({
 export type KanbanHeaderProps = HTMLAttributes<HTMLDivElement>;
 
 export const KanbanHeader = ({ className, ...props }: KanbanHeaderProps) => (
-  <div className={cn('m-0 p-2 font-semibold text-sm text-zinc-200', className)} {...props} />
+  <div 
+    className={cn('flex items-center border-b border-zinc-800/50 p-4 font-semibold text-sm text-zinc-200 bg-zinc-900/20 rounded-t-xl', className)} 
+    {...props} 
+  />
 );
 
 export type KanbanProviderProps<
@@ -200,7 +201,11 @@ export const KanbanProvider = <
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
 
   const sensors = useSensors(
-    useSensor(MouseSensor),
+    useSensor(MouseSensor, {
+      activationConstraint: {
+        distance: 10,
+      },
+    }),
     useSensor(TouchSensor),
     useSensor(KeyboardSensor)
   );
@@ -256,7 +261,7 @@ export const KanbanProvider = <
       >
         <div
           className={cn(
-            'grid size-full auto-cols-fr grid-flow-col gap-4',
+            'grid size-full auto-cols-fr grid-flow-col gap-6',
             className
           )}
         >
@@ -268,6 +273,7 @@ export const KanbanProvider = <
               id={activeCardId}
               name={data.find(d => d.id === activeCardId)?.name || ''}
               column=""
+              isDragging
             />
           )}
         </DragOverlay>

@@ -655,7 +655,7 @@ export const Sidebar = () => {
                                 if (e.key === 'Enter') saveTaskName();
                                 if (e.key === 'Escape') cancelEditing();
                               }}
-                              className="bg-zinc-800 border border-zinc-400 rounded px-2 py-1 text-zinc-500 w-full outline-none focus:border-zinc-700"
+                              className="bg-zinc-950 border border-zinc-700/80 rounded px-2 py-1 text-zinc-300 w-full outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20 transition-all placeholder-zinc-600"
                               autoFocus
                             />
                           ) : (

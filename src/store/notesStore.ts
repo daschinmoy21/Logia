@@ -184,26 +184,32 @@ export const useNotesStore = create<NotesState>()(
     },
 
     updateCurrentNoteContent: (content: string) => {
+      console.log('updateCurrentNoteContent called with length:', content.length);
       const state = get();
-      if (!state.currentNote) return;
 
-      // Clear existing timeout
-      if (state.saveTimeout) {
-        clearTimeout(state.saveTimeout);
+      if (state.currentNote) {
+        console.log('Updating note content locally');
+        // Clear any existing save timeout
+        if (state.saveTimeout) {
+          clearTimeout(state.saveTimeout);
+        }
+
+        // Update the current note content locally
+        const updatedNote = { ...state.currentNote, content };
+
+        // Schedule auto-save with aggressive debounce for canvas notes
+        const newTimeout = setTimeout(() => {
+          console.log('Executing autosave timeout');
+          get().saveCurrentNote();
+        }, 200); // Aggressive save for canvas
+
+        set({
+          currentNote: updatedNote,
+          saveTimeout: newTimeout,
+        });
+      } else {
+        console.log('No current note to update');
       }
-
-      // Update the current note content locally
-      const updatedNote = { ...state.currentNote, content };
-
-      // Schedule auto-save with shorter debounce for real-time feel
-      const newTimeout = setTimeout(() => {
-        get().saveCurrentNote();
-      }, 500); // Reduced from 2000ms to 500ms
-
-      set({
-        currentNote: updatedNote,
-        saveTimeout: newTimeout,
-      });
     },
 
     updateCurrentNoteTitle: (title: string) => {
@@ -228,24 +234,19 @@ export const useNotesStore = create<NotesState>()(
     },
 
     saveCurrentNote: async () => {
+      console.log('saveCurrentNote called');
       const state = get();
-      if (!state.currentNote) return;
-
-      try {
-        // Save via Tauri backend
-        await invoke('save_note', { note: state.currentNote });
-
-        // Update the note in the notes list
-        set((state) => ({
-          notes: state.notes.map((note) =>
-            note.id === state.currentNote?.id ? state.currentNote : note
-          ),
-        }));
-
-        console.log('Note saved:', state.currentNote);
-      } catch (error) {
-        console.error('Failed to save note:', error);
-        throw error;
+      if (state.currentNote) {
+        try {
+          console.log('Invoking save_note');
+          await invoke('save_note', { note: state.currentNote });
+          set({ saveTimeout: null });
+          console.log('Note saved successfully:', state.currentNote.id);
+        } catch (error) {
+          console.error('Failed to save note:', error);
+        }
+      } else {
+        console.log('No current note to save');
       }
     },
   })
