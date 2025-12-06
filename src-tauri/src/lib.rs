@@ -7,6 +7,8 @@ use tauri::path::BaseDirectory;
 use tauri::Manager;
 use uuid::Uuid;
 
+mod audio;
+
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -289,6 +291,22 @@ fn get_google_api_key() -> Result<String, String> {
         .map_err(|_| "GOOGLE_GENERATIVE_AI_API_KEY environment variable not set".to_string())
 }
 
+#[tauri::command]
+async fn start_recording(app_handle: tauri::AppHandle) -> Result<(), String> {
+    audio::os_capture::start_capture(&app_handle)
+}
+
+#[tauri::command]
+async fn stop_recording() -> Result<String, String> {
+    audio::os_capture::stop_capture()
+}
+
+#[tauri::command]
+async fn transcribe_audio(audio_path: String) -> Result<String, String> {
+    let result = audio::transcription::transcribe_audio(&audio_path)?;
+    serde_json::to_string(&result).map_err(|e| format!("Serialization error: {}", e))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Load .env file
@@ -309,7 +327,10 @@ pub fn run() {
             get_kanban_data,
             save_kanban_data,
             get_google_api_key,
-            greet
+            greet,
+            start_recording,
+            stop_recording,
+            transcribe_audio
         ])
         .plugin(tauri_plugin_opener::init())
         .run(tauri::generate_context!())

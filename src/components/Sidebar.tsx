@@ -36,7 +36,7 @@ export const Sidebar = () => {
   const currentNote = useNotesStore((state) => state.currentNote);
 
   // Getting actions (they don't cause re-renders)
-  const { loadNotes, loadFolders, selectNote, deleteNote, createNote, createFolder, updateNote, updateFolder, deleteFolder } = useNotesStore.getState();
+  const { loadNotes, loadFolders, selectNote, deleteNote, createNote, createFolder, updateNote, updateFolder, deleteFolder, updateCurrentNoteContent } = useNotesStore.getState();
 
   // Subscribing to UI state changes individually
   const deleteConfirmId = useUiStore((state) => state.deleteConfirmId);
@@ -258,13 +258,25 @@ export const Sidebar = () => {
 
         {/* Action buttons row */}
         <div className='bg-zinc-900 flex justify-around text-sm mb-1 pb-2 border-b border-zinc-700'>
-          <button
-            title="Notes Agent"
-            className='p-2 text-zinc-500 cursor-not-allowed focus:outline-none'
-            disabled
-          >
-            <Bot size={20} />
-          </button>
+           <button
+             title="Notes Agent"
+             className={`p-2 focus:outline-none transition-colors ${isRecording ? 'text-red-400' : 'text-zinc-400 hover:text-blue-400'} cursor-pointer`}
+             onClick={async () => {
+               if (!isRecording) {
+                 console.log('Starting recording...');
+                 try {
+                   console.log('Calling start_recording...');
+                   await invoke('start_recording');
+                   console.log('Recording started');
+                   setIsRecording(true);
+                 } catch (error) {
+                   console.error('Failed to start recording:', error);
+                 }
+               }
+             }}
+           >
+             <Bot size={20} />
+           </button>
           <button
             title="New Canvas"
             className='p-2 text-zinc-400 hover:text-blue-400 cursor-pointer focus:outline-none transition-colors active:scale-95'
@@ -290,10 +302,79 @@ export const Sidebar = () => {
             <Plus size={20} />
           </button>
         </div>
-        {/* Recording animation div visible when capturing system audio */}
-        {isRecording &&
-          <RecStatus isRecording={isRecording} onStop={() => setIsRecording(false)} />
-        }
+         {/* Recording animation div visible when capturing system audio */}
+          {isRecording &&
+           <RecStatus isRecording={isRecording} onStop={async () => {
+             console.log('Stopping recording...');
+             let noteToUpdate = currentNote;
+             if (!currentNote) {
+               console.log('No current note, creating one...');
+               try {
+                 await createNote('text');
+                 noteToUpdate = useNotesStore.getState().currentNote;
+                 console.log('Created new note:', noteToUpdate?.id);
+               } catch (error) {
+                 console.error('Failed to create note:', error);
+                 return;
+               }
+             }
+
+             try {
+               console.log('Calling stop_recording...');
+               const audioPath = await invoke<string>('stop_recording');
+               console.log('Recording stopped, audio path:', audioPath);
+
+               // Stop showing recording progress immediately
+               setIsRecording(false);
+               console.log('Recording state set to false');
+
+               console.log('Calling transcribe_audio...');
+               const transcriptionResult = await invoke<string>('transcribe_audio', { audioPath });
+               console.log('Transcription result received, length:', transcriptionResult.length);
+
+               const result = JSON.parse(transcriptionResult);
+               console.log('Parsed result:', result);
+
+               if (result.error) {
+                 throw new Error(result.error);
+               }
+               if (noteToUpdate && result.text) {
+                 console.log('Appending transcription to note...');
+                 try {
+                   // Parse current content, default to empty array if invalid
+                   let currentContent = [];
+                   if (noteToUpdate.content && noteToUpdate.content.trim()) {
+                     try {
+                       currentContent = JSON.parse(noteToUpdate.content);
+                       if (!Array.isArray(currentContent)) {
+                         currentContent = [];
+                       }
+                     } catch (parseError) {
+                       console.warn('Failed to parse current note content, using empty array:', parseError);
+                       currentContent = [];
+                     }
+                   }
+
+                   const newBlock = {
+                     type: 'paragraph',
+                     content: result.text
+                   };
+                   const updatedContent = [...currentContent, newBlock];
+                   updateCurrentNoteContent(JSON.stringify(updatedContent));
+                   console.log('Transcription appended to note, new content length:', updatedContent.length);
+                 } catch (error) {
+                   console.error('Failed to append transcription:', error);
+                 }
+               } else {
+                 console.warn('No note to update or no transcription text');
+               }
+               console.log('Transcription:', result.text);
+             } catch (error) {
+               console.error('Transcription failed:', error);
+               // If transcription fails, we already stopped recording UI
+             }
+           }} />
+         }
 
 
         {/* File Tree */}

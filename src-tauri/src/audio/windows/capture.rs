@@ -25,6 +25,7 @@ fn generate_output_file(app_handle: &AppHandle) -> Result<String, String> {
 }
 
 pub fn start_capture(app_handle: &AppHandle) -> Result<(), String> {
+    println!("Starting audio capture on Windows");
     let executable_path = app_handle
         .path()
         .resolve_resource("resources/audio/windows/Windows.exe")

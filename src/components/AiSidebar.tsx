@@ -17,11 +17,14 @@ interface AiSidebarProps {
 
 const AiSidebar = ({ isOpen, onClose }: AiSidebarProps) => {
   const { currentNote } = useNotesStore();
-  const [messages, setMessages] = useState<{ role: 'user' | 'assistant', content: string }[]>([]);
+  const [messagesMap, setMessagesMap] = useState<Record<string, { role: 'user' | 'assistant', content: string }[]>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [streamingMessage, setStreamingMessage] = useState<string>('');
   const [apiKey, setApiKey] = useState<string>('');
   const scrollableContainerRef = useRef<HTMLDivElement>(null);
+
+  // Get messages for current note
+  const messages = currentNote ? messagesMap[currentNote.id] || [] : [];
 
   useEffect(() => {
     if (scrollableContainerRef.current) {
@@ -51,10 +54,14 @@ const AiSidebar = ({ isOpen, onClose }: AiSidebarProps) => {
       alert('Google API key not configured. Please set GOOGLE_GENERATIVE_AI_API_KEY in your environment.');
       return;
     }
+    if (!currentNote) return;
 
     // Add user message
     const userMessage = { role: 'user' as const, content: message };
-    setMessages(prev => [...prev, userMessage]);
+    setMessagesMap(prev => ({
+      ...prev,
+      [currentNote.id]: [...(prev[currentNote.id] || []), userMessage]
+    }));
     setIsLoading(true);
     setStreamingMessage('');
 
@@ -77,12 +84,18 @@ const AiSidebar = ({ isOpen, onClose }: AiSidebarProps) => {
 
       // Add assistant message
       const assistantMessage = { role: 'assistant' as const, content: fullResponse };
-      setMessages(prev => [...prev, assistantMessage]);
+      setMessagesMap(prev => ({
+        ...prev,
+        [currentNote.id]: [...(prev[currentNote.id] || []), assistantMessage]
+      }));
       setStreamingMessage('');
     } catch (error) {
       console.error('AI error:', error);
       const errorMessage = { role: 'assistant' as const, content: 'Sorry, I encountered an error.' };
-      setMessages(prev => [...prev, errorMessage]);
+      setMessagesMap(prev => ({
+        ...prev,
+        [currentNote.id]: [...(prev[currentNote.id] || []), errorMessage]
+      }));
       setStreamingMessage('');
     } finally {
       setIsLoading(false);

@@ -1,15 +1,27 @@
-use libc::{kill, SIGINT};
+use libc;
 use std::process::Command;
 use std::sync::{Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
+use tauri::{AppHandle, Manager};
 static CAPTURE_PROCESS: OnceLock<Mutex<Option<std::process::Child>>> = OnceLock::new();
+static CURRENT_FILE: OnceLock<Mutex<Option<String>>> = OnceLock::new();
 
-fn generate_output_file() -> String {
+fn generate_output_file(app_handle: &AppHandle) -> Result<String, String> {
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
-        .as_specs();
-    format!("capture_{}.wav", timestamp)
+        .as_secs();
+    let file_name = format!("capture_{}.wav", timestamp);
+
+    let audio_dir = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {}", e))?
+        .join("audio");
+    std::fs::create_dir_all(&audio_dir)
+        .map_err(|e| format!("Failed to create audio directory: {}", e))?;
+
+    Ok(audio_dir.join(file_name).to_string_lossy().to_string())
 }
 
 fn get_default_sink() -> Result<String, String> {
@@ -35,10 +47,11 @@ fn get_default_sink() -> Result<String, String> {
     Ok(sink_name)
 }
 
-pub fn start_capture() -> Result<(), String> {
+pub fn start_capture(app_handle: &AppHandle) -> Result<(), String> {
+    println!("Starting audio capture on Linux");
     let default_sink = get_default_sink()?;
     let monitor_name = format!("{}.monitor", default_sink);
-    let output_file = generate_output_file();
+    let output_file = generate_output_file(app_handle)?;
 
     let mut cmd = Command::new("ffmpeg");
     cmd.args(&[
@@ -66,26 +79,32 @@ pub fn start_capture() -> Result<(), String> {
         .map_err(|e| format!("Mutex error:{}", e))?;
     *guard = Some(child);
 
+    let file_mutex = CURRENT_FILE.get_or_init(|| Mutex::new(None));
+    let mut file_guard = file_mutex
+        .lock()
+        .map_err(|e| format!("Mutex error:{}", e))?;
+    *file_guard = Some(output_file.clone());
+
     println!("Capturing audio from '{}' to {}", monitor_name, output_file);
     Ok(())
 }
 
-pub fn stop_capture() -> Result<(), String> {
+pub fn stop_capture() -> Result<String, String> {
     let process_mutex = CAPTURE_PROCESS
         .get()
         .ok_or("Capture process not initialized")?;
 
     let mut guard = process_mutex
         .lock()
-        .map_err(|e| format!("Mutext error {}", e))?;
+        .map_err(|e| format!("Mutex error {}", e))?;
     if let Some(mut child) = guard.take() {
-        if let Err(e) = child.signal(libc::SIGINT) {
-            eprintln!("Failed to send SIGINT:{}", e);
+        unsafe {
+            libc::kill(child.id() as i32, libc::SIGINT);
         }
 
         std::thread::sleep(std::time::Duration::from_millis(500));
 
-        if let Ok(None) = child_try_wait() {
+        if let Ok(None) = child.try_wait() {
             if let Err(e) = child.kill() {
                 return Err(format!("Failed to kill process:{}", e));
             }
@@ -96,7 +115,16 @@ pub fn stop_capture() -> Result<(), String> {
             .map_err(|e| format!("Process wait failed:{}", e))?;
         println!("Audio capture stopped");
     }
-    Ok(())
+
+    let file_mutex = CURRENT_FILE
+        .get()
+        .ok_or("File not initialized")?;
+    let mut file_guard = file_mutex
+        .lock()
+        .map_err(|e| format!("Mutex error:{}", e))?;
+    let file_path = file_guard.take().ok_or("No file path stored")?;
+
+    Ok(file_path)
 }
 
 pub fn cleanup() -> Result<(), String> {

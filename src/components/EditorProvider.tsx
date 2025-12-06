@@ -42,7 +42,7 @@ export function useEditorContext() {
 // const provider = createGroq({
 //   apiKey: import.meta.env.VITE_GROQ_API_KEY,
 // });
-const model = google("gemini-1.5-flash");
+const model = google("gemini-2.5-flash");
 
 
 export function EditorProvider({
@@ -82,9 +82,11 @@ export function EditorProvider({
   // Update editor content when currentNote changes
   useEffect(() => {
     if (currentNote && !isUpdatingRef.current) {
+      console.log('Updating editor content for note:', currentNote.id, 'content length:', currentNote.content?.length);
       try {
         const content = currentNote.content ? JSON.parse(currentNote.content) : [];
         editor.replaceBlocks(editor.document, content);
+        console.log('Editor content updated with', content.length, 'blocks');
       } catch (error) {
         // If content is not valid JSON, treat as plain text
         console.warn("Invalid JSON content, treating as plain text");
@@ -96,7 +98,7 @@ export function EditorProvider({
         ]);
       }
     }
-  }, [currentNote?.id, editor]); // Only trigger when note ID changes
+  }, [currentNote?.id, currentNote?.content, editor]); // Trigger when note ID or content changes
 
   // Handle content changes with auto-save
   useEffect(() => {
@@ -138,7 +140,7 @@ export function FormattingToolbarWithAI({ editor }: { editor: BlockNoteEditor<an
         <FormattingToolbar>
           {...getFormattingToolbarItems()}
           {/* Add the AI button */}
-          <AIToolbarButton />
+          {/* <AIToolbarButton /> */}
         </FormattingToolbar>
       )}
     />
