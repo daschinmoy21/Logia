@@ -9,6 +9,7 @@ import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import Loader from "@/components/Ai-loader";
 import { ShimmeringText } from "../components/animate-ui/text/shimmering";
+import { Bot, User, Trash2, X } from 'lucide-react';
 
 interface AiSidebarProps {
   isOpen: boolean;
@@ -47,6 +48,15 @@ const AiSidebar = ({ isOpen, onClose }: AiSidebarProps) => {
   const google = createGoogleGenerativeAI({ apiKey });
 
   if (!isOpen) return null;
+
+  const handleClearChat = () => {
+    if (currentNote) {
+      setMessagesMap(prev => ({
+        ...prev,
+        [currentNote.id]: []
+      }));
+    }
+  };
 
   const handleSendMessage = async (message: string, files?: File[]) => {
     if (!message.trim()) return;
@@ -104,64 +114,134 @@ const AiSidebar = ({ isOpen, onClose }: AiSidebarProps) => {
 
   return (
     <Resizable
-      defaultSize={{ width: 320, height: '100%' }}
+      defaultSize={{ width: 350, height: '100%' }}
       enable={{ left: true }}
-      minWidth={270}
+      minWidth={300}
       maxWidth={600}
+      handleClasses={{ left: 'w-1 bg-zinc-800 hover:bg-zinc-600 transition-colors' }}
     >
-      <div className="h-full bg-zinc-900 border-l border-zinc-500 flex flex-col">
-      <div className="p-4 border-b border-zinc-800">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-zinc-200">AI Assistant</h2>
-          <button
-            onClick={onClose}
-            className="text-zinc-400 hover:text-zinc-200"
-          >
-            ✕
-          </button>
+      <div className="h-full bg-zinc-950 border-l border-zinc-800 flex flex-col shadow-2xl">
+        {/* Header */}
+        <div className="px-4 py-3 border-b border-zinc-800 bg-zinc-950 flex items-center justify-between sticky top-0 z-10">
+          <div className="flex items-center gap-2">
+            <span className="text-zinc-100 font-medium text-sm tracking-wide">AI Assistant</span>
+            {messages.length > 0 && (
+              <span className="bg-zinc-800 text-zinc-400 text-[10px] px-1.5 py-0.5 rounded-full border border-zinc-700">
+                {messages.length} msgs
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={handleClearChat}
+              className="p-1.5 text-zinc-400 hover:text-red-400 hover:bg-zinc-800/50 rounded-md transition-all"
+              title="Clear Chat"
+            >
+              <Trash2 size={14} />
+            </button>
+            <button
+              onClick={onClose}
+              className="p-1.5 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/50 rounded-md transition-all"
+              title="Close"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+
+        {/* Messages Area */}
+        <div className="flex-1 overflow-hidden relative flex flex-col">
+          <div ref={scrollableContainerRef} className="flex-1 overflow-y-auto p-4 space-y-6 scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-transparent">
+            {messages.length === 0 && (
+              <div className="h-full flex flex-col items-center justify-center text-center p-6 opacity-60 mt-10">
+                <div className="bg-zinc-900/50 p-4 rounded-2xl mb-4 border border-zinc-800">
+                  <Bot size={32} className="text-blue-500 mb-2 mx-auto" />
+                  <p className="text-zinc-400 text-sm font-medium">How can I help you with your notes today?</p>
+                </div>
+              </div>
+            )}
+            
+            {messages.map((msg, index) => (
+              <div key={index} className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
+                <div className={`flex-shrink-0 mt-1 size-7 rounded-full flex items-center justify-center border ${
+                  msg.role === 'user' ? 'bg-zinc-800 border-zinc-700' : 'bg-blue-600/10 border-blue-500/20'
+                }`}>
+                  {msg.role === 'user' ? (
+                    <User size={14} className="text-zinc-400" />
+                  ) : (
+                    <Bot size={14} className="text-blue-400" />
+                  )}
+                </div>
+
+                <div className={`flex-1 max-w-[85%] text-sm leading-relaxed ${
+                  msg.role === 'user' 
+                    ? 'bg-zinc-800 text-zinc-100 px-4 py-2.5 rounded-2xl rounded-tr-sm border border-zinc-700/50' 
+                    : 'text-zinc-300'
+                }`}>
+                  <div className="prose prose-invert prose-p:my-1 prose-pre:bg-zinc-900 prose-pre:border prose-pre:border-zinc-800 prose-pre:rounded-md prose-code:text-blue-300 prose-code:bg-zinc-800/50 prose-code:px-1 prose-code:rounded prose-sm max-w-none">
+                  <Markdown 
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      code({className, children, ...props}) {
+                        const match = /language-(\w+)/.exec(className || '')
+                        return match ? (
+                          <div className="relative group my-2">
+                             <code className={className} {...props}>
+                                {children}
+                             </code>
+                          </div>
+                        ) : (
+                          <code className={className} {...props}>
+                            {children}
+                          </code>
+                        )
+                      }
+                    }}
+                  >
+                    {msg.content}
+                  </Markdown>
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {isLoading && streamingMessage && (
+               <div className="flex gap-3">
+                 <div className="flex-shrink-0 mt-1 size-7 rounded-full flex items-center justify-center bg-blue-600/10 border border-blue-500/20">
+                   <Bot size={14} className="text-blue-400" />
+                 </div>
+                 <div className="flex-1 text-sm text-zinc-300 leading-relaxed">
+                   <div className="prose prose-invert prose-p:my-1 prose-pre:bg-zinc-900 prose-pre:border prose-pre:border-zinc-800 prose-pre:rounded-md prose-code:text-blue-300 prose-code:bg-zinc-800/50 prose-code:px-1 prose-code:rounded prose-sm max-w-none">
+                   <Markdown 
+                    remarkPlugins={[remarkGfm]} 
+                   >
+                     {streamingMessage}
+                   </Markdown>
+                   </div>
+                 </div>
+               </div>
+            )}
+
+            {isLoading && !streamingMessage && (
+              <div className="flex gap-3 items-center">
+                 <div className="flex-shrink-0 size-7 rounded-full flex items-center justify-center bg-blue-600/10 border border-blue-500/20">
+                    <Loader />      
+                 </div>
+                 <ShimmeringText
+                    className="text-xs font-medium text-zinc-500"
+                    text="Thinking..."
+                    wave 
+                 />
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Input Area */}
+        <div className="p-4 bg-zinc-950 border-t border-zinc-800">
+          <PromptInputBox onSend={handleSendMessage} isLoading={isLoading} />
         </div>
       </div>
-      <div className="flex-1 p-4 flex flex-col overflow-hidden text-sm">
-        {/* Chat messages area */}
-        <div ref={scrollableContainerRef} className="flex-1 mb-4 overflow-y-auto space-y-4">
-          {messages.length === 0 && (
-            <div className="text-center text-zinc-400">
-              <h2 className="text-lg mb-2">Welcome to your AI assistant</h2>
-              <p>Ask me anything!</p>
-            </div>
-          )}
-          {messages.map((msg, index) => (
-            <div key={index} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[80%] p-3 rounded-lg ${ 
-                msg.role === 'user'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-zinc-700 text-zinc-200'
-              }`}>
-                {msg.role === 'user' ? msg.content : <Markdown remarkPlugins={[remarkGfm]}>{msg.content}</Markdown>}
-              </div>
-            </div>
-          ))}
-          {isLoading && streamingMessage && (
-            <div className="flex justify-start">
-              <div className="bg-zinc-700 text-zinc-200 p-3 rounded-lg">
-                <Markdown remarkPlugins={[remarkGfm]}>{streamingMessage}</Markdown>
-              </div>
-            </div>
-          )}
-          {isLoading && !streamingMessage && (
-            <div className="flex justify-start p-1 text-zinc-300">
-              <Loader />      
-             <ShimmeringText
-            className="ml-2 text-xs font-semibold"
-            text="Thinking"
-            wave />
- 
-            </div>
-          )}
-        </div>
-        <PromptInputBox onSend={handleSendMessage} isLoading={isLoading} />
-      </div>
-    </div>
     </Resizable>
   );
 };

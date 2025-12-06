@@ -20,6 +20,7 @@ function App() {
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      console.log('Key pressed:', event.key, 'metaKey:', event.metaKey, 'altKey:', event.altKey, 'ctrlKey:', event.ctrlKey);
       if ((event.metaKey || event.altKey) && event.key === 'p') {
         event.preventDefault();
         openCommandPalette();
@@ -44,7 +45,7 @@ function App() {
           <div className="flex-1 overflow-y-auto">
             <Editor />
           </div>
-          {currentNote && <Footer wordCount={wordCount} isSaved={isSaved}/>}
+          {currentNote && currentNote.note_type !== 'canvas' && <Footer wordCount={wordCount} isSaved={isSaved}/>}
         </div>
         <AiSidebar isOpen={isAiSidebarOpen} onClose={() => setIsAiSidebarOpen(false)} />
       </div>

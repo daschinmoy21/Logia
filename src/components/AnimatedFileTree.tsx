@@ -35,6 +35,7 @@ interface AnimatedFileTreeProps {
   onFolderRenameValueChange: (value: string) => void;
   onStartRenaming: (noteId: string, title: string) => void;
   onStartFolderRenaming: (folderId: string, name: string) => void;
+  selectedNoteId: string | null;
 }
 
 export const AnimatedFileTree: React.FC<AnimatedFileTreeProps> = ({
@@ -56,6 +57,7 @@ export const AnimatedFileTree: React.FC<AnimatedFileTreeProps> = ({
   onFolderRenameValueChange,
   onStartRenaming,
   onStartFolderRenaming,
+  selectedNoteId,
 }) => {
   const currentNotes = useNotesStore((state) => state.notes);
   const currentFolders = useNotesStore((state) => state.folders);
@@ -83,7 +85,11 @@ export const AnimatedFileTree: React.FC<AnimatedFileTreeProps> = ({
     return (
       <FolderItem key={folder.id} value={folder.id}>
         <div
-          className={`flex py-1.5 px-1 rounded-md cursor-pointer group ${isSelected ? 'bg-zinc-800' : 'hover:bg-zinc-800/70'}`}
+          className={`flex items-center py-1.5 px-1 rounded-md cursor-pointer transition-all duration-200 group
+            ${isSelected 
+              ? 'bg-blue-600/10 text-blue-100 border-l-2 border-blue-500' 
+              : 'hover:bg-zinc-800/70 text-zinc-300'
+            }`}
           style={{ paddingLeft: `${depth * 8}px` }}
           onClick={(e) => {
             e.stopPropagation();
@@ -98,17 +104,17 @@ export const AnimatedFileTree: React.FC<AnimatedFileTreeProps> = ({
             <div className="flex items-start mr-0.5">
               {hasChildren ? (
                 <FolderIcon
-                  closeIcon={<ChevronRight size={14} className="text-zinc-500" />}
-                  openIcon={<ChevronDown size={14} className="text-zinc-500" />}
+                  closeIcon={<ChevronRight size={14} className={isSelected ? "text-blue-300" : "text-zinc-500"} />}
+                  openIcon={<ChevronDown size={14} className={isSelected ? "text-blue-300" : "text-zinc-500"} />}
                 />
               ) : (
                 <div className="w-4" />
               )}
             </div>
             {expandedFolders.has(folder.id) ? (
-              <FolderOpen size={16} className="text-blue-400" />
+              <FolderOpen size={16} className={isSelected ? "text-blue-200" : "text-blue-400"} />
             ) : (
-              <Folder size={16} className="text-blue-400" />
+              <Folder size={16} className={isSelected ? "text-blue-200" : "text-blue-400"} />
             )}
             {renamingFolderId === folder.id ? (
               <input
@@ -127,7 +133,7 @@ export const AnimatedFileTree: React.FC<AnimatedFileTreeProps> = ({
                 onClick={(e) => e.stopPropagation()}
               />
             ) : (
-      <FolderLabel className="text-sm text-zinc-300 truncate px-1 py-0.5">
+      <FolderLabel className={isSelected ? "text-blue-100 text-sm truncate px-1 py-0.5" : "text-zinc-300 text-sm truncate px-1 py-0.5"}>
         {folder.name}
       </FolderLabel>
             )}
@@ -147,10 +153,12 @@ export const AnimatedFileTree: React.FC<AnimatedFileTreeProps> = ({
             <File
               key={note.id}
               className={`
-                group relative font-small px-2 py-1.5 rounded-md cursor-pointer transition-all duration-200
+                group relative font-small px-2 py-1.5 rounded-md cursor-pointer transition-all duration-200 flex items-center
                 ${note.id === renamingNoteId
                   ? 'bg-zinc-800'
-                  : 'hover:bg-zinc-800/50'
+                  : note.id === selectedNoteId
+                    ? 'bg-blue-600/20 text-blue-100 border-l-2 border-blue-500'
+                    : 'hover:bg-zinc-800/50 text-zinc-300'
                 }
               `}
               style={{ paddingLeft: `${(depth + 1) * 16 + 8}px` }}
@@ -158,13 +166,13 @@ export const AnimatedFileTree: React.FC<AnimatedFileTreeProps> = ({
               onContextMenu={(e) => onContextMenu(e, { note })}
               onDoubleClick={() => onStartRenaming(note.id, note.title || 'Untitled')}
             >
-              <div className='flex items-start justify-between'>
+              <div className='flex items-center justify-between w-full'>
                 <div className='flex-1 min-w-0 pr-2'>
                   <div className={`
                     font-small text-sm truncate flex items-start
-                    ${note.id === renamingNoteId ? 'text-white' : 'text-zinc-300'}
+                    ${note.id === renamingNoteId ? 'text-white' : note.id === selectedNoteId ? 'text-blue-100' : 'text-zinc-300'}
                   `}>
-                    <FileIcon className="mr-2 flex-shrink-0 mt-0.5">
+                    <FileIcon className={`mr-2 flex-shrink-0 mt-0.5 ${note.id === selectedNoteId ? "text-blue-300" : "text-zinc-500"}`}>
                       {note.note_type === 'canvas' ? <PencilRuler size={15} /> : <FileMinus size={13} />}
                     </FileIcon>
                     {renamingNoteId === note.id ? (
@@ -184,7 +192,7 @@ export const AnimatedFileTree: React.FC<AnimatedFileTreeProps> = ({
                         onClick={(e) => e.stopPropagation()}
                       />
                     ) : (
-                      <FileLabel>{note.title || 'Untitled'}</FileLabel>
+                      <FileLabel className={note.id === selectedNoteId ? "text-blue-100" : "text-zinc-300"}>{note.title || 'Untitled'}</FileLabel>
                     )}
                   </div>
                 </div>
@@ -192,7 +200,7 @@ export const AnimatedFileTree: React.FC<AnimatedFileTreeProps> = ({
                 <button
                   onClick={(e) => onDeleteNote(note.id, e)}
                   className='opacity-0 group-hover:opacity-100 p-1 text-zinc-500 hover:text-red-400
-                  hover:bg-zinc-700 rounded transition-all duration-200 flex-shrink-0 active:scale-95'
+                  hover:bg-zinc-700 rounded transition-all duration-200 flex-shrink-0 active:scale-95 ml-auto'
                   title="Delete note"
                 >
                   <RiDeleteBin6Line size={12} />
@@ -222,23 +230,25 @@ export const AnimatedFileTree: React.FC<AnimatedFileTreeProps> = ({
         <File
           key={note.id}
           className={`
-            group relative font-small px-2 py-1.5 rounded-lg cursor-pointer transition-all duration-200
+            group relative font-small px-2 py-1.5 rounded-lg cursor-pointer transition-all duration-200 flex items-center
             ${note.id === renamingNoteId
               ? 'bg-zinc-800 border border-zinc-700'
-              : 'hover:bg-zinc-800/50 border border-transparent'
+              : note.id === selectedNoteId
+                ? 'bg-blue-600/30 text-blue-100 border-l-2 border-blue-500'
+                : 'hover:bg-zinc-800/50 border border-transparent text-zinc-300'
             }
           `}
           onClick={() => onSelectNote(note)}
           onContextMenu={(e) => onContextMenu(e, { note })}
           onDoubleClick={() => onStartRenaming(note.id, note.title || 'Untitled')}
         >
-          <div className='flex items-start justify-between'>
+          <div className='flex items-center justify-between w-full'>
             <div className='flex-1 min-w-0 pr-2'>
               <div className={`
                 font-small text-sm truncate flex items-start
-                ${note.id === renamingNoteId ? 'text-white' : 'text-zinc-300'}
+                ${note.id === renamingNoteId ? 'text-white' : note.id === selectedNoteId ? 'text-blue-100' : 'text-zinc-300'}
               `}>
-                <FileIcon className="mr-2 flex-shrink-0">
+                <FileIcon className={`mr-2 flex-shrink-0 ${note.id === selectedNoteId ? "text-blue-300" : "text-zinc-500"}`}>
                   {note.note_type === 'canvas' ? <PencilRuler size={17} /> : <FileMinus size={15} />}
                 </FileIcon>
                 {renamingNoteId === note.id ? (
@@ -258,7 +268,7 @@ export const AnimatedFileTree: React.FC<AnimatedFileTreeProps> = ({
                     onClick={(e) => e.stopPropagation()}
                   />
                 ) : (
-                  <FileLabel>{note.title || 'Untitled'}</FileLabel>
+                  <FileLabel className={note.id === selectedNoteId ? "text-blue-100" : "text-zinc-300"}>{note.title || 'Untitled'}</FileLabel>
                 )}
               </div>
             </div>
@@ -266,10 +276,10 @@ export const AnimatedFileTree: React.FC<AnimatedFileTreeProps> = ({
             <button
               onClick={(e) => onDeleteNote(note.id, e)}
               className='opacity-0 group-hover:opacity-100 p-1 text-zinc-500 hover:text-red-400
-              hover:bg-zinc-700 rounded transition-all duration-200 flex-shrink-0 active:scale-95'
+              hover:bg-zinc-700 rounded transition-all duration-200 flex-shrink-0 active:scale-95 ml-auto'
               title="Delete note"
             >
-              <RiDeleteBin6Line size={14} />
+              <RiDeleteBin6Line size={12} />
             </button>
           </div>
         </File>

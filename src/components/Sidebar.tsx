@@ -216,7 +216,6 @@ export const Sidebar = () => {
 
   const selectFolder = (folderId: string) => {
     setSelectedFolderId(folderId);
-    setExpandedFolders(prev => new Set([...prev, folderId]));
   };
 
   const toggleFolder = (folderId: string) => {
@@ -394,6 +393,7 @@ export const Sidebar = () => {
             onDeleteFolder={handleDeleteFolder}
             onDeleteNote={handleDeleteNote}
             selectedFolderId={selectedFolderId}
+            selectedNoteId={currentNote?.id}
             expandedFolders={expandedFolders}
             onExpandedFoldersChange={setExpandedFolders}
             renamingNoteId={renamingNoteId}
