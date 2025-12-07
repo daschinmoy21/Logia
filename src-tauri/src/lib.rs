@@ -79,6 +79,20 @@ fn get_folders_directory(app_handle: &tauri::AppHandle) -> Result<PathBuf, Strin
     Ok(documents_dir)
 }
 
+fn get_config_directory(app_handle: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let config_dir = app_handle
+        .path()
+        .resolve("Kortex", BaseDirectory::AppConfig)
+        .map_err(|_| "Could not find config directory")?;
+
+    if !config_dir.exists() {
+        fs::create_dir_all(&config_dir)
+            .map_err(|e| format!("Failed to create config directory:{}", e))?;
+    }
+
+    Ok(config_dir)
+}
+
 fn get_kanban_directory(app_handle: &tauri::AppHandle) -> Result<PathBuf, String> {
     let documents_dir = app_handle
         .path()
@@ -286,9 +300,52 @@ async fn save_kanban_data(tasks: Vec<KanbanTask>, app_handle: tauri::AppHandle) 
 }
 
 #[tauri::command]
-fn get_google_api_key() -> Result<String, String> {
-    std::env::var("GOOGLE_GENERATIVE_AI_API_KEY")
-        .map_err(|_| "GOOGLE_GENERATIVE_AI_API_KEY environment variable not set".to_string())
+async fn get_google_api_key(app_handle: tauri::AppHandle) -> Result<String, String> {
+    let config_dir = get_config_directory(&app_handle)?;
+    let config_file = config_dir.join("config.json");
+
+    if !config_file.exists() {
+        return Err("API key not configured".to_string());
+    }
+
+    let content = fs::read_to_string(&config_file)
+        .map_err(|e| format!("Failed to read config file: {}", e))?;
+
+    let config: serde_json::Value = serde_json::from_str(&content)
+        .map_err(|e| format!("Failed to parse config file: {}", e))?;
+
+    config.get("google_api_key")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+        .ok_or_else(|| "API key not found in config".to_string())
+}
+
+#[tauri::command]
+async fn save_google_api_key(key: String, app_handle: tauri::AppHandle) -> Result<(), String> {
+    let config_dir = get_config_directory(&app_handle)?;
+    let config_file = config_dir.join("config.json");
+
+    // Read existing config or create new one
+    let mut config: serde_json::Value = if config_file.exists() {
+        let content = fs::read_to_string(&config_file)
+            .map_err(|e| format!("Failed to read config file: {}", e))?;
+        serde_json::from_str(&content)
+            .map_err(|e| format!("Failed to parse config file: {}", e))?
+    } else {
+        serde_json::json!({})
+    };
+
+    // Update the API key
+    config["google_api_key"] = serde_json::Value::String(key);
+
+    // Write back to file
+    let content = serde_json::to_string_pretty(&config)
+        .map_err(|e| format!("Failed to serialize config: {}", e))?;
+
+    fs::write(&config_file, content)
+        .map_err(|e| format!("Failed to write config file: {}", e))?;
+
+    Ok(())
 }
 
 #[tauri::command]
@@ -301,10 +358,264 @@ async fn stop_recording() -> Result<String, String> {
     audio::os_capture::stop_capture()
 }
 
+// New helper function for dependency management
+async fn ensure_transcription_dependencies(app_handle: &tauri::AppHandle) -> Result<PathBuf, String> {
+    use std::process::Command;
+    use std::path::PathBuf;
+    use tauri::path::BaseDirectory;
+
+    let requirements_path = app_handle.path().resolve("src/audio/transcription/requirements.txt", BaseDirectory::Resource)
+        .map_err(|e| format!("Failed to resolve requirements.txt resource: {}", e))?;
+
+    let app_data_dir = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data directory: {}", e))?;
+
+    if !app_data_dir.exists() {
+        std::fs::create_dir_all(&app_data_dir)
+            .map_err(|e| format!("Failed to create app data directory: {}", e))?;
+    }
+
+    let venv_path = app_data_dir.join("transcription_venv");
+
+    let uv_available = Command::new("uv")
+        .arg("--version")
+        .output()
+        .map(|output| output.status.success())
+        .unwrap_or(false);
+
+    // Python version check and venv recreation logic
+    if venv_path.exists() {
+        let python_bin = if cfg!(windows) {
+            venv_path.join("Scripts").join("python")
+        } else {
+            venv_path.join("bin").join("python")
+        };
+        
+        if python_bin.exists() {
+            let version_output = Command::new(&python_bin)
+                .arg("--version")
+                .output()
+                .ok();
+            
+            if let Some(output) = version_output {
+                let version_str = String::from_utf8_lossy(&output.stdout);
+                let version_str_err = String::from_utf8_lossy(&output.stderr);
+                
+                if version_str.contains("3.14") || version_str_err.contains("3.14") {
+                    println!("Detected Python 3.14 in venv, which is likely incompatible. Recreating venv with 3.12...");
+                    let _ = std::fs::remove_dir_all(&venv_path);
+                }
+            }
+        }
+    }
+
+    // Create virtual environment if it doesn't exist
+    if !venv_path.exists() {
+        println!("Creating virtual environment...");
+
+        if uv_available {
+            let status = Command::new("uv")
+                .arg("venv")
+                .arg(&venv_path)
+                .arg("--python")
+                .arg("3.12")
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false);
+            
+            if status {
+                println!("Created venv with uv (Python 3.12)");
+            } else {
+                return Err("Failed to create venv with uv".to_string());
+            }
+        } else if Command::new("python3")
+            .args(&["-m", "venv", &venv_path.to_string_lossy()])
+            .output()
+            .map(|output| output.status.success())
+            .unwrap_or(false)
+        {
+            println!("Created venv with python3");
+        } else {
+            return Err("Failed to create virtual environment".to_string());
+        }
+    }
+
+    // Check if faster_whisper is already installed
+    let python_path = if cfg!(windows) {
+        venv_path.join("Scripts").join("python")
+    } else {
+        venv_path.join("bin").join("python")
+    };
+
+    if !python_path.exists() {
+        return Err("Python executable not found in venv after creation".to_string());
+    }
+
+    let check_import_status = Command::new(&python_path)
+        .args(&["-c", "import faster_whisper"])
+        .env_remove("PYTHONHOME")
+        .env_remove("PYTHONPATH")
+        .status();
+
+    if let Ok(status) = check_import_status {
+        if status.success() {
+            println!("faster_whisper already installed in venv.");
+            return Ok(venv_path); // Dependencies already installed, return venv_path
+        }
+    }
+
+    // Install dependencies if not already installed
+    println!("Installing transcription dependencies...");
+    
+    let mut install_success = false;
+
+    if uv_available {
+        println!("Using uv to install dependencies...");
+        let status_result = Command::new("uv")
+            .args(&["pip", "install", "-r", &requirements_path.to_string_lossy(), "--python", &venv_path.to_string_lossy()])
+            .env_remove("PYTHONHOME")
+            .env_remove("PYTHONPATH")
+            .status();
+
+        match status_result {
+            Ok(status) if status.success() => {
+                println!("Successfully installed dependencies with uv");
+                install_success = true;
+            },
+            Ok(status) => {
+                println!("uv install failed with exit code: {:?}", status.code());
+            },
+            Err(e) => {
+                println!("Failed to execute uv: {}", e);
+            }
+        }
+    }
+
+    if !install_success {
+        // Fallback to pip inside venv
+        let pip_path = if cfg!(windows) {
+            venv_path.join("Scripts").join("pip")
+        } else {
+            venv_path.join("bin").join("pip")
+        };
+
+        if pip_path.exists() {
+            let status_result = Command::new(&pip_path)
+                .args(&["install", "-r", &requirements_path.to_string_lossy()])
+                .env_remove("PYTHONHOME")
+                .env_remove("PYTHONPATH")
+                .status();
+
+            match status_result {
+                Ok(status) if status.success() => {
+                    println!("Successfully installed dependencies in venv with pip");
+                    install_success = true;
+                }
+                Ok(status) => {
+                    println!("pip install failed with exit code: {:?}", status.code());
+                }
+                Err(e) => {
+                    println!("Failed to run pip: {}", e);
+                }
+            }
+        } else {
+            println!("pip binary not found at {:?} and uv install failed/skipped.", pip_path);
+        }
+    }
+
+    if install_success {
+        Ok(venv_path)
+    } else {
+        Err("Failed to install transcription dependencies.".to_string())
+    }
+}
+
 #[tauri::command]
-async fn transcribe_audio(audio_path: String) -> Result<String, String> {
-    let result = audio::transcription::transcribe_audio(&audio_path)?;
-    serde_json::to_string(&result).map_err(|e| format!("Serialization error: {}", e))
+async fn transcribe_audio(audio_path: String, app_handle: tauri::AppHandle) -> Result<String, String> {
+    use std::process::Command;
+    use tauri::path::BaseDirectory;
+
+    let venv_path = ensure_transcription_dependencies(&app_handle).await?;
+
+    let script_path = app_handle.path().resolve("src/audio/transcription/transcribe.py", BaseDirectory::Resource)
+        .map_err(|e| format!("Failed to resolve transcribe.py resource: {}", e))?;
+    
+    let python_path = if cfg!(windows) {
+        venv_path.join("Scripts").join("python")
+    } else {
+        venv_path.join("bin").join("python")
+    };
+
+    if !python_path.exists() {
+        return Err("Python executable not found in venv".to_string());
+    }
+
+    let child = Command::new(&python_path)
+        .arg(&script_path)
+        .arg(&audio_path)
+        .env_remove("PYTHONHOME")
+        .env_remove("PYTHONPATH")
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::inherit())
+        .spawn()
+        .map_err(|e| format!("Failed to spawn transcription script: {}", e))?;
+
+    let output = child
+        .wait_with_output()
+        .map_err(|e| format!("Failed to wait for transcription script: {}", e))?;
+
+    if output.status.success() {
+        let stdout = String::from_utf8(output.stdout)
+            .map_err(|e| format!("Invalid output encoding: {}", e))?;
+
+        // Try to parse as JSON
+        if let Ok(result) = serde_json::from_str::<serde_json::Value>(&stdout) {
+            return serde_json::to_string(&result)
+                .map_err(|e| format!("Serialization error: {}", e));
+        } else {
+            return Err(format!("Invalid JSON output: {}", stdout));
+        }
+    } else {
+        // stderr is inherited so it's already printed, but we can't capture it here for the error message
+        // unless we pipe it. But inheriting is better for UX.
+        return Err("Transcription script failed (check terminal logs for details)".to_string());
+    }
+}
+
+#[tauri::command]
+async fn install_transcription_dependencies(app_handle: tauri::AppHandle) -> Result<(), String> {
+    let _venv_path = ensure_transcription_dependencies(&app_handle).await?;
+    Ok(())
+}
+
+fn install_python() -> Result<(), String> {
+    use std::process::Command;
+
+    // Try different package managers
+    let install_commands = vec![
+        vec!["apt-get", "update", "&&", "apt-get", "install", "-y", "python3", "python3-pip"],
+        vec!["yum", "install", "-y", "python3", "python3-pip"],
+        vec!["dnf", "install", "-y", "python3", "python3-pip"],
+        vec!["pacman", "-S", "--noconfirm", "python", "python-pip"],
+        vec!["brew", "install", "python3"],
+    ];
+
+    for cmd in install_commands {
+        println!("Trying to install Python with: {:?}", cmd);
+        let output = Command::new(&cmd[0])
+            .args(&cmd[1..])
+            .output()
+            .map_err(|e| format!("Failed to run installation command: {}", e))?;
+
+        if output.status.success() {
+            println!("Successfully installed Python");
+            return Ok(());
+        }
+    }
+
+    Err("Failed to install Python with any package manager".to_string())
 }
 
 
@@ -329,6 +640,8 @@ pub fn run() {
             get_kanban_data,
             save_kanban_data,
             get_google_api_key,
+            save_google_api_key,
+            install_transcription_dependencies,
             greet,
             start_recording,
             stop_recording,

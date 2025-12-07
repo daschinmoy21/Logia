@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import Fuse from 'fuse.js';
 import { Note, Folder } from '../types/Note';
+import { invoke } from '@tauri-apps/api/core';
 
 interface UiState {
   isSearchActive: boolean;
@@ -11,6 +12,7 @@ interface UiState {
   setSearchQuery: (query: string, notes: Note[]) => void;
   openCommandPalette: () => void;
   closeCommandPalette: () => void;
+  loadApiKey: () => Promise<void>;
 
   // States moved from Sidebar
   deleteConfirmId: string | null;
@@ -23,6 +25,7 @@ interface UiState {
   isSupportOpen: boolean;
   isRecording: boolean;
   isAiSidebarOpen: boolean;
+  googleApiKey: string;
 
   // Actions for new states
   setDeleteConfirmId: (id: string | null) => void;
@@ -36,6 +39,7 @@ interface UiState {
   setIsSupportOpen: (isOpen: boolean) => void;
   setIsRecording: (isRecording: boolean) => void;
   setIsAiSidebarOpen: (isOpen: boolean) => void;
+  setGoogleApiKey: (key: string) => void;
 }
 
 const useUiStore = create<UiState>((set) => ({
@@ -60,6 +64,16 @@ const useUiStore = create<UiState>((set) => ({
   openCommandPalette: () => set({ isCommandPaletteOpen: true }),
   closeCommandPalette: () => set({ isCommandPaletteOpen: false, searchQuery: '', searchResults: [] }),
 
+  // Load API key on initialization
+  loadApiKey: async () => {
+    try {
+      const key = await invoke<string>('get_google_api_key');
+      set({ googleApiKey: key });
+    } catch (error) {
+      console.error('Failed to load API key:', error);
+    }
+  },
+
   // States moved from Sidebar
   deleteConfirmId: null,
   renamingNoteId: null,
@@ -71,6 +85,7 @@ const useUiStore = create<UiState>((set) => ({
   isRecording: false,
   isAiSidebarOpen: false,
   deleteConfirmFolderId:null,
+  googleApiKey: '',
 
   // Actions for new states
   setDeleteConfirmId: (id) => set({ deleteConfirmId: id }),
@@ -84,6 +99,7 @@ const useUiStore = create<UiState>((set) => ({
   setIsSupportOpen: (isOpen) => set({ isSupportOpen: isOpen }),
   setIsRecording: (isRecording) => set({ isRecording }),
   setIsAiSidebarOpen: (isOpen) => set({ isAiSidebarOpen: isOpen }),
+  setGoogleApiKey: (key) => set({ googleApiKey: key }),
 }));
 
 export default useUiStore;

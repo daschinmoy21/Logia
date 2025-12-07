@@ -3,7 +3,6 @@ import { FileMinus, PencilRuler, Folder, FolderOpen, ChevronRight, ChevronDown }
 import { RiDeleteBin6Line } from 'react-icons/ri';
 import { useNotesStore } from '../store/notesStore';
 import { Folder as FolderType } from '../types/Note';
-import useUiStore from '../store/UiStore';
 import {
   Files,
   FolderItem,

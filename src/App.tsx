@@ -10,15 +10,19 @@ import { CommandPalette } from "./components/CommandPalette.tsx";
 import Footer from "./components/Footer.tsx";
 import AiSidebar from "./components/AiSidebar.tsx";
 import { useNotesStore } from "./store/notesStore";
+import { Toaster } from 'react-hot-toast';
 
 function App() {
-  const { openCommandPalette, isAiSidebarOpen, setIsAiSidebarOpen } = useUiStore();
+  const { openCommandPalette, isAiSidebarOpen, setIsAiSidebarOpen, loadApiKey } = useUiStore();
   const { currentNote, saveTimeout } = useNotesStore();
 
   const wordCount = currentNote ? currentNote.content.split(/\s+/).filter(word => word.length > 0).length : 0;
   const isSaved = !saveTimeout;
 
   useEffect(() => {
+    // Load API key immediately on app startup
+    loadApiKey();
+
     const handleKeyDown = (event: KeyboardEvent) => {
       console.log('Key pressed:', event.key, 'metaKey:', event.metaKey, 'altKey:', event.altKey, 'ctrlKey:', event.ctrlKey);
       if ((event.metaKey || event.altKey) && event.key === 'p') {
@@ -32,7 +36,7 @@ function App() {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [openCommandPalette]);
+  }, [openCommandPalette, loadApiKey]);
 
   return (
     <div className="bg-zinc-950 flex flex-col h-screen overflow-hidden">
@@ -49,6 +53,17 @@ function App() {
         </div>
         <AiSidebar isOpen={isAiSidebarOpen} onClose={() => setIsAiSidebarOpen(false)} />
       </div>
+      <Toaster 
+        position="bottom-center"
+        reverseOrder={false}
+        toastOptions={{
+          style: {
+            background: '#333',
+            color: '#fff',
+            borderRadius: '10px',
+          },
+        }}
+      />
     </div>
   );
 }

@@ -59,10 +59,14 @@ const AiSidebar = ({ isOpen, onClose }: AiSidebarProps) => {
     }
   };
 
-  const handleSendMessage = async (message: string, files?: File[]) => {
+  const handleSendMessage = async (message: string) => {
     if (!message.trim()) return;
     if (!apiKey) {
-      toast.failure("Google API key not configured. Please set GOOGLE_GENERATIVE_AI_API_KEY in settings");
+      toast.error("Google API key not configured. Please set GOOGLE_GENERATIVE_AI_API_KEY in settings",{    style: {
+      borderRadius: '10px',
+      background: '#333',
+      color: '#fff',}
+    },);
       return;
     }
     if (!currentNote) return;

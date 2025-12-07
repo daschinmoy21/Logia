@@ -1,10 +1,8 @@
 import { BlockNoteEditor, filterSuggestionItems } from "@blocknote/core";
 import { useCreateBlockNote } from "@blocknote/react";
-import { ReactNode, useEffect, createContext, useContext, useRef } from "react";
+import { ReactNode, useEffect, createContext, useContext, useRef, useMemo } from "react";
 import { codeBlock } from "@blocknote/code-block";
 import {
-  AIMenuController,
-  AIToolbarButton,
   createAIExtension,
   getAISlashMenuItems,
 } from "@blocknote/xl-ai";
@@ -18,13 +16,13 @@ import {
   getDefaultReactSlashMenuItems,
   getFormattingToolbarItems,
 } from "@blocknote/react";
-import { Note } from "../store/notesStore";
-import { google } from '@ai-sdk/google';
-import { generateText } from 'ai';
+import { Note } from "../types/Note";
+import { createGoogleGenerativeAI } from '@ai-sdk/google';
+import useUiStore from '../store/UiStore';
 
 
 type EditorContextType = {
-  editor: ReturnType<typeof useCreateBlockNote>;
+  editor: any | null;
   updateCurrentNoteTitle: (title: string) => void;
 };
 
@@ -42,9 +40,6 @@ export function useEditorContext() {
 // const provider = createGroq({
 //   apiKey: import.meta.env.VITE_GROQ_API_KEY,
 // });
-const model = google("gemini-2.5-flash-lite");
-
-
 export function EditorProvider({
   children,
   currentNote,
@@ -56,9 +51,21 @@ export function EditorProvider({
   updateCurrentNoteContent: (content: string) => void;
   updateCurrentNoteTitle: (title: string) => void;
 }) {
+  const { googleApiKey } = useUiStore();
   const isUpdatingRef = useRef(false);
 
-  // Always call the hook to maintain consistent order
+  // Create model only when API key changes
+  const model = useMemo(() => {
+    if (googleApiKey) {
+      const googleAI = createGoogleGenerativeAI({
+        apiKey: googleApiKey,
+      });
+      return googleAI('gemini-2.5-flash-lite');
+    }
+    return null;
+  }, [googleApiKey]);
+
+  // Create editor only when model is available
   const editor = useCreateBlockNote({
     tables: {
       splitCells: true,
@@ -71,11 +78,11 @@ export function EditorProvider({
       ...en,
       ai: aiEn,
     },
-    extensions: [
+    extensions: model ? [
       createAIExtension({
-        model,
+        model: model as any,
       }),
-    ],
+    ] : [],
     initialContent: currentNote?.content ? JSON.parse(currentNote.content) : undefined,
   });
 
@@ -133,7 +140,7 @@ export function EditorProvider({
 }
 
 // Formatting toolbar with the `AIToolbarButton` added
-export function FormattingToolbarWithAI({ editor }: { editor: BlockNoteEditor<any, any, any> }) {
+export function FormattingToolbarWithAI() {
   return (
     <FormattingToolbarController
       formattingToolbar={() => (

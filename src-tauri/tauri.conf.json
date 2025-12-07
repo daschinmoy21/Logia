@@ -15,7 +15,7 @@
         "title": "kortex",
         "width": 1080,
         "height": 780,
-        "decorations":false
+        "decorations": false
       }
     ],
     "security": {
@@ -31,6 +31,9 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
+    ],
+    "resources": [
+      "src/audio/transcription/*"
     ]
   }
 }

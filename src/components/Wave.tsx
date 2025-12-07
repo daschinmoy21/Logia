@@ -6,7 +6,7 @@ interface SineWaveCanvasProps {
 
 export const SineWaveCanvas = ({ isRunning }: SineWaveCanvasProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const animationFrameRef = useRef<number>();
+  const animationFrameRef = useRef<number | undefined>(undefined);
   const phaseRef = useRef(0);
 
   useEffect(() => {

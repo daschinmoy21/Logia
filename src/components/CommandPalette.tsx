@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import useUiStore from '../store/UiStore';
 import { useNotesStore } from '../store/notesStore';
-import LiquidGlass from 'liquid-glass-react';
 import './CommandPalette.css';
 
 export const CommandPalette = () => {

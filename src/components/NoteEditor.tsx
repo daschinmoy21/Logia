@@ -23,18 +23,25 @@ export function NoteEditor({
     }
   };
 
+  if (!editor) {
+    return (
+      <div className="flex flex-col w-full h-full bg-zinc-930 items-center justify-center">
+        <div className="text-zinc-400">Loading editor...</div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col w-full h-full bg-zinc-930">
       {/* Note title input */}
       <div className="ml-7 px-6 pt-6 pb-4 border-b border-zinc-700">
         <input
           type="text"
-          value={currentNote.title}
+          value={currentNote?.title || ""}
           onChange={(e) => updateCurrentNoteTitle(e.target.value)}
           onKeyDown={handleTitleKeyDown}
-          placeholder="Untitled Note"
-          className="w-full bg-transparent text-white text-6xl font-semibold 
-          placeholder-zinc-500 border-none outline-none focus:ring-0"
+          placeholder="Note title..."
+          className="w-full bg-transparent text-2xl font-semibold text-zinc-100 placeholder-zinc-500 focus:outline-none"
         />
       </div>
 
@@ -51,7 +58,7 @@ export function NoteEditor({
           <AIMenuController />
 
           {/* Custom Formatting Toolbar */}
-          <FormattingToolbarWithAI editor={editor} />
+          <FormattingToolbarWithAI />
 
           {/* Custom Suggestion Menu */}
           <SuggestionMenuWithAI editor={editor} />

@@ -6,7 +6,7 @@ interface FooterProps {
   isSaved: boolean
 }
 
-export default function Footer({ wordCount, isSaved }: FooterProps) {
+export default function Footer({ wordCount }: FooterProps) {
   const { isAiSidebarOpen, setIsAiSidebarOpen } = useUiStore();
 
   return (

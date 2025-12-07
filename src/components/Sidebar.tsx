@@ -1,16 +1,12 @@
 import { useEffect, useState } from 'react';
-import { FileMinus, PencilRuler, Folder, FolderOpen, ChevronRight, ChevronDown, ListTodo, Clock, CheckCircle } from 'lucide-react';
 import { Resizable } from 're-resizable';
-import { AnimatePresence, motion } from 'framer-motion';
 import { GoPersonFill } from 'react-icons/go';
 import { IoSettingsOutline } from 'react-icons/io5';
 import { AiOutlineLayout, AiOutlineFolderAdd } from 'react-icons/ai';
 import { CiSearch } from 'react-icons/ci';
-import { Bot, Plus } from 'lucide-react';
-import { RiDeleteBin6Line } from 'react-icons/ri';
+import { Bot, Plus, ListTodo, Clock, CheckCircle } from 'lucide-react';
 import { Description, Dialog, DialogPanel, DialogTitle } from '@headlessui/react';
 import { useNotesStore } from '../store/notesStore';
-import { Folder as FolderType } from '../types/Note';
 import RecStatus from './RecStatus';
 import useUiStore from '../store/UiStore';
 import {
@@ -23,6 +19,7 @@ import {
 import { invoke } from '@tauri-apps/api/core';
 import { AnimatedFileTree } from './AnimatedFileTree';
 import { Settings } from './Settings';
+import toast from 'react-hot-toast';
 
 type KanbanTask = {
   id: string;
@@ -219,19 +216,6 @@ export const Sidebar = () => {
     setSelectedFolderId(folderId);
   };
 
-  const toggleFolder = (folderId: string) => {
-    setExpandedFolders(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(folderId)) {
-        newSet.delete(folderId);
-      } else {
-        newSet.add(folderId);
-      }
-      return newSet;
-    });
-  };
-
-
 
 
   return (
@@ -263,14 +247,12 @@ export const Sidebar = () => {
              className={`p-2 focus:outline-none transition-colors ${isRecording ? 'text-red-400' : 'text-zinc-400 hover:text-blue-400'} cursor-pointer`}
              onClick={async () => {
                if (!isRecording) {
-                 console.log('Starting recording...');
                  try {
-                   console.log('Calling start_recording...');
                    await invoke('start_recording');
-                   console.log('Recording started');
                    setIsRecording(true);
                  } catch (error) {
                    console.error('Failed to start recording:', error);
+                   toast.error('Failed to start recording');
                  }
                }
              }}
@@ -281,7 +263,6 @@ export const Sidebar = () => {
             title="New Canvas"
             className='p-2 text-zinc-400 hover:text-blue-400 cursor-pointer focus:outline-none transition-colors active:scale-95'
             onClick={() => {
-              console.log("Canvas button clicked");
               handleCreateNote('canvas');
             }}
           >
@@ -305,41 +286,34 @@ export const Sidebar = () => {
          {/* Recording animation div visible when capturing system audio */}
           {isRecording &&
            <RecStatus isRecording={isRecording} onStop={async () => {
-             console.log('Stopping recording...');
              let noteToUpdate = currentNote;
+             
+             // Create a new note if none exists
              if (!currentNote) {
-               console.log('No current note, creating one...');
                try {
                  await createNote('text');
                  noteToUpdate = useNotesStore.getState().currentNote;
-                 console.log('Created new note:', noteToUpdate?.id);
                } catch (error) {
                  console.error('Failed to create note:', error);
+                 toast.error('Failed to create new note');
                  return;
                }
              }
 
+             const loadingToast = toast.loading('Transcribing audio...');
+
              try {
-               console.log('Calling stop_recording...');
                const audioPath = await invoke<string>('stop_recording');
-               console.log('Recording stopped, audio path:', audioPath);
-
-               // Stop showing recording progress immediately
                setIsRecording(false);
-               console.log('Recording state set to false');
 
-               console.log('Calling transcribe_audio...');
                const transcriptionResult = await invoke<string>('transcribe_audio', { audioPath });
-               console.log('Transcription result received, length:', transcriptionResult.length);
-
                const result = JSON.parse(transcriptionResult);
-               console.log('Parsed result:', result);
 
                if (result.error) {
                  throw new Error(result.error);
                }
+               
                if (noteToUpdate && result.text) {
-                 console.log('Appending transcription to note...');
                  try {
                    // Parse current content, default to empty array if invalid
                    let currentContent = [];
@@ -349,8 +323,7 @@ export const Sidebar = () => {
                        if (!Array.isArray(currentContent)) {
                          currentContent = [];
                        }
-                     } catch (parseError) {
-                       console.warn('Failed to parse current note content, using empty array:', parseError);
+                     } catch {
                        currentContent = [];
                      }
                    }
@@ -361,17 +334,19 @@ export const Sidebar = () => {
                    };
                    const updatedContent = [...currentContent, newBlock];
                    updateCurrentNoteContent(JSON.stringify(updatedContent));
-                   console.log('Transcription appended to note, new content length:', updatedContent.length);
+                   
+                   toast.success('Transcription complete', { id: loadingToast });
                  } catch (error) {
                    console.error('Failed to append transcription:', error);
+                   toast.error('Failed to update note', { id: loadingToast });
                  }
                } else {
-                 console.warn('No note to update or no transcription text');
+                 toast.success('Transcription complete (no text)', { id: loadingToast });
                }
-               console.log('Transcription:', result.text);
              } catch (error) {
                console.error('Transcription failed:', error);
-               // If transcription fails, we already stopped recording UI
+               toast.error(`Transcription failed: ${error}`, { id: loadingToast });
+               setIsRecording(false);
              }
            }} />
          }
@@ -394,7 +369,7 @@ export const Sidebar = () => {
             onDeleteFolder={handleDeleteFolder}
             onDeleteNote={handleDeleteNote}
             selectedFolderId={selectedFolderId}
-            selectedNoteId={currentNote?.id}
+            selectedNoteId={currentNote?.id || null}
             expandedFolders={expandedFolders}
             onExpandedFoldersChange={setExpandedFolders}
             renamingNoteId={renamingNoteId}
