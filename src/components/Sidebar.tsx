@@ -22,6 +22,7 @@ import {
 } from './ui/shadcn-io/kanban';
 import { invoke } from '@tauri-apps/api/core';
 import { AnimatedFileTree } from './AnimatedFileTree';
+import { Settings } from './Settings';
 
 type KanbanTask = {
   id: string;
@@ -676,6 +677,9 @@ export const Sidebar = () => {
           </div>
         </Dialog>
       )}
+
+      {/* Settings dialog */}
+      <Settings />
     </>
   );
 };

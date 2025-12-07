@@ -10,6 +10,7 @@ import remarkGfm from "remark-gfm";
 import Loader from "@/components/Ai-loader";
 import { ShimmeringText } from "../components/animate-ui/text/shimmering";
 import { Bot, User, Trash2, X } from 'lucide-react';
+import toast, { Toaster } from 'react-hot-toast';
 
 interface AiSidebarProps {
   isOpen: boolean;
@@ -61,7 +62,8 @@ const AiSidebar = ({ isOpen, onClose }: AiSidebarProps) => {
   const handleSendMessage = async (message: string, files?: File[]) => {
     if (!message.trim()) return;
     if (!apiKey) {
-      alert('Google API key not configured. Please set GOOGLE_GENERATIVE_AI_API_KEY in your environment.');
+      alert('Google API key not configured. Please set GOOGLE_GENERATIVE_AI_API_KEY in settings.');
+      toast.failure("Google API key not configured. Please set GOOGLE_GENERATIVE_AI_API_KEY in settings");
       return;
     }
     if (!currentNote) return;
@@ -78,7 +80,7 @@ const AiSidebar = ({ isOpen, onClose }: AiSidebarProps) => {
     try {
       // Call Gemini with conversation history
       const systemPrompt = 'You are KAi, a helpful AI assistant in a note-taking app called Kortex. Help users with their notes, writing, research, and general questions.Keep responses crisp unless specified.';
-      const noteContext = currentNote ? `\n\nHere is the content of the current note for context:\n---\n${currentNote.content}\n---` : '';
+      const noteContext = currentNote ? `\n\nHere is the content of the current note for context:\n---\n${currentNote.content + currentNote.title}\n---` : '';
 
       const result = await streamText({
         model: google('gemini-2.5-flash-lite'),
@@ -120,9 +122,9 @@ const AiSidebar = ({ isOpen, onClose }: AiSidebarProps) => {
       maxWidth={600}
       handleClasses={{ left: 'w-1 bg-zinc-800 hover:bg-zinc-600 transition-colors' }}
     >
-      <div className="h-full bg-zinc-950 border-l border-zinc-800 flex flex-col shadow-2xl">
+      <div className="h-full bg red-950/80 border-l border-zinc-800 flex flex-col shadow-2xl">
         {/* Header */}
-        <div className="px-4 py-3 border-b border-zinc-800 bg-zinc-950 flex items-center justify-between sticky top-0 z-10">
+        <div className="px-4 py-3 border-b border-blue-800 bg-zinc-950 flex items-center justify-between sticky top-0 z-10">
           <div className="flex items-center gap-2">
             <span className="text-zinc-100 font-medium text-sm tracking-wide">AI Assistant</span>
             {messages.length > 0 && (
@@ -164,7 +166,7 @@ const AiSidebar = ({ isOpen, onClose }: AiSidebarProps) => {
             {messages.map((msg, index) => (
               <div key={index} className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
                 <div className={`flex-shrink-0 mt-1 size-7 rounded-full flex items-center justify-center border ${
-                  msg.role === 'user' ? 'bg-zinc-800 border-zinc-700' : 'bg-blue-600/10 border-blue-500/20'
+                  msg.role === 'user' ? 'bg-zinc-800/60 border-zinc-700' : 'bg-blue-600/10 border-blue-500/20'
                 }`}>
                   {msg.role === 'user' ? (
                     <User size={14} className="text-zinc-400" />

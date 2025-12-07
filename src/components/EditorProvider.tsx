@@ -42,7 +42,7 @@ export function useEditorContext() {
 // const provider = createGroq({
 //   apiKey: import.meta.env.VITE_GROQ_API_KEY,
 // });
-const model = google("gemini-2.5-flash");
+const model = google("gemini-2.5-flash-lite");
 
 
 export function EditorProvider({

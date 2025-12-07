@@ -225,9 +225,12 @@ export const useNotesStore = create<NotesState>()(
       }
 
       // Save title changes immediately for instant feedback
-      set({
+      set((state) => ({
         currentNote: updatedNote,
-      });
+        notes: state.notes.map((note) =>
+          note.id === updatedNote.id ? updatedNote : note
+        ),
+      }));
 
       // Save immediately without debounce
       get().saveCurrentNote();
