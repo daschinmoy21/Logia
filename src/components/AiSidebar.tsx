@@ -62,7 +62,6 @@ const AiSidebar = ({ isOpen, onClose }: AiSidebarProps) => {
   const handleSendMessage = async (message: string, files?: File[]) => {
     if (!message.trim()) return;
     if (!apiKey) {
-      alert('Google API key not configured. Please set GOOGLE_GENERATIVE_AI_API_KEY in settings.');
       toast.failure("Google API key not configured. Please set GOOGLE_GENERATIVE_AI_API_KEY in settings");
       return;
     }
@@ -244,6 +243,7 @@ const AiSidebar = ({ isOpen, onClose }: AiSidebarProps) => {
           <PromptInputBox onSend={handleSendMessage} isLoading={isLoading} />
         </div>
       </div>
+      <Toaster />
     </Resizable>
   );
 };
