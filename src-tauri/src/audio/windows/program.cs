@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 class Program
 {
-    static Process whisperProcess;
+    static Process? whisperProcess;
 
     static void Main(string[] args)
     {
@@ -32,7 +32,7 @@ class Program
             // Read from stdin for stop command
             while (!cancellationTokenSource.IsCancellationRequested)
             {
-                string input = Console.ReadLine();
+                string? input = Console.ReadLine();
                 if (input != null && input.Trim().ToLower() == "stop")
                 {
                     Console.WriteLine("Received stop signal, stopping recording...");
@@ -48,6 +48,7 @@ class Program
         catch (Exception ex)
         {
             Console.Error.WriteLine($"Error: {ex.Message}");
+            Console.Error.WriteLine($"StackTrace: {ex.StackTrace}");
             Environment.Exit(1);
         }
     }
@@ -81,7 +82,15 @@ class Program
         if (!Directory.Exists(venvDir))
         {
             Console.WriteLine("Creating Python venv...");
-            RunCmd("python", $"-m venv {venvDir}");
+            // Prefer the py launcher on Windows, fallback to python.exe
+            try
+            {
+                RunCmd("py", $"-3 -m venv \"{venvDir}\"");
+            }
+            catch
+            {
+                RunCmd("python", $"-m venv \"{venvDir}\"");
+            }
         }
 
         string pythonExe = Path.Combine(venvDir, "Scripts", "python.exe");
@@ -90,9 +99,13 @@ class Program
             throw new Exception("Python venv not created correctly.");
         }
 
-        Console.WriteLine("Installing Python dependencies...");
-        RunCmd(pythonExe, $"-m pip install --upgrade pip");
-        RunCmd(pythonExe, $"-m pip install -r {requirements}");
+        Console.WriteLine("Upgrading pip/setuptools/wheel and installing build helpers (cython, imageio-ffmpeg)...");
+        // Upgrade pip, setuptools, wheel and install helpers to reduce likelihood of source builds
+        RunCmd(pythonExe, $"-m pip install --upgrade pip setuptools wheel cython imageio-ffmpeg");
+
+        Console.WriteLine("Installing Python dependencies (prefer binary wheels)...");
+        // Use --prefer-binary to prefer prebuilt wheels and avoid compiling C extensions like 'av'
+        RunCmd(pythonExe, $"-m pip install --prefer-binary -r \"{requirements}\"");
     }
 
     static string RunTranscription(string pythonExe, string script, string wavFile)
@@ -157,8 +170,8 @@ class Program
                     try
                     {
                         var result = System.Text.Json.JsonSerializer.Deserialize<TranscriptionResult>(jsonOutput);
-                        File.WriteAllText(transcriptFile, result.text);
-                        Console.WriteLine($"Transcription completed. Language: {result.language} ({result.language_probability:P2})");
+                        File.WriteAllText(transcriptFile, result?.text ?? string.Empty);
+                        Console.WriteLine($"Transcription completed. Language: {result?.language ?? "unknown"} ({(result?.language_probability).GetValueOrDefault():P2})");
                     }
                     catch (Exception ex)
                     {
@@ -166,7 +179,7 @@ class Program
                         try
                         {
                             var error = System.Text.Json.JsonSerializer.Deserialize<TranscriptionError>(jsonOutput);
-                            throw new Exception($"Transcription error: {error.error}");
+                            throw new Exception($"Transcription error: {error?.error ?? "unknown"}");
                         }
                         catch
                         {
@@ -188,22 +201,22 @@ class Program
     // Classes to match the Python script's JSON output format
     class TranscriptionSegment
     {
-        public string text { get; set; }
+        public string? text { get; set; }
         public double start { get; set; }
         public double end { get; set; }
     }
 
     class TranscriptionResult
     {
-        public string text { get; set; }
-        public string language { get; set; }
+        public string? text { get; set; }
+        public string? language { get; set; }
         public double language_probability { get; set; }
-        public TranscriptionSegment[] segments { get; set; }
+        public TranscriptionSegment[]? segments { get; set; }
     }
 
     class TranscriptionError
     {
-        public string error { get; set; }
+        public string? error { get; set; }
     }
 
     static void RunCmd(string exe, string args)

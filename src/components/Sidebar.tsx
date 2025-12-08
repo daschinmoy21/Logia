@@ -352,7 +352,16 @@ export const Sidebar = () => {
                     }
                   }
 
-                  if (googleApiKey) {
+                  // Refresh API key from backend at time of processing (avoids race where store wasn't populated yet in packaged builds)
+                  let apiKey = googleApiKey;
+                  try {
+                    const runtimeKey = await invoke<string>('get_google_api_key');
+                    if (runtimeKey) apiKey = runtimeKey;
+                  } catch (e) {
+                    console.warn('Could not fetch API key at runtime', e);
+                  }
+
+                  if (apiKey) {
                      // Update toast to processing with AI
                      toast.loading('🤖 Processing transcription with AI...', {
                        id: loadingToast,
@@ -364,8 +373,9 @@ export const Sidebar = () => {
                      });
 
                     try {
+                       const client = createGoogleGenerativeAI({ apiKey });
                        const { text: structuredJson } = await generateText({
-                         model: createGoogleGenerativeAI({ apiKey: googleApiKey })('gemini-2.5-flash'),
+                         model: client('gemini-2.5-flash'),
                         system: `You are an expert note-taker. Transform the raw transcription into a highly structured, educational note using BlockNote JSON blocks.
 
 Your goal is to organize the information for effective learning, using the most appropriate block types.

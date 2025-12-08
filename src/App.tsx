@@ -9,6 +9,7 @@ import useUiStore from "./store/UiStore.ts";
 import { CommandPalette } from "./components/CommandPalette.tsx";
 import Footer from "./components/Footer.tsx";
 import AiSidebar from "./components/AiSidebar.tsx";
+import PreflightModal from "./components/PrereflightModal";
 import { useNotesStore } from "./store/notesStore";
 import { Toaster } from 'react-hot-toast';
 
@@ -41,6 +42,7 @@ function App() {
   return (
     <div className="bg-zinc-950 flex flex-col h-screen overflow-hidden">
       <CommandPalette />
+      <PreflightModal />
       <div className="flex flex-1 overflow-hidden">
         <div className="h-full flex-shrink-0">
           <Sidebar />

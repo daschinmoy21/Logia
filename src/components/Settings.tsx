@@ -12,6 +12,7 @@ export const Settings = () => {
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [isInstallingDeps, setIsInstallingDeps] = useState(false);
   const [installStatus, setInstallStatus] = useState<'idle' | 'installing' | 'installed' | 'error'>('idle');
+  const [installLog, setInstallLog] = useState<string>('');
 
   useEffect(() => {
     if (isSettingsOpen) {
@@ -79,6 +80,32 @@ export const Settings = () => {
     }
   };
 
+  // Poll the backend install log while installation is running so the UI can show progress
+  useEffect(() => {
+    let timer: number | undefined;
+    async function poll() {
+      try {
+        const content = await invoke<string>('read_install_log');
+        setInstallLog(content);
+      } catch (e) {
+        // ignore errors while polling
+      }
+    }
+
+    if (isInstallingDeps) {
+      poll();
+      // poll every second
+      timer = window.setInterval(poll, 1000);
+    } else {
+      // fetch once when not installing
+      poll();
+    }
+
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [isInstallingDeps]);
+
   return (
     <Dialog
       open={isSettingsOpen}
@@ -129,22 +156,32 @@ export const Settings = () => {
                    <Description className="text-xs text-zinc-500 mb-2">
                      Install Python dependencies required for audio transcription. This will download faster-whisper and other required packages.
                    </Description>
-                   <button
-                     onClick={handleInstallTranscriptionDeps}
-                     disabled={isInstallingDeps}
-                     className={`
-                       px-4 py-2 rounded-lg text-sm font-medium transition-all
-                       ${installStatus === 'installed'
-                         ? 'bg-green-600 text-white hover:bg-green-700'
-                         : installStatus === 'error'
-                         ? 'bg-red-600 text-white hover:bg-red-700'
-                         : 'bg-zinc-100 text-zinc-900 hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed'}
-                     `}
-                   >
-                     {isInstallingDeps ? 'Installing...' :
-                      installStatus === 'installed' ? 'Installed ✓' :
-                      installStatus === 'error' ? 'Error' : 'Install Dependencies'}
-                   </button>
+                   <div className="flex items-center gap-3">
+                    <div className="flex-1">
+                      <button
+                       onClick={handleInstallTranscriptionDeps}
+                       disabled={isInstallingDeps}
+                       className={`
+                         px-4 py-2 rounded-lg text-sm font-medium transition-all
+                         ${installStatus === 'installed'
+                           ? 'bg-green-600 text-white hover:bg-green-700'
+                           : installStatus === 'error'
+                           ? 'bg-red-600 text-white hover:bg-red-700'
+                           : 'bg-zinc-100 text-zinc-900 hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed'}
+                       `}
+                     >
+                       {isInstallingDeps ? 'Installing...' :
+                        installStatus === 'installed' ? 'Installed ✓' :
+                        installStatus === 'error' ? 'Error' : 'Install Dependencies'}
+                     </button>
+                    </div>
+                    <div className="w-48 text-xs text-zinc-400">
+                      {isInstallingDeps ? 'Downloading / installing...' : ''}
+                    </div>
+                   </div>
+                   <div className="mt-3">
+                     <pre className="max-h-40 overflow-auto text-xs bg-zinc-900 border border-zinc-800 p-2 rounded text-zinc-300">{installLog}</pre>
+                   </div>
                  </div>
                </div>
              </div>

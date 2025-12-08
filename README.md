@@ -79,11 +79,37 @@ GOOGLE_GENRATIVE_AI_API_KEY=your_google_key
 - `bun run tauri dev` - Start Tauri development mode
 - `bun run tauri build` - Build the native application
 
+## Packaging and Dependencies (Windows)
+
+When distributing the Windows installer, include this checklist so users have the required runtime components for audio capture and transcription to work.
+
+Required on target machine (or bundled in installer):
+
+- Microsoft Visual C++ Redistributable (Visual Studio C++ 2015-2022 runtime)
+- FFmpeg available on PATH (required by some audio libs and optional features)
+- Python 3.12+ (if not bundling a portable Python)
+  - pip available
+  - If your installer does not bundle Python, the app will attempt to create a virtual environment and install dependencies at first run.
+- Internet access for pip installs (unless you bundle prebuilt wheels)
+
+Optional but recommended:
+
+- Code-sign the EXE/MSI to avoid SmartScreen/AV false positives
+
+Packaging tips:
+
+- You can bundle a portable Python and a pre-created venv inside your installer to avoid first-run installs (tradeoff: larger installer size).
+- Run installer tests on a clean Windows VM to reproduce missing-dependency issues.
+
+## Using the preflight check
+
+The app exposes a Tauri command `prereflight_check` that returns JSON with diagnostics (python presence, ffmpeg, VC++ runtime, network, resource paths). The UI can call this command at first run to show actionable errors to users.
+
 ## Contributing
 DO NOT MAKE SPAM PRs
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details. 
+This project is licensed under the MIT License - see the LICENSE file for details.
 
 
