@@ -28,4 +28,6 @@ tauri-plugin-fs = "2"
 libc = "0.2.175"
 dotenvy = "0.15"
 keyring = "3.6.3"
+aes-gcm = "0.10"
+base64 = "0.22"
 

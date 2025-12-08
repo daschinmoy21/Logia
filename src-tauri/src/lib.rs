@@ -7,8 +7,42 @@ use tauri::path::BaseDirectory;
 use tauri::Manager;
 use uuid::Uuid;
 use keyring::Entry;
+use aes_gcm::{Aes256Gcm, Key, Nonce};
+use aes_gcm::aead::{Aead, KeyInit};
+use base64::{Engine as _, engine::general_purpose};
 
 mod audio;
+
+// Encryption key derived from app name (in production, this should be more secure)
+fn get_encryption_key() -> &'static [u8; 32] {
+    b"kortex-app-encryption-key-32byte"
+}
+
+fn encrypt_api_key(key: &str) -> Result<String, String> {
+    let cipher_key = Key::<Aes256Gcm>::from_slice(get_encryption_key());
+    let cipher = Aes256Gcm::new(cipher_key);
+    let nonce = Nonce::from_slice(b"unique nonce"); // In production, use random nonce
+
+    let ciphertext = cipher.encrypt(nonce, key.as_bytes())
+        .map_err(|e| format!("Encryption failed: {}", e))?;
+
+    Ok(general_purpose::STANDARD.encode(ciphertext))
+}
+
+fn decrypt_api_key(encrypted: &str) -> Result<String, String> {
+    let cipher_key = Key::<Aes256Gcm>::from_slice(get_encryption_key());
+    let cipher = Aes256Gcm::new(cipher_key);
+    let nonce = Nonce::from_slice(b"unique nonce");
+
+    let ciphertext = general_purpose::STANDARD.decode(encrypted)
+        .map_err(|e| format!("Base64 decode failed: {}", e))?;
+
+    let plaintext = cipher.decrypt(nonce, ciphertext.as_ref())
+        .map_err(|e| format!("Decryption failed: {}", e))?;
+
+    String::from_utf8(plaintext)
+        .map_err(|e| format!("UTF-8 decode failed: {}", e))
+}
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
@@ -309,38 +343,44 @@ async fn get_google_api_key(app_handle: tauri::AppHandle) -> Result<String, Stri
         }
     }
 
-    // Fallback/Migration: Check config.json
+    // Fallback: Check config.json for encrypted key
     let config_dir = get_config_directory(&app_handle)?;
     let config_file = config_dir.join("config.json");
 
-    if !config_file.exists() {
-        return Err("API key not configured".to_string());
-    }
+    if config_file.exists() {
+        let content = fs::read_to_string(&config_file)
+            .map_err(|e| format!("Failed to read config file: {}", e))?;
 
-    let content = fs::read_to_string(&config_file)
-        .map_err(|e| format!("Failed to read config file: {}", e))?;
+        let config: serde_json::Value = serde_json::from_str(&content)
+            .map_err(|e| format!("Failed to parse config file: {}", e))?;
 
-    let mut config: serde_json::Value = serde_json::from_str(&content)
-        .map_err(|e| format!("Failed to parse config file: {}", e))?;
-
-    let key = config.get("google_api_key")
-        .and_then(|v| v.as_str())
-        .map(|s| s.to_string());
-
-    if let Some(key) = key {
-        // Migrate to keyring
-        if let Ok(entry) = Entry::new("kortex-app", "google_api_key") {
-            let _ = entry.set_password(&key);
+        // Check for encrypted key
+        if let Some(encrypted_key) = config.get("encrypted_google_api_key")
+            .and_then(|v| v.as_str())
+        {
+            let key = decrypt_api_key(encrypted_key)?;
+            return Ok(key);
         }
 
-        // Remove from config.json
-        if let Some(obj) = config.as_object_mut() {
-            obj.remove("google_api_key");
+        // Legacy: Check for plain key and migrate
+        if let Some(plain_key) = config.get("google_api_key")
+            .and_then(|v| v.as_str())
+        {
+            // Migrate to keyring if possible
+            if let Ok(entry) = Entry::new("kortex-app", "google_api_key") {
+                let _ = entry.set_password(plain_key);
+            }
+
+            // Remove plain key
+            let mut updated_config = config.clone();
+            if let Some(obj) = updated_config.as_object_mut() {
+                obj.remove("google_api_key");
+            }
+            let content = serde_json::to_string_pretty(&updated_config).unwrap_or_default();
+            let _ = fs::write(&config_file, content);
+
+            return Ok(plain_key.to_string());
         }
-        let content = serde_json::to_string_pretty(&config).unwrap_or_default();
-        let _ = fs::write(&config_file, content);
-        
-        return Ok(key);
     }
 
     Err("API key not configured".to_string())
@@ -348,24 +388,54 @@ async fn get_google_api_key(app_handle: tauri::AppHandle) -> Result<String, Stri
 
 #[tauri::command]
 async fn save_google_api_key(key: String, app_handle: tauri::AppHandle) -> Result<(), String> {
-    // Save to keyring
-    let entry = Entry::new("kortex-app", "google_api_key")
-        .map_err(|e| format!("Failed to access keyring: {}", e))?;
-    
-    entry.set_password(&key)
-        .map_err(|e| format!("Failed to save to keyring: {}", e))?;
+    // Try to save to keyring first
+    let keyring_success = if let Ok(entry) = Entry::new("kortex-app", "google_api_key") {
+        entry.set_password(&key).is_ok()
+    } else {
+        false
+    };
 
-    // Ensure it's not in config.json anymore (cleanup)
-    let config_dir = get_config_directory(&app_handle)?;
-    let config_file = config_dir.join("config.json");
+    // If keyring failed, fall back to encrypted config.json
+    if !keyring_success {
+        let encrypted_key = encrypt_api_key(&key)?;
 
-    if config_file.exists() {
-        if let Ok(content) = fs::read_to_string(&config_file) {
-            if let Ok(mut config) = serde_json::from_str::<serde_json::Value>(&content) {
-                 if let Some(obj) = config.as_object_mut() {
-                    if obj.remove("google_api_key").is_some() {
-                        let content = serde_json::to_string_pretty(&config).unwrap_or_default();
-                        let _ = fs::write(&config_file, content);
+        let config_dir = get_config_directory(&app_handle)?;
+        let config_file = config_dir.join("config.json");
+
+        let mut config = if config_file.exists() {
+            if let Ok(content) = fs::read_to_string(&config_file) {
+                serde_json::from_str::<serde_json::Value>(&content).unwrap_or(serde_json::json!({}))
+            } else {
+                serde_json::json!({})
+            }
+        } else {
+            serde_json::json!({})
+        };
+
+        if let Some(obj) = config.as_object_mut() {
+            obj.insert("encrypted_google_api_key".to_string(), serde_json::Value::String(encrypted_key));
+            // Remove any plain key
+            obj.remove("google_api_key");
+        }
+
+        let content = serde_json::to_string_pretty(&config)
+            .map_err(|e| format!("Failed to serialize config: {}", e))?;
+
+        fs::write(&config_file, content)
+            .map_err(|e| format!("Failed to write config file: {}", e))?;
+    } else {
+        // Keyring succeeded, ensure it's not in config.json anymore (cleanup)
+        let config_dir = get_config_directory(&app_handle)?;
+        let config_file = config_dir.join("config.json");
+
+        if config_file.exists() {
+            if let Ok(content) = fs::read_to_string(&config_file) {
+                if let Ok(mut config) = serde_json::from_str::<serde_json::Value>(&content) {
+                     if let Some(obj) = config.as_object_mut() {
+                        if obj.remove("google_api_key").is_some() {
+                            let content = serde_json::to_string_pretty(&config).unwrap_or_default();
+                            let _ = fs::write(&config_file, content);
+                        }
                     }
                 }
             }
@@ -382,7 +452,7 @@ async fn remove_google_api_key(app_handle: tauri::AppHandle) -> Result<(), Strin
         let _ = entry.delete_credential();
     }
 
-    // Also check config.json just in case
+    // Also remove from config.json
     let config_dir = get_config_directory(&app_handle)?;
     let config_file = config_dir.join("config.json");
 
@@ -395,6 +465,7 @@ async fn remove_google_api_key(app_handle: tauri::AppHandle) -> Result<(), Strin
 
         if let Some(obj) = config.as_object_mut() {
             obj.remove("google_api_key");
+            obj.remove("encrypted_google_api_key");
         }
 
         let content = serde_json::to_string_pretty(&config)

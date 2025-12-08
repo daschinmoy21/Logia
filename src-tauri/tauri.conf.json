@@ -15,7 +15,7 @@
         "title": "kortex",
         "width": 1080,
         "height": 780,
-        "decorations": false
+        "decorations": true
       }
     ],
     "security": {
