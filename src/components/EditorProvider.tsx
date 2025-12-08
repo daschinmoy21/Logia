@@ -1,6 +1,6 @@
 import { BlockNoteEditor, filterSuggestionItems } from "@blocknote/core";
 import { useCreateBlockNote } from "@blocknote/react";
-import { ReactNode, useEffect, createContext, useContext, useRef, useMemo } from "react";
+import { ReactNode, createContext, useContext, useRef, useMemo, useEffect } from "react";
 import { codeBlock } from "@blocknote/code-block";
 import {
   createAIExtension,
@@ -51,7 +51,7 @@ export function EditorProvider({
   updateCurrentNoteContent: (content: string) => void;
   updateCurrentNoteTitle: (title: string) => void;
 }) {
-  const { googleApiKey } = useUiStore();
+  const { googleApiKey, setEditor } = useUiStore();
   const isUpdatingRef = useRef(false);
 
   // Create model only when API key changes
@@ -60,7 +60,7 @@ export function EditorProvider({
       const googleAI = createGoogleGenerativeAI({
         apiKey: googleApiKey,
       });
-      return googleAI('gemini-2.5-flash-lite');
+       return googleAI('gemini-2.5-flash');
     }
     return null;
   }, [googleApiKey]);
@@ -85,6 +85,11 @@ export function EditorProvider({
     ] : [],
     initialContent: currentNote?.content ? JSON.parse(currentNote.content) : undefined,
   });
+
+  // Set editor in store
+  useEffect(() => {
+    setEditor(editor);
+  }, [editor, setEditor]);
 
   // Update editor content when currentNote changes
   useEffect(() => {
@@ -156,6 +161,8 @@ export function FormattingToolbarWithAI() {
 
 // Slash menu with the AI option added
 export function SuggestionMenuWithAI({ editor }: { editor: BlockNoteEditor<any, any, any> }) {
+  const { googleApiKey } = useUiStore();
+  
   return (
     <SuggestionMenuController
       triggerCharacter="/"
@@ -163,8 +170,8 @@ export function SuggestionMenuWithAI({ editor }: { editor: BlockNoteEditor<any, 
         filterSuggestionItems(
           [
             ...getDefaultReactSlashMenuItems(editor),
-            // add the default AI slash menu items, or define your own
-            ...getAISlashMenuItems(editor),
+            // add the default AI slash menu items only if API key is present
+            ...(googleApiKey ? getAISlashMenuItems(editor) : []),
           ],
           query,
         )

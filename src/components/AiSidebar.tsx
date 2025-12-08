@@ -1,10 +1,11 @@
+import {useMemo} from 'react';
 import { PromptInputBox } from "@/components/ui/ai-prompt-box";
 import { useNotesStore } from "@/store/notesStore";
+import useUiStore from "../store/UiStore";
 import { Resizable } from 're-resizable';
 import { streamText } from 'ai';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { useState, useEffect, useRef } from 'react';
-import { invoke } from '@tauri-apps/api/core';
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import Loader from "@/components/Ai-loader";
@@ -19,10 +20,10 @@ interface AiSidebarProps {
 
 const AiSidebar = ({ isOpen, onClose }: AiSidebarProps) => {
   const { currentNote } = useNotesStore();
+  const { googleApiKey } = useUiStore();
   const [messagesMap, setMessagesMap] = useState<Record<string, { role: 'user' | 'assistant', content: string }[]>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [streamingMessage, setStreamingMessage] = useState<string>('');
-  const [apiKey, setApiKey] = useState<string>('');
   const scrollableContainerRef = useRef<HTMLDivElement>(null);
 
   // Get messages for current note
@@ -34,19 +35,16 @@ const AiSidebar = ({ isOpen, onClose }: AiSidebarProps) => {
     }
   }, [messages, streamingMessage]);
 
-  useEffect(() => {
-    const fetchApiKey = async () => {
-      try {
-        const key = await invoke<string>('get_google_api_key');
-        setApiKey(key);
-      } catch (error) {
-        console.error('Failed to get API key:', error);
-      }
-    };
-    fetchApiKey();
-  }, []);
+  const googleClient = useMemo(() => {
+    if (!googleApiKey) return null;
+     try {
+        return createGoogleGenerativeAI({ apiKey: googleApiKey });
+    } catch (e) {
+        console.error("Failed to create Google AI client", e);
+        return null;
+    }
+  }, [googleApiKey]);
 
-  const google = createGoogleGenerativeAI({ apiKey });
 
   if (!isOpen) return null;
 
@@ -61,7 +59,7 @@ const AiSidebar = ({ isOpen, onClose }: AiSidebarProps) => {
 
   const handleSendMessage = async (message: string) => {
     if (!message.trim()) return;
-    if (!apiKey) {
+    if (!googleApiKey || !googleClient) {
       toast.error("Google API key not configured. Please set GOOGLE_GENERATIVE_AI_API_KEY in settings",{    style: {
       borderRadius: '10px',
       background: '#333',
@@ -86,7 +84,7 @@ const AiSidebar = ({ isOpen, onClose }: AiSidebarProps) => {
       const noteContext = currentNote ? `\n\nHere is the content of the current note for context:\n---\n${currentNote.content + currentNote.title}\n---` : '';
 
       const result = await streamText({
-        model: google('gemini-2.5-flash-lite'),
+        model: googleClient('gemini-2.5-flash-lite'),
         system: systemPrompt + noteContext,
         messages: [...messages, userMessage], // Include all previous + current user
       });

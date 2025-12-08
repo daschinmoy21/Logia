@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use tauri::path::BaseDirectory;
 use tauri::Manager;
 use uuid::Uuid;
+use keyring::Entry;
 
 mod audio;
 
@@ -301,6 +302,14 @@ async fn save_kanban_data(tasks: Vec<KanbanTask>, app_handle: tauri::AppHandle) 
 
 #[tauri::command]
 async fn get_google_api_key(app_handle: tauri::AppHandle) -> Result<String, String> {
+    // Try to get from keyring first
+    if let Ok(entry) = Entry::new("kortex-app", "google_api_key") {
+        if let Ok(password) = entry.get_password() {
+            return Ok(password);
+        }
+    }
+
+    // Fallback/Migration: Check config.json
     let config_dir = get_config_directory(&app_handle)?;
     let config_file = config_dir.join("config.json");
 
@@ -311,39 +320,89 @@ async fn get_google_api_key(app_handle: tauri::AppHandle) -> Result<String, Stri
     let content = fs::read_to_string(&config_file)
         .map_err(|e| format!("Failed to read config file: {}", e))?;
 
-    let config: serde_json::Value = serde_json::from_str(&content)
+    let mut config: serde_json::Value = serde_json::from_str(&content)
         .map_err(|e| format!("Failed to parse config file: {}", e))?;
 
-    config.get("google_api_key")
+    let key = config.get("google_api_key")
         .and_then(|v| v.as_str())
-        .map(|s| s.to_string())
-        .ok_or_else(|| "API key not found in config".to_string())
+        .map(|s| s.to_string());
+
+    if let Some(key) = key {
+        // Migrate to keyring
+        if let Ok(entry) = Entry::new("kortex-app", "google_api_key") {
+            let _ = entry.set_password(&key);
+        }
+
+        // Remove from config.json
+        if let Some(obj) = config.as_object_mut() {
+            obj.remove("google_api_key");
+        }
+        let content = serde_json::to_string_pretty(&config).unwrap_or_default();
+        let _ = fs::write(&config_file, content);
+        
+        return Ok(key);
+    }
+
+    Err("API key not configured".to_string())
 }
 
 #[tauri::command]
 async fn save_google_api_key(key: String, app_handle: tauri::AppHandle) -> Result<(), String> {
+    // Save to keyring
+    let entry = Entry::new("kortex-app", "google_api_key")
+        .map_err(|e| format!("Failed to access keyring: {}", e))?;
+    
+    entry.set_password(&key)
+        .map_err(|e| format!("Failed to save to keyring: {}", e))?;
+
+    // Ensure it's not in config.json anymore (cleanup)
     let config_dir = get_config_directory(&app_handle)?;
     let config_file = config_dir.join("config.json");
 
-    // Read existing config or create new one
-    let mut config: serde_json::Value = if config_file.exists() {
+    if config_file.exists() {
+        if let Ok(content) = fs::read_to_string(&config_file) {
+            if let Ok(mut config) = serde_json::from_str::<serde_json::Value>(&content) {
+                 if let Some(obj) = config.as_object_mut() {
+                    if obj.remove("google_api_key").is_some() {
+                        let content = serde_json::to_string_pretty(&config).unwrap_or_default();
+                        let _ = fs::write(&config_file, content);
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn remove_google_api_key(app_handle: tauri::AppHandle) -> Result<(), String> {
+    // Remove from keyring
+    if let Ok(entry) = Entry::new("kortex-app", "google_api_key") {
+        let _ = entry.delete_credential();
+    }
+
+    // Also check config.json just in case
+    let config_dir = get_config_directory(&app_handle)?;
+    let config_file = config_dir.join("config.json");
+
+    if config_file.exists() {
         let content = fs::read_to_string(&config_file)
             .map_err(|e| format!("Failed to read config file: {}", e))?;
-        serde_json::from_str(&content)
-            .map_err(|e| format!("Failed to parse config file: {}", e))?
-    } else {
-        serde_json::json!({})
-    };
 
-    // Update the API key
-    config["google_api_key"] = serde_json::Value::String(key);
+        let mut config: serde_json::Value = serde_json::from_str(&content)
+            .map_err(|e| format!("Failed to parse config file: {}", e))?;
 
-    // Write back to file
-    let content = serde_json::to_string_pretty(&config)
-        .map_err(|e| format!("Failed to serialize config: {}", e))?;
+        if let Some(obj) = config.as_object_mut() {
+            obj.remove("google_api_key");
+        }
 
-    fs::write(&config_file, content)
-        .map_err(|e| format!("Failed to write config file: {}", e))?;
+        let content = serde_json::to_string_pretty(&config)
+            .map_err(|e| format!("Failed to serialize config: {}", e))?;
+
+        fs::write(&config_file, content)
+            .map_err(|e| format!("Failed to write config file: {}", e))?;
+    }
 
     Ok(())
 }
@@ -641,6 +700,7 @@ pub fn run() {
             save_kanban_data,
             get_google_api_key,
             save_google_api_key,
+            remove_google_api_key,
             install_transcription_dependencies,
             greet,
             start_recording,

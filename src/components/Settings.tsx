@@ -3,6 +3,7 @@ import { Dialog, DialogPanel, DialogTitle, Description } from '@headlessui/react
 import { invoke } from '@tauri-apps/api/core';
 import useUiStore from '../store/UiStore';
 import { X } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 export const Settings = () => {
   const { isSettingsOpen, setIsSettingsOpen, setGoogleApiKey } = useUiStore();
@@ -57,6 +58,24 @@ export const Settings = () => {
       setInstallStatus('error');
     } finally {
       setIsInstallingDeps(false);
+    }
+  };
+
+  const handleRemoveApiKey = async () => {
+    setIsLoading(true);
+    try {
+      await invoke('remove_google_api_key');
+      setApiKey('');
+      setGoogleApiKey('');
+      setStatus('saved');
+      toast.success('API key removed successfully!');
+      setTimeout(() => setStatus('idle'), 2000);
+    } catch (error) {
+      console.error('Failed to remove API key:', error);
+      setStatus('error');
+      toast.error('Failed to remove API key.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -131,6 +150,18 @@ export const Settings = () => {
              </div>
 
             <div className="flex justify-end pt-4 border-t border-zinc-800">
+              {apiKey && (
+                <button
+                  onClick={handleRemoveApiKey}
+                  disabled={isLoading}
+                  className={`
+                    mr-2 px-4 py-2 rounded-lg text-sm font-medium transition-all
+                    bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed
+                  `}
+                >
+                  Remove API Key
+                </button>
+              )}
               <button
                 onClick={handleSave}
                 disabled={isLoading || !apiKey}

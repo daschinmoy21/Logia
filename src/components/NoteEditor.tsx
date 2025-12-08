@@ -6,6 +6,7 @@ import {
 } from "./EditorProvider";
 import { Note } from "../types/Note";
 import { AIMenuController } from "@blocknote/xl-ai";
+import useUiStore from "../store/UiStore";
 
 export function NoteEditor({
   currentNote,
@@ -15,6 +16,7 @@ export function NoteEditor({
   updateCurrentNoteTitle: (title: string) => void;
 }) {
   const { editor } = useEditorContext();
+  const { googleApiKey } = useUiStore();
 
   const handleTitleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
@@ -54,8 +56,8 @@ export function NoteEditor({
           className="h-full bg-zinc-950 px-1 py-2"
           data-theming-css-variables-demo
         >
-          {/* AI Menu */}
-          <AIMenuController />
+          {/* AI Menu - Only show if API key is present */}
+          {googleApiKey && <AIMenuController />}
 
           {/* Custom Formatting Toolbar */}
           <FormattingToolbarWithAI />

@@ -26,6 +26,7 @@ interface UiState {
   isRecording: boolean;
   isAiSidebarOpen: boolean;
   googleApiKey: string;
+  editor: any | null;
 
   // Actions for new states
   setDeleteConfirmId: (id: string | null) => void;
@@ -40,6 +41,7 @@ interface UiState {
   setIsRecording: (isRecording: boolean) => void;
   setIsAiSidebarOpen: (isOpen: boolean) => void;
   setGoogleApiKey: (key: string) => void;
+  setEditor: (editor: any) => void;
 }
 
 const useUiStore = create<UiState>((set) => ({
@@ -86,6 +88,7 @@ const useUiStore = create<UiState>((set) => ({
   isAiSidebarOpen: false,
   deleteConfirmFolderId:null,
   googleApiKey: '',
+  editor: null,
 
   // Actions for new states
   setDeleteConfirmId: (id) => set({ deleteConfirmId: id }),
@@ -100,6 +103,7 @@ const useUiStore = create<UiState>((set) => ({
   setIsRecording: (isRecording) => set({ isRecording }),
   setIsAiSidebarOpen: (isOpen) => set({ isAiSidebarOpen: isOpen }),
   setGoogleApiKey: (key) => set({ googleApiKey: key }),
+  setEditor: (editor) => set({ editor }),
 }));
 
 export default useUiStore;

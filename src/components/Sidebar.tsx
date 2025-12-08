@@ -20,6 +20,8 @@ import { invoke } from '@tauri-apps/api/core';
 import { AnimatedFileTree } from './AnimatedFileTree';
 import { Settings } from './Settings';
 import toast from 'react-hot-toast';
+import { createGoogleGenerativeAI } from '@ai-sdk/google';
+import { generateText } from 'ai';
 
 type KanbanTask = {
   id: string;
@@ -44,8 +46,10 @@ export const Sidebar = () => {
   const contextMenu = useUiStore((state) => state.contextMenu);
   const isSettingsOpen = useUiStore((state) => state.isSettingsOpen);
   const isKanbanOpen = useUiStore((state) => state.isKanbanOpen);
-  const isSupportOpen = useUiStore((state) => state.isSupportOpen);
-  const isRecording = useUiStore((state) => state.isRecording);
+    const isSupportOpen = useUiStore((state) => state.isSupportOpen);
+    const isRecording = useUiStore((state) => state.isRecording);
+    const googleApiKey = useUiStore((state) => state.googleApiKey);
+    const editor = useUiStore((state) => state.editor);
 
   // Folder renaming state
   const [renamingFolderId, setRenamingFolderId] = useState<string | null>(null);
@@ -252,7 +256,14 @@ export const Sidebar = () => {
                    setIsRecording(true);
                  } catch (error) {
                    console.error('Failed to start recording:', error);
-                   toast.error('Failed to start recording');
+                    toast.error('❌ Failed to start recording', {
+                      icon: '❌',
+                      style: {
+                        background: '#7f1d1d',
+                        color: '#fca5a5',
+                        border: '1px solid #dc2626',
+                      },
+                    });
                  }
                }
              }}
@@ -295,57 +306,232 @@ export const Sidebar = () => {
                  noteToUpdate = useNotesStore.getState().currentNote;
                } catch (error) {
                  console.error('Failed to create note:', error);
-                 toast.error('Failed to create new note');
+                  toast.error('❌ Failed to create new note', {
+                    icon: '❌',
+                    style: {
+                      background: '#7f1d1d',
+                      color: '#fca5a5',
+                      border: '1px solid #dc2626',
+                    },
+                  });
                  return;
                }
              }
 
-             const loadingToast = toast.loading('Transcribing audio...');
+              const loadingToast = toast.loading('🎙️ Transcribing audio...', {
+                style: {
+                  background: '#1f2937',
+                  color: '#fbbf24',
+                  border: '1px solid #374151',
+                },
+              });
 
              try {
                const audioPath = await invoke<string>('stop_recording');
                setIsRecording(false);
 
-               const transcriptionResult = await invoke<string>('transcribe_audio', { audioPath });
-               const result = JSON.parse(transcriptionResult);
+                const transcriptionResult = await invoke<string>('transcribe_audio', { audioPath });
+                console.log('Transcription result:', transcriptionResult);
+                const result = JSON.parse(transcriptionResult);
 
                if (result.error) {
                  throw new Error(result.error);
                }
                
-               if (noteToUpdate && result.text) {
-                 try {
-                   // Parse current content, default to empty array if invalid
-                   let currentContent = [];
-                   if (noteToUpdate.content && noteToUpdate.content.trim()) {
-                     try {
-                       currentContent = JSON.parse(noteToUpdate.content);
-                       if (!Array.isArray(currentContent)) {
-                         currentContent = [];
-                       }
-                     } catch {
-                       currentContent = [];
-                     }
-                   }
+                if (noteToUpdate && result.text) {
+                  // Parse current content, default to empty array if invalid
+                  let currentContent = [];
+                  if (noteToUpdate.content && noteToUpdate.content.trim()) {
+                    try {
+                      currentContent = JSON.parse(noteToUpdate.content);
+                      if (!Array.isArray(currentContent)) {
+                        currentContent = [];
+                      }
+                    } catch {
+                      currentContent = [];
+                    }
+                  }
 
-                   const newBlock = {
-                     type: 'paragraph',
-                     content: result.text
-                   };
-                   const updatedContent = [...currentContent, newBlock];
-                   updateCurrentNoteContent(JSON.stringify(updatedContent));
-                   
-                   toast.success('Transcription complete', { id: loadingToast });
-                 } catch (error) {
-                   console.error('Failed to append transcription:', error);
-                   toast.error('Failed to update note', { id: loadingToast });
-                 }
-               } else {
-                 toast.success('Transcription complete (no text)', { id: loadingToast });
-               }
+                  if (googleApiKey) {
+                     // Update toast to processing with AI
+                     toast.loading('🤖 Processing transcription with AI...', {
+                       id: loadingToast,
+                       style: {
+                         background: '#1f2937',
+                         color: '#60a5fa',
+                         border: '1px solid #374151',
+                       },
+                     });
+
+                    try {
+                       const { text: structuredJson } = await generateText({
+                         model: createGoogleGenerativeAI({ apiKey: googleApiKey })('gemini-2.5-flash'),
+                        system: `You are an expert note-taker. Transform the raw transcription into a highly structured, educational note using BlockNote JSON blocks.
+
+Your goal is to organize the information for effective learning, using the most appropriate block types.
+
+Output MUST be a valid JSON array of blocks. Do not wrap in markdown.
+
+Each block must have: "id" (unique string), "type", "props" (object), "content", "children" (array, usually []).
+
+AVAILABLE BLOCK STRUCTURES:
+
+1. PARAGRAPHS & QUOTES:
+   - {"id": "unique-id-1", "type": "paragraph", "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"}, "content": "Simple text", "children": []}
+   - {"id": "unique-id-2", "type": "paragraph", "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"}, "content": [{"type":"text", "text":"Bold Text", "styles":{"bold":true}}, {"type":"text", "text":" normal text", "styles":{}}], "children": []}
+   - {"id": "unique-id-3", "type": "quote", "props": {}, "content": "Key takeaway or important definition", "children": []}
+
+2. HEADINGS (Use hierarchy):
+   - {"id": "unique-id-4", "type": "heading", "props": {"level": 1, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"}, "content": "Main Title", "children": []}
+   - {"id": "unique-id-5", "type": "heading", "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"}, "content": "Section Title", "children": []}
+   - {"id": "unique-id-6", "type": "heading", "props": {"level": 3, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"}, "content": "Subsection", "children": []}
+   - {"id": "unique-id-7", "type": "heading", "props": {"level": 2, "isToggleable": true, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"}, "content": "Toggleable Section", "children": []}
+
+3. LISTS (Use for steps, features, pros/cons):
+   - {"id": "unique-id-8", "type": "bulletListItem", "props": {}, "content": "Point", "children": []}
+   - {"id": "unique-id-9", "type": "numberedListItem", "props": {}, "content": "Step 1", "children": []}
+   - {"id": "unique-id-10", "type": "checkListItem", "props": {}, "content": "Task", "children": []}
+   - {"id": "unique-id-11", "type": "toggleListItem", "props": {}, "content": "Click to reveal detail", "children": []}
+
+4. CODE (For technical terms/snippets):
+   - {"id": "unique-id-12", "type": "codeBlock", "props": {"language": "javascript", "textColor": "default", "backgroundColor": "default", "textAlignment": "left"}, "content": "console.log('code');", "children": []}
+
+5. TABLES (Use for comparisons/data):
+   - {"id": "unique-id-13", "type": "table", "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"}, "content": {"type": "tableContent", "rows": [{"cells": ["Col1", "Col2"]}, {"cells": ["Val1", "Val2"]}]}, "children": []}
+
+RULES:
+- Generate unique IDs for each block (e.g., using random strings or sequential numbers).
+- Organize content logically with headings.
+- Use TABLES for comparisons (e.g., "Option A vs Option B").
+- Use CODE BLOCKS for any programming code or command line output.
+- Use BOLD text for key terms (using the content array format).
+- Do NOT use generic "list" type. Use specific list item types.
+- Ensure valid JSON syntax with all required fields.`,
+                        prompt: result.text,
+                      });
+
+                       // Clean up markdown code blocks if present
+                       const cleanedJson = structuredJson.replace(/```json/g, '').replace(/```/g, '').trim();
+                       console.log('AI structured response:', cleanedJson);
+                       const newBlocks = JSON.parse(cleanedJson);
+                       if (!Array.isArray(newBlocks)) throw new Error("AI output is not an array");
+
+                       // Insert blocks at cursor position
+                       if (editor) {
+                         const cursorPosition = editor.getTextCursorPosition();
+                         const blockId = cursorPosition.block;
+                         editor.insertBlocks(newBlocks, blockId, 'after');
+                       } else {
+                         // Fallback: append to content
+                         const updatedContent = [...currentContent, ...newBlocks];
+                         updateCurrentNoteContent(JSON.stringify(updatedContent));
+                       }
+
+                       toast.success('✅ Transcription structured by AI', {
+                         id: loadingToast,
+                         icon: '🎉',
+                         style: {
+                           background: '#065f46',
+                           color: '#10b981',
+                           border: '1px solid #047857',
+                         },
+                       });
+                       toast('Done! 🎊', {
+                         icon: '🎊',
+                         style: {
+                           background: '#7c3aed',
+                           color: '#c4b5fd',
+                           border: '1px solid #6d28d9',
+                         },
+                       });
+                     } catch (error) {
+                       console.error('AI structuring failed:', error);
+                       console.log('Falling back to simple paragraph');
+                       // Fallback to simple paragraph
+                       const newBlock = {
+                         id: Date.now().toString(),
+                         type: 'paragraph',
+                         props: { textColor: 'default', backgroundColor: 'default', textAlignment: 'left' },
+                         content: result.text,
+                         children: []
+                       };
+                       if (editor) {
+                         const cursorPosition = editor.getTextCursorPosition();
+                         const blockId = cursorPosition.block;
+                         editor.insertBlocks([newBlock], blockId, 'after');
+                       } else {
+                         // Fallback: append to content
+                         const updatedContent = [...currentContent, newBlock];
+                         updateCurrentNoteContent(JSON.stringify(updatedContent));
+                       }
+                       toast.success('✅ Transcription complete', {
+                         id: loadingToast,
+                         icon: '📝',
+                         style: {
+                           background: '#92400e',
+                           color: '#fbbf24',
+                           border: '1px solid #78350f',
+                         },
+                       });
+                       toast('Done! 📝', {
+                         icon: '📝',
+                         style: {
+                           background: '#7c3aed',
+                           color: '#c4b5fd',
+                           border: '1px solid #6d28d9',
+                         },
+                       });
+                     }
+                   } else {
+                     // No API key, fallback to simple paragraph
+                     const newBlock = {
+                       id: Date.now().toString(),
+                       type: 'paragraph',
+                       props: { textColor: 'default', backgroundColor: 'default', textAlignment: 'left' },
+                       content: result.text,
+                       children: []
+                     };
+                     if (editor) {
+                       const cursorPosition = editor.getTextCursorPosition();
+                       const blockId = cursorPosition.block;
+                       editor.insertBlocks([newBlock], blockId, 'after');
+                     } else {
+                       // Fallback: append to content
+                       const updatedContent = [...currentContent, newBlock];
+                       updateCurrentNoteContent(JSON.stringify(updatedContent));
+                     }
+                     toast.success('✅ Transcription complete', {
+                       id: loadingToast,
+                       icon: '📝',
+                       style: {
+                         background: '#92400e',
+                         color: '#fbbf24',
+                         border: '1px solid #78350f',
+                       },
+                     });
+                     toast('Done! 📝', {
+                       icon: '📝',
+                       style: {
+                         background: '#7c3aed',
+                         color: '#c4b5fd',
+                         border: '1px solid #6d28d9',
+                       },
+                     });
+                   }
+                } else {
+                  toast.success('Transcription complete (no text)', { id: loadingToast });
+                }
              } catch (error) {
                console.error('Transcription failed:', error);
-               toast.error(`Transcription failed: ${error}`, { id: loadingToast });
+                toast.error(`❌ Transcription failed: ${error}`, {
+                  id: loadingToast,
+                  icon: '❌',
+                  style: {
+                    background: '#7f1d1d',
+                    color: '#fca5a5',
+                    border: '1px solid #dc2626',
+                  },
+                });
                setIsRecording(false);
              }
            }} />
