@@ -12,10 +12,6 @@ class Program
     static void Main(string[] args)
     {
         string outputFile = "output.wav";
-        string venvDir = "model/venv";
-        string pythonExe = Path.Combine(venvDir, "Scripts", "python.exe");
-        string requirements = "model/requirements.txt";
-        string transcribeScript = @"src-tauri\src\audio\transcription\transcribe.py"; // Updated path to actual script
 
         // Parse command-line arguments
         for (int i = 0; i < args.Length; i++)
@@ -24,11 +20,40 @@ class Program
                 outputFile = args[i + 1];
         }
 
-        // 1. Start Python venv/dependency install in parallel
-        var venvTask = Task.Run(() => EnsurePythonVenv(venvDir, requirements));
+        Console.WriteLine($"Starting audio capture, saving to {outputFile} (send 'stop' to stdin to stop)...");
 
-        Console.WriteLine($"Starting audio capture, saving to {outputFile} (press Ctrl+C to stop)...");
+        try
+        {
+            var cancellationTokenSource = new CancellationTokenSource();
 
+            // Start capture in a separate task
+            var captureTask = Task.Run(() => StartCapture(outputFile, cancellationTokenSource.Token));
+
+            // Read from stdin for stop command
+            while (!cancellationTokenSource.IsCancellationRequested)
+            {
+                string input = Console.ReadLine();
+                if (input != null && input.Trim().ToLower() == "stop")
+                {
+                    Console.WriteLine("Received stop signal, stopping recording...");
+                    cancellationTokenSource.Cancel();
+                    break;
+                }
+            }
+
+            // Wait for capture to finish
+            captureTask.Wait();
+            Console.WriteLine($"Recording stopped. Saved to {outputFile}");
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Error: {ex.Message}");
+            Environment.Exit(1);
+        }
+    }
+
+    static void StartCapture(string outputFile, CancellationToken token)
+    {
         try
         {
             using (var capture = new WasapiLoopbackCapture())
@@ -39,32 +64,15 @@ class Program
                     writer.Write(e.Buffer, 0, e.BytesRecorded);
                 };
 
-                var cancellationTokenSource = new CancellationTokenSource();
-                Console.CancelKeyPress += (s, e) =>
-                {
-                    Console.WriteLine("\nReceived stop signal, stopping recording...");
-                    e.Cancel = true;
-                    cancellationTokenSource.Cancel();
-                };
-
                 capture.StartRecording();
-                cancellationTokenSource.Token.WaitHandle.WaitOne();
+                token.WaitHandle.WaitOne();
                 capture.StopRecording();
-                Console.WriteLine($"Recording stopped. Saved to {outputFile}");
             }
-
-            // 2. Wait for venv/dependency install to finish if not already done
-            venvTask.Wait();
-
-            // 3. Transcribe using the whisper model
-            Console.WriteLine("Transcribing with faster-whisper...");
-            string transcriptFile = RunTranscription(pythonExe, transcribeScript, outputFile);
-            Console.WriteLine($"Transcription saved to: {transcriptFile}");
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"Error: {ex.Message}");
-            Environment.Exit(1);
+            Console.Error.WriteLine($"Capture error: {ex.Message}");
+            throw;
         }
     }
 
