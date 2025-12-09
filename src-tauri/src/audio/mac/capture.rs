@@ -28,7 +28,7 @@ pub fn start_capture(app_handle: &AppHandle) -> Result<(), String> {
     // Path to the `record.js` script, assuming it's bundled as a resource
     let script_path = app_handle
         .path()
-        .resolve_resource("resources/audio/mac/record.js")
+        .resolve_resource("src/audio/mac/record.js")
         .ok_or_else(|| "record.js script not found in resources".to_string())?;
 
     let output_file = generate_output_file(app_handle)?;

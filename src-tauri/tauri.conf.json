@@ -35,6 +35,8 @@
     "externalBin": [],
     "resources": [
       "src/audio/transcription/*",
+      "src/audio/mac/record.js",
+      "src/audio/mac/SystemAudioDump",
       "bin/AudioCapture-x86_64-pc-windows-msvc.exe"
     ]
   }
