@@ -32,11 +32,10 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "externalBin": [
-      "src/audio/windows/Windows.bin"
-    ],
+    "externalBin": [],
     "resources": [
-      "src/audio/transcription/*"
+      "src/audio/transcription/*",
+      "bin/AudioCapture-x86_64-pc-windows-msvc.exe"
     ]
   }
 }

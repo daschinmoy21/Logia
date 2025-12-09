@@ -8,6 +8,16 @@
   "permissions": [
     "core:default",
     "opener:default",
-    "fs:default"
+    "fs:default",
+    {
+      "identifier": "shell:allow-execute",
+      "allow": [
+        {
+          "name": "AudioCapture",
+          "cmd": "",
+          "sidecar": true
+        }
+      ]
+    }
   ]
 }

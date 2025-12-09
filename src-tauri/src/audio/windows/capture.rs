@@ -42,55 +42,35 @@ pub fn start_capture(app_handle: &AppHandle) -> Result<(), String> {
 
     let output_file = generate_output_file(app_handle)?;
     println!("Output file: {}", output_file);
-
-    // Try to find the exe via resource resolver (works in packaged builds)
-    let exe_resource = match app_handle.path().resolve("src/audio/windows/Windows.bin", BaseDirectory::Resource) {
-        Ok(p) if p.exists() => Some(p),
-        _ => {
-            // Fallback: try to find the exe relative to the app exe (useful in dev or some packaging layouts)
-            let app_exe = std::env::current_exe().map_err(|e| format!("Failed to get current exe: {}", e))?;
-            let app_dir = app_exe.parent().ok_or("Failed to get app dir")?;
-            let exe_path = app_dir.join("resources/audio/windows/Windows.bin");
-            if exe_path.exists() {
-                Some(exe_path)
-            } else {
-                None
-            }
-        }
-    };
-
-    // Write debug info to a file
-    if let Ok(app_data_dir) = app_handle.path().app_data_dir() {
-        let debug_file = app_data_dir.join("debug_audio.txt");
-        let _ = std::fs::write(&debug_file, format!("Exe path: {:?}\n", exe_resource.as_ref().map(|p| p.display())));
+ 
+    // Manually resolve the bundled binary path
+    let sidecar_path = app_handle.path().resolve("bin/AudioCapture-x86_64-pc-windows-msvc.exe", BaseDirectory::Resource)
+        .map_err(|e| format!("Failed to resolve audio capture binary: {}", e))?;
+    
+    if !sidecar_path.exists() {
+         return Err(format!("Audio capture binary not found at: {:?}", sidecar_path));
     }
 
-    let mut child = if let Some(exe_path) = exe_resource {
-        let exe_str = exe_path.to_string_lossy().into_owned();
-        println!("Found native Windows exe at {}, launching...", exe_str);
+    println!("Launching AudioCapture binary from: {:?}", sidecar_path);
 
-        // Build command so we can set Windows-specific creation flags to avoid showing a console window
-        let exe_dir = exe_path.parent().ok_or("Failed to get exe directory")?;
-        let mut cmd = Command::new(&exe_str);
-        cmd.arg("--output")
-            .arg(&output_file)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .current_dir(exe_dir);
+    let mut cmd = Command::new(sidecar_path);
+    cmd.args([
+        "--output",
+        &output_file,
+    ])
+    .stdin(Stdio::piped())
+    .stdout(Stdio::piped())
+    .stderr(Stdio::piped());
 
-        // On Windows, prevent a console window from being created for the child process
-        #[cfg(windows)]
-        {
-            // CREATE_NO_WINDOW = 0x08000000
-            cmd.creation_flags(0x08000000);
-        }
+    // On Windows, prevent a console window from being created for the child process
+    #[cfg(windows)]
+    {
+        // CREATE_NO_WINDOW = 0x08000000
+        cmd.creation_flags(0x08000000);
+    }
 
-        cmd.spawn()
-            .map_err(|e| format!("Failed to start Windows.exe: {}", e))?
-    } else {
-        return Err("Windows capture executable not found. Ensure Windows.bin is in the app's resources/audio/windows/ directory.".to_string());
-    };
+    let mut child = cmd.spawn()
+        .map_err(|e| format!("Failed to spawn sidecar: {}", e))?;
 
     // Quick check: did the process exit immediately? If so, capture stderr/stdout and return an error with logs.
     match child.try_wait() {

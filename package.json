@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build:audio": "node src-tauri/scripts/build-audio.js",
+    "build": "bun run build:audio && tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri"
   },

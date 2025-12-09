@@ -1097,8 +1097,19 @@ async fn prereflight_check(app_handle: tauri::AppHandle) -> Result<serde_json::V
     } else { false };
     map.insert("vcruntime_found".to_string(), serde_json::Value::Bool(vcruntime_found));
 
-    // Check that packaged Windows helper exists in resources
-    let windows_bin_path = app_handle.path().resolve("src/audio/windows/Windows.bin", BaseDirectory::Resource).ok();
+    // Check that packaged Windows helper exists in resources.
+    // Prefer the bundled runtime location: src-tauri/bin/windows/capture.exe (resolved via path_resolver)
+    // Check that packaged Windows helper exists in resources.
+    // Prefer the bundled runtime location: src-tauri/bin/windows/capture.exe (resolved via path().resolve)
+    let windows_bin_path = match app_handle.path().resolve("bin/AudioCapture-x86_64-pc-windows-msvc.exe", BaseDirectory::Resource) {
+        Ok(p) if p.exists() => Some(p),
+        _ => {
+            // Legacy resource path (older setups)
+            if let Ok(p) = app_handle.path().resolve("src/audio/windows/Windows.bin", BaseDirectory::Resource) {
+                if p.exists() { Some(p) } else { None }
+            } else { None }
+        }
+    };
     map.insert("windows_helper_present".to_string(), serde_json::Value::Bool(windows_bin_path.as_ref().map(|p| p.exists()).unwrap_or(false)));
     map.insert("windows_helper_path".to_string(), match windows_bin_path { Some(p) => serde_json::Value::String(p.to_string_lossy().to_string()), None => serde_json::Value::Null });
 
@@ -1128,6 +1139,7 @@ pub fn run() {
     dotenvy::dotenv().ok();
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_fs::init())
         .invoke_handler(tauri::generate_handler![
             get_notes_path,
