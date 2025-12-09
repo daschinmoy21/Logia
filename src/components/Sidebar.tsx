@@ -4,7 +4,7 @@ import { GoPersonFill } from 'react-icons/go';
 import { IoSettingsOutline } from 'react-icons/io5';
 import { AiOutlineLayout, AiOutlineFolderAdd } from 'react-icons/ai';
 import { CiSearch } from 'react-icons/ci';
-import { Bot, Plus, ListTodo, Clock, CheckCircle } from 'lucide-react';
+import { Bot, Plus, ListTodo, Clock, CheckCircle, Command } from 'lucide-react';
 import { Description, Dialog, DialogPanel, DialogTitle } from '@headlessui/react';
 import { useNotesStore } from '../store/notesStore';
 import RecStatus from './RecStatus';
@@ -56,6 +56,11 @@ export const Sidebar = () => {
   const [folderRenameValue, setFolderRenameValue] = useState('');
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
+  const [isMac, setIsMac] = useState(false);
+
+  useEffect(() => {
+    setIsMac(navigator.platform.toUpperCase().indexOf('MAC') >= 0);
+  }, []);
 
   // Kanban state
   const [kanbanData, setKanbanData] = useState<KanbanTask[]>([]);
@@ -240,7 +245,13 @@ export const Sidebar = () => {
             className='w-full bg-zinc-800/50 border border-zinc-700 hover:bg-zinc-800 transition-colors text-zinc-400 text-sm flex items-center gap-2 p-2 rounded-md active:scale-95'
           >
             <CiSearch size={18} />
-            Search (Alt + P)
+            <span className="flex items-center gap-1">
+              Search
+              <kbd className="hidden md:inline-flex items-center gap-0.5 text-xs text-zinc-500 font-sans border border-zinc-700 rounded px-1.5 py-0.5 ml-2 bg-zinc-900/50">
+                {isMac ? <Command size={10} /> : <span className="text-[10px]">Alt</span>}
+                <span>P</span>
+              </kbd>
+            </span>
           </button>
         </div>
 

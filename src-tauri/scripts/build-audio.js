@@ -15,6 +15,10 @@ const tempDir = join(outputDir, 'temp_audio_build');
 const targetBin = join(outputDir, 'AudioCapture-x86_64-pc-windows-msvc.exe');
 
 async function build() {
+    if (process.platform !== 'win32') {
+        console.log('Skipping Windows audio build on non-Windows platform');
+        return;
+    }
     console.log('Building AudioCapture...');
     try {
         // Publish to temp directory

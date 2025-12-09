@@ -32,10 +32,13 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "macOS": {
+      "entitlements": "entitlements.plist"
+    },
     "externalBin": [],
     "resources": [
       "src/audio/transcription/*",
-      "src/audio/mac/record.js",
+      "src/audio/mac/record.cjs",
       "src/audio/mac/SystemAudioDump",
       "bin/AudioCapture-x86_64-pc-windows-msvc.exe"
     ]

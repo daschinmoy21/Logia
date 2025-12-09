@@ -2,10 +2,7 @@ use chrono;
 use serde::Deserialize;
 use serde::Serialize;
 use std::fs;
-use std::net::TcpStream;
 use std::path::PathBuf;
-use std::process::Command;
-use std::time::Duration;
 use tauri::path::BaseDirectory;
 use tauri::Manager;
 use uuid::Uuid;
@@ -20,7 +17,7 @@ mod audio;
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
 
-fn hide_console(cmd: &mut std::process::Command) {
+fn hide_console(_cmd: &mut std::process::Command) {
     #[cfg(windows)]
     {
         // CREATE_NO_WINDOW
@@ -1080,6 +1077,14 @@ async fn prereflight_check(app_handle: tauri::AppHandle) -> Result<serde_json::V
         }
     }
 
+    if !python_found {
+        if let Some((exe, ver)) = try_python_cmd("python3", &["-c", "import sys;print(sys.executable);print(sys.version)"]) {
+            python_found = true;
+            python_exec = Some(exe);
+            python_version = Some(ver);
+        }
+    }
+
     map.insert("python_found".to_string(), serde_json::Value::Bool(python_found));
     map.insert("python_version".to_string(), match python_version { Some(v) => serde_json::Value::String(v), None => serde_json::Value::Null });
     map.insert("python_executable".to_string(), match python_exec { Some(p) => serde_json::Value::String(p), None => serde_json::Value::Null });
@@ -1098,30 +1103,44 @@ async fn prereflight_check(app_handle: tauri::AppHandle) -> Result<serde_json::V
     map.insert("ffmpeg_available".to_string(), serde_json::Value::Bool(ffmpeg_available));
 
     // Check for Visual C++ runtime on Windows by probing common DLL locations (vcruntime140.dll)
-    let vcruntime_found = if cfg!(windows) {
-        std::env::var("WINDIR").ok().map(|w| {
+    // Check for Visual C++ runtime on Windows by probing common DLL locations (vcruntime140.dll)
+    if cfg!(windows) {
+        let vcruntime_found = std::env::var("WINDIR").ok().map(|w| {
             let sys32 = std::path::Path::new(&w).join("System32").join("vcruntime140.dll");
             let wow64 = std::path::Path::new(&w).join("SysWOW64").join("vcruntime140.dll");
             sys32.exists() || wow64.exists()
-        }).unwrap_or(false)
-    } else { false };
-    map.insert("vcruntime_found".to_string(), serde_json::Value::Bool(vcruntime_found));
+        }).unwrap_or(false);
+        map.insert("vcruntime_found".to_string(), serde_json::Value::Bool(vcruntime_found));
 
-    // Check that packaged Windows helper exists in resources.
-    // Prefer the bundled runtime location: src-tauri/bin/windows/capture.exe (resolved via path_resolver)
-    // Check that packaged Windows helper exists in resources.
-    // Prefer the bundled runtime location: src-tauri/bin/windows/capture.exe (resolved via path().resolve)
-    let windows_bin_path = match app_handle.path().resolve("bin/AudioCapture-x86_64-pc-windows-msvc.exe", BaseDirectory::Resource) {
-        Ok(p) if p.exists() => Some(p),
-        _ => {
-            // Legacy resource path (older setups)
-            if let Ok(p) = app_handle.path().resolve("src/audio/windows/Windows.bin", BaseDirectory::Resource) {
-                if p.exists() { Some(p) } else { None }
-            } else { None }
-        }
-    };
-    map.insert("windows_helper_present".to_string(), serde_json::Value::Bool(windows_bin_path.as_ref().map(|p| p.exists()).unwrap_or(false)));
-    map.insert("windows_helper_path".to_string(), match windows_bin_path { Some(p) => serde_json::Value::String(p.to_string_lossy().to_string()), None => serde_json::Value::Null });
+        // Check that packaged Windows helper exists in resources.
+        let windows_bin_path = match app_handle.path().resolve("bin/AudioCapture-x86_64-pc-windows-msvc.exe", BaseDirectory::Resource) {
+            Ok(p) if p.exists() => Some(p),
+            _ => {
+                // Legacy resource path (older setups)
+                if let Ok(p) = app_handle.path().resolve("src/audio/windows/Windows.bin", BaseDirectory::Resource) {
+                    if p.exists() { Some(p) } else { None }
+                } else { None }
+            }
+        };
+        map.insert("windows_helper_present".to_string(), serde_json::Value::Bool(windows_bin_path.as_ref().map(|p| p.exists()).unwrap_or(false)));
+        map.insert("windows_helper_path".to_string(), match windows_bin_path { Some(p) => serde_json::Value::String(p.to_string_lossy().to_string()), None => serde_json::Value::Null });
+    }
+
+    // MacOS helper check
+    if cfg!(target_os = "macos") {
+         let mac_bin_path = match app_handle.path().resolve("src/audio/mac/SystemAudioDump", BaseDirectory::Resource) {
+             Ok(p) => Some(p),
+             _ => None
+         };
+         let mac_helper_present = mac_bin_path.as_ref().map(|p| p.exists()).unwrap_or(false);
+         // We reuse the same key 'windows_helper_present' or create a new one?
+         // The frontend checks 'windows_helper_present' specifically.
+         // Let's use a generic name or platform specific.
+         // But to reuse existing frontend logic for now without changing frontend too much:
+         // Ideally we shouldn't send 'windows_helper_present' on mac.
+         // We can send 'mac_helper_present'.
+         map.insert("mac_helper_present".to_string(), serde_json::Value::Bool(mac_helper_present));
+    }
 
     // Simple network check to pypi.org (used by pip installs)
     use std::net::ToSocketAddrs;

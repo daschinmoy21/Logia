@@ -4,16 +4,21 @@ const path = require('path');
 
 // Configuration
 const EXECUTABLE_PATH = path.join(__dirname, 'SystemAudioDump');
-const PCM_OUTPUT_PATH = path.join(process.cwd(), 'temp_audio.pcm');
-const WAV_OUTPUT_PATH = path.join(process.cwd(), 'temp_audio.wav');
+// 2. Use provided path from arguments or temp fallback
+const WAV_OUTPUT_PATH = process.argv[2] && process.argv[2].endsWith('.wav')
+  ? process.argv[2]
+  : path.join(require('os').tmpdir(), 'kortex_temp_audio.wav');
+// Use a temp PCM file
+const PCM_OUTPUT_PATH = WAV_OUTPUT_PATH.replace('.wav', '.pcm');
+
 // We assume transcribe.py is bundled in resources/src/audio/transcription/
 // Since record.js is in resources/src/audio/mac/, we need to go up two levels then into transcription
 const TRANSCRIPT_SCRIPT_PATH = path.resolve(__dirname, '../transcription/transcribe.py');
 
 // Try to find a python executable.
-// 1. If we had a bundled venv, we'd check that.
+// 1. Use provided path from arguments
 // 2. Fallback to system 'python3' or 'python'.
-const PYTHON_EXEC_PATH = 'python3';
+const PYTHON_EXEC_PATH = process.argv[3] || 'python3';
 const SAMPLE_RATE = 24000;
 const BITS_PER_SAMPLE = 16;
 const CHANNELS = 2;
@@ -65,35 +70,65 @@ function transcribeWavFile(wavPath) {
       return reject(`Transcription script not found at ${TRANSCRIPT_SCRIPT_PATH}.`);
     }
 
-    const transcriptionProcess = spawn(PYTHON_EXEC_PATH, [TRANSCRIPT_SCRIPT_PATH], {
+    console.error(`Starting transcription with: ${PYTHON_EXEC_PATH} ${TRANSCRIPT_SCRIPT_PATH} ${wavPath}`);
+
+    const transcriptionProcess = spawn(PYTHON_EXEC_PATH, [TRANSCRIPT_SCRIPT_PATH, wavPath], {
       cwd: path.dirname(TRANSCRIPT_SCRIPT_PATH)
     });
 
-    let transcript = '';
-    let errorOutput = '';
-    let isReady = false;
+    let stdoutData = '';
+    let stderrData = '';
 
     transcriptionProcess.stdout.on('data', (data) => {
-      const output = data.toString();
-      if (!isReady && output.trim() === 'READY') {
-        isReady = true;
-        console.error('Transcription model is ready. Sending WAV file path.');
-        transcriptionProcess.stdin.write(wavPath + '\n');
-        transcriptionProcess.stdin.end(); // End stdin right after writing.
-      } else if (isReady) {
-        transcript += output; // Accumulate without trimming.
-      }
+      stdoutData += data.toString();
     });
 
     transcriptionProcess.stderr.on('data', (data) => {
-      errorOutput += data.toString();
+      stderrData += data.toString();
+      console.error(`[Transcription Stderr]: ${data.toString().trim()}`);
     });
 
     transcriptionProcess.on('close', (code) => {
-      if (code === 0 && transcript) {
-        resolve(transcript.trim());
+      if (code === 0) {
+        // try to find the JSON in stdout
+        try {
+          const lines = stdoutData.trim().split('\n');
+          // Start reading from the end to find the JSON
+          let jsonResult = null;
+          for (let i = lines.length - 1; i >= 0; i--) {
+            try {
+              const potentialJson = JSON.parse(lines[i]);
+              if (potentialJson.text || potentialJson.error) {
+                jsonResult = potentialJson;
+                break;
+              }
+            } catch (e) {
+              // Not json line, continue
+            }
+          }
+
+          if (jsonResult) {
+            if (jsonResult.error) {
+              reject(`Transcription error from script: ${jsonResult.error}`);
+            } else {
+              // Return the whole object as string, or construct a new one. 
+              // Sidebar.tsx expects { text: "..." } structure or similar if it parses it.
+              // Looking at Sidebar.tsx: const result = JSON.parse(transcriptionResult); if (result.text) ...
+              resolve(JSON.stringify(jsonResult));
+            }
+          } else {
+            // Fallback if no JSON found but exit code 0 (might be mock)
+            // Wrap raw text in JSON structure
+            resolve(JSON.stringify({ text: stdoutData.trim() }));
+          }
+
+        } catch (e) {
+          // Fallback on error
+          resolve(JSON.stringify({ text: stdoutData.trim() }));
+        }
+
       } else {
-        reject(`Transcription process exited with code ${code}. Stderr: ${errorOutput}`);
+        reject(`Transcription process exited with code ${code}. Stderr: ${stderrData}`);
       }
     });
 
@@ -158,9 +193,23 @@ audioCaptureChild.on('exit', (code, signal) => {
     } catch (error) {
       console.error(`❌ Transcription failed: ${error}`);
     } finally {
+
       // Clean up temporary files
-      fs.unlinkSync(PCM_OUTPUT_PATH);
-      fs.unlinkSync(WAV_OUTPUT_PATH);
+      try {
+        if (fs.existsSync(PCM_OUTPUT_PATH)) {
+          fs.unlinkSync(PCM_OUTPUT_PATH);
+        }
+
+        // Only delete the WAV file if it was a temp file we generated, 
+        // NOT if it was passed as an argument (which means the app wants to keep it)
+        const isTempWav = !process.argv[2];
+        if (isTempWav && fs.existsSync(WAV_OUTPUT_PATH)) {
+          fs.unlinkSync(WAV_OUTPUT_PATH);
+        }
+      } catch (e) {
+        console.error(`Error cleaning up files: ${e.message}`);
+      }
+
       console.error('🎉 Process completed.');
       process.exit(0);
     }

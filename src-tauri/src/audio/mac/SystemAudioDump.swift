@@ -11,19 +11,22 @@ struct SystemAudioDump {
       fputs("Starting SystemAudioDump...\n", Darwin.stderr)
 
       // Check screen recording permission
-      if !CGPreflightScreenCaptureAccess() {
-        fputs("❌ Screen recording permission required!\n", Darwin.stderr)
-        if !CGRequestScreenCaptureAccess() {
-          fputs("Permission denied. Exiting.\n", Darwin.stderr)
-          exit(1)
-        }
-      }
-      fputs("✅ Permissions OK\n", Darwin.stderr)
+      // Temporarily disabled for dev
+      // if !CGPreflightScreenCaptureAccess() {
+      //   fputs("❌ Screen recording permission required!\n", Darwin.stderr)
+      //   if !CGRequestScreenCaptureAccess() {
+      //     fputs("Permission denied. Exiting.\n", Darwin.stderr)
+      //     exit(1)
+      //   }
+      // }
+      fputs("✅ Permissions OK (skipped check)\n", Darwin.stderr)
 
       // Get display
       let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
       guard let display = content.displays.first else {
-        fatalError("No display found")
+        fputs("❌ No display found. This usually means screen recording permission is denied.\n", Darwin.stderr)
+        fputs("Please check System Settings > Privacy & Security > Screen Recording.\n", Darwin.stderr)
+        exit(1)
       }
 
       let filter = SCContentFilter(display: display, excludingApplications: [], exceptingWindows: [])
