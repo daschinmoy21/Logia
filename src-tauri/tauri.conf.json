@@ -32,9 +32,11 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "externalBin": [
+      "src/audio/windows/Windows.bin"
+    ],
     "resources": [
-      "src/audio/transcription/*",
-      "src/audio/windows/*"
+      "src/audio/transcription/*"
     ]
   }
 }

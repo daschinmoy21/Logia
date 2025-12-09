@@ -70,12 +70,14 @@ pub fn start_capture(app_handle: &AppHandle) -> Result<(), String> {
         println!("Found native Windows exe at {}, launching...", exe_str);
 
         // Build command so we can set Windows-specific creation flags to avoid showing a console window
+        let exe_dir = exe_path.parent().ok_or("Failed to get exe directory")?;
         let mut cmd = Command::new(&exe_str);
         cmd.arg("--output")
             .arg(&output_file)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
+            .stderr(Stdio::piped())
+            .current_dir(exe_dir);
 
         // On Windows, prevent a console window from being created for the child process
         #[cfg(windows)]
