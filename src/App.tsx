@@ -12,6 +12,7 @@ import AiSidebar from "./components/AiSidebar.tsx";
 
 import { useNotesStore } from "./store/notesStore";
 import { Toaster } from 'react-hot-toast';
+import PreflightModal from "./components/PrereflightModal.tsx";
 
 function App() {
   const { openCommandPalette, isAiSidebarOpen, setIsAiSidebarOpen, loadApiKey } = useUiStore();
@@ -41,6 +42,7 @@ function App() {
 
   return (
     <div className="bg-zinc-950 flex flex-col h-screen overflow-hidden">
+      <PreflightModal />
       <CommandPalette />
 
       <div className="flex flex-1 overflow-hidden">
@@ -51,11 +53,11 @@ function App() {
           <div className="flex-1 overflow-y-auto">
             <Editor />
           </div>
-          {currentNote && currentNote.note_type !== 'canvas' && <Footer wordCount={wordCount} isSaved={isSaved}/>}
+          {currentNote && currentNote.note_type !== 'canvas' && <Footer wordCount={wordCount} isSaved={isSaved} />}
         </div>
         <AiSidebar isOpen={isAiSidebarOpen} onClose={() => setIsAiSidebarOpen(false)} />
       </div>
-      <Toaster 
+      <Toaster
         position="bottom-center"
         reverseOrder={false}
         toastOptions={{

@@ -32,3 +32,15 @@ dist-ssr
 
 # Python virtual environment
 src-tauri/src/audio/transcription/venv
+src-tauri/src/audio/transcription/transcription_venv
+
+# Binaries and Executors
+src-tauri/bin/*.exe
+src-tauri/bin/AudioCapture-x86_64-pc-windows-msvc.exe
+
+# C# Build Artifacts
+src-tauri/src/audio/windows/bin/
+src-tauri/src/audio/windows/obj/
+
+# AI Models
+src-tauri/src/audio/transcription/models/

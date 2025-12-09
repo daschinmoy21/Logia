@@ -606,10 +606,10 @@ async fn ensure_transcription_dependencies(app_handle: &tauri::AppHandle) -> Res
         let python_bin = python_executable_in_venv(&venv_path);
 
         if python_bin.exists() {
-            let version_output = Command::new(&python_bin)
-                .arg("--version")
-                .output()
-                .ok();
+            let mut cmd = Command::new(&python_bin);
+            cmd.arg("--version");
+            hide_console(&mut cmd);
+            let version_output = cmd.output().ok();
 
             if let Some(output) = version_output {
                 let version_str = String::from_utf8_lossy(&output.stdout);
@@ -1000,7 +1000,10 @@ async fn install_system_dependencies(app_handle: tauri::AppHandle) -> Result<ser
     // Try installing Rust toolchain if pip builds require it
     append_to_log(&log_path, "Checking Rust toolchain (needed for building some Python wheels)...");
     let mut need_rust = true;
-    if let Ok(status) = Command::new("rustc").arg("--version").status() {
+    let mut cmd_rustc = Command::new("rustc");
+    cmd_rustc.arg("--version");
+    hide_console(&mut cmd_rustc);
+    if let Ok(status) = cmd_rustc.status() {
         if status.success() { need_rust = false; }
     }
     if need_rust {
@@ -1082,9 +1085,16 @@ async fn prereflight_check(app_handle: tauri::AppHandle) -> Result<serde_json::V
     map.insert("python_executable".to_string(), match python_exec { Some(p) => serde_json::Value::String(p), None => serde_json::Value::Null });
 
     // Check ffmpeg availability
-    let ffmpeg_available = if let Ok(output) = Command::new("ffmpeg").arg("-version").output() {
-        output.status.success()
-    } else { false };
+    let ffmpeg_available = {
+        let mut cmd = Command::new("ffmpeg");
+        cmd.arg("-version");
+        hide_console(&mut cmd);
+        if let Ok(output) = cmd.output() {
+            output.status.success()
+        } else {
+            false
+        }
+    };
     map.insert("ffmpeg_available".to_string(), serde_json::Value::Bool(ffmpeg_available));
 
     // Check for Visual C++ runtime on Windows by probing common DLL locations (vcruntime140.dll)

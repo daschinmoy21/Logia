@@ -46,10 +46,10 @@ export const Sidebar = () => {
   const contextMenu = useUiStore((state) => state.contextMenu);
   const isSettingsOpen = useUiStore((state) => state.isSettingsOpen);
   const isKanbanOpen = useUiStore((state) => state.isKanbanOpen);
-    const isSupportOpen = useUiStore((state) => state.isSupportOpen);
-    const isRecording = useUiStore((state) => state.isRecording);
-    const googleApiKey = useUiStore((state) => state.googleApiKey);
-    const editor = useUiStore((state) => state.editor);
+  const isSupportOpen = useUiStore((state) => state.isSupportOpen);
+  const isRecording = useUiStore((state) => state.isRecording);
+  const googleApiKey = useUiStore((state) => state.googleApiKey);
+  const editor = useUiStore((state) => state.editor);
 
   // Folder renaming state
   const [renamingFolderId, setRenamingFolderId] = useState<string | null>(null);
@@ -246,30 +246,30 @@ export const Sidebar = () => {
 
         {/* Action buttons row */}
         <div className='bg-zinc-900 flex justify-around text-sm mb-1 pb-2 border-b border-zinc-700'>
-           <button
-             title="Notes Agent"
-             className={`p-2 focus:outline-none transition-colors ${isRecording ? 'text-red-400' : 'text-zinc-400 hover:text-blue-400'} cursor-pointer`}
-             onClick={async () => {
-               if (!isRecording) {
-                 try {
-                   await invoke('start_recording');
-                   setIsRecording(true);
-                 } catch (error) {
-                   console.error('Failed to start recording:', error);
-                    toast.error('❌ Failed to start recording', {
-                      icon: '❌',
-                      style: {
-                        background: '#7f1d1d',
-                        color: '#fca5a5',
-                        border: '1px solid #dc2626',
-                      },
-                    });
-                 }
-               }
-             }}
-           >
-             <Bot size={20} />
-           </button>
+          <button
+            title="Notes Agent"
+            className={`p-2 focus:outline-none transition-colors ${isRecording ? 'text-red-400' : 'text-zinc-400 hover:text-blue-400'} cursor-pointer`}
+            onClick={async () => {
+              if (!isRecording) {
+                try {
+                  await invoke('start_recording');
+                  setIsRecording(true);
+                } catch (error) {
+                  console.error('Failed to start recording:', error);
+                  toast.error('❌ Failed to start recording', {
+                    icon: '❌',
+                    style: {
+                      background: '#7f1d1d',
+                      color: '#fca5a5',
+                      border: '1px solid #dc2626',
+                    },
+                  });
+                }
+              }
+            }}
+          >
+            <Bot size={20} />
+          </button>
           <button
             title="New Canvas"
             className='p-2 text-zinc-400 hover:text-blue-400 cursor-pointer focus:outline-none transition-colors active:scale-95'
@@ -294,89 +294,98 @@ export const Sidebar = () => {
             <Plus size={20} />
           </button>
         </div>
-         {/* Recording animation div visible when capturing system audio */}
-          {isRecording &&
-           <RecStatus isRecording={isRecording} onStop={async () => {
-             let noteToUpdate = currentNote;
-             
-             // Create a new note if none exists
-             if (!currentNote) {
-               try {
-                 await createNote('text');
-                 noteToUpdate = useNotesStore.getState().currentNote;
-               } catch (error) {
-                 console.error('Failed to create note:', error);
-                  toast.error('❌ Failed to create new note', {
-                    icon: '❌',
-                    style: {
-                      background: '#7f1d1d',
-                      color: '#fca5a5',
-                      border: '1px solid #dc2626',
-                    },
-                  });
-                 return;
-               }
-             }
+        {/* Recording animation div visible when capturing system audio */}
+        {isRecording &&
+          <RecStatus isRecording={isRecording} onStop={async () => {
+            let noteToUpdate = currentNote;
 
-              const loadingToast = toast.loading('🎙️ Transcribing audio...', {
-                style: {
-                  background: '#1f2937',
-                  color: '#fbbf24',
-                  border: '1px solid #374151',
-                },
-              });
+            // Create a new note if none exists
+            if (!currentNote) {
+              try {
+                await createNote('text');
+                noteToUpdate = useNotesStore.getState().currentNote;
+              } catch (error) {
+                console.error('Failed to create note:', error);
+                toast.error('❌ Failed to create new note', {
+                  icon: '❌',
+                  style: {
+                    background: '#7f1d1d',
+                    color: '#fca5a5',
+                    border: '1px solid #dc2626',
+                  },
+                });
+                return;
+              }
+            }
 
-             try {
-               const audioPath = await invoke<string>('stop_recording');
-               setIsRecording(false);
+            const loadingToast = toast.loading('🎙️ Transcribing audio...', {
+              style: {
+                background: '#1f2937',
+                color: '#fbbf24',
+                border: '1px solid #374151',
+              },
+            });
 
-                const transcriptionResult = await invoke<string>('transcribe_audio', { audioPath });
-                console.log('Transcription result:', transcriptionResult);
-                const result = JSON.parse(transcriptionResult);
+            try {
+              const audioPath = await invoke<string>('stop_recording');
+              setIsRecording(false);
 
-               if (result.error) {
-                 throw new Error(result.error);
-               }
-               
-                if (noteToUpdate && result.text) {
-                  // Parse current content, default to empty array if invalid
-                  let currentContent = [];
-                  if (noteToUpdate.content && noteToUpdate.content.trim()) {
-                    try {
-                      currentContent = JSON.parse(noteToUpdate.content);
-                      if (!Array.isArray(currentContent)) {
-                        currentContent = [];
-                      }
-                    } catch {
+              const transcriptionResult = await invoke<string>('transcribe_audio', { audioPath });
+              console.log('Transcription result:', transcriptionResult);
+              const result = JSON.parse(transcriptionResult);
+
+              if (result.error) {
+                throw new Error(result.error);
+              }
+
+              if (noteToUpdate && result.text) {
+                // Parse current content, default to empty array if invalid
+                let currentContent = [];
+                if (noteToUpdate.content && noteToUpdate.content.trim()) {
+                  try {
+                    currentContent = JSON.parse(noteToUpdate.content);
+                    if (!Array.isArray(currentContent)) {
                       currentContent = [];
                     }
+                  } catch {
+                    currentContent = [];
                   }
+                }
 
-                  // Refresh API key from backend at time of processing (avoids race where store wasn't populated yet in packaged builds)
-                  let apiKey = googleApiKey;
+                // Refresh API key from backend at time of processing (avoids race where store wasn't populated yet in packaged builds)
+                let apiKey = googleApiKey;
+                try {
+                  const runtimeKey = await invoke<string>('get_google_api_key');
+                  if (runtimeKey) apiKey = runtimeKey;
+                } catch (e) {
+                  console.warn('Could not fetch API key at runtime', e);
+                }
+
+                if (apiKey) {
+                  // Update toast to processing with AI
+                  toast.loading('🤖 Processing transcription with AI...', {
+                    id: loadingToast,
+                    style: {
+                      background: '#1f2937',
+                      color: '#60a5fa',
+                      border: '1px solid #374151',
+                    },
+                  });
+
                   try {
-                    const runtimeKey = await invoke<string>('get_google_api_key');
-                    if (runtimeKey) apiKey = runtimeKey;
-                  } catch (e) {
-                    console.warn('Could not fetch API key at runtime', e);
-                  }
+                    // Calculate dynamic timeout based on transcript length
+                    // Base 30s + 10ms per character (approx 1s per 100 chars)
+                    // e.g., 5000 chars (~1000 words) -> 30s + 50s = 80s
+                    const timeoutDuration = Math.max(30000, 30000 + (result.text.length * 10));
+                    console.log(`Setting AI timeout to ${timeoutDuration}ms for ${result.text.length} chars`);
 
-                  if (apiKey) {
-                     // Update toast to processing with AI
-                     toast.loading('🤖 Processing transcription with AI...', {
-                       id: loadingToast,
-                       style: {
-                         background: '#1f2937',
-                         color: '#60a5fa',
-                         border: '1px solid #374151',
-                       },
-                     });
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), timeoutDuration);
 
-                    try {
-                       const client = createGoogleGenerativeAI({ apiKey });
-                       const { text: structuredJson } = await generateText({
-                         model: client('gemini-2.5-flash'),
-                        system: `You are an expert note-taker. Transform the raw transcription into a highly structured, educational note using BlockNote JSON blocks.
+                    const client = createGoogleGenerativeAI({ apiKey });
+                    const { text: structuredJson } = await generateText({
+                      model: client('gemini-2.5-flash'),
+                      system: `You are an expert note-taker. Transform the raw transcription into a highly structured, educational note using BlockNote JSON blocks.
 
 Your goal is to organize the information for effective learning, using the most appropriate block types.
 
@@ -417,135 +426,147 @@ RULES:
 - Use BOLD text for key terms (using the content array format).
 - Do NOT use generic "list" type. Use specific list item types.
 - Ensure valid JSON syntax with all required fields.`,
-                        prompt: result.text,
-                      });
+                      prompt: result.text,
+                      abortSignal: controller.signal,
+                    });
+                    clearTimeout(timeoutId);
 
-                       // Clean up markdown code blocks if present
-                       const cleanedJson = structuredJson.replace(/```json/g, '').replace(/```/g, '').trim();
-                       console.log('AI structured response:', cleanedJson);
-                       const newBlocks = JSON.parse(cleanedJson);
-                       if (!Array.isArray(newBlocks)) throw new Error("AI output is not an array");
+                    // Clean up markdown code blocks if present
+                    const cleanedJson = structuredJson.replace(/```json/g, '').replace(/```/g, '').trim();
+                    console.log('AI structured response:', cleanedJson);
+                    const newBlocks = JSON.parse(cleanedJson);
+                    if (!Array.isArray(newBlocks)) throw new Error("AI output is not an array");
 
-                       // Insert blocks at cursor position
-                       if (editor) {
-                         const cursorPosition = editor.getTextCursorPosition();
-                         const blockId = cursorPosition.block;
-                         editor.insertBlocks(newBlocks, blockId, 'after');
-                       } else {
-                         // Fallback: append to content
-                         const updatedContent = [...currentContent, ...newBlocks];
-                         updateCurrentNoteContent(JSON.stringify(updatedContent));
-                       }
+                    // Insert blocks at cursor position
+                    if (editor) {
+                      const cursorPosition = editor.getTextCursorPosition();
+                      const blockId = cursorPosition.block;
+                      editor.insertBlocks(newBlocks, blockId, 'after');
 
-                       toast.success('✅ Transcription structured by AI', {
-                         id: loadingToast,
-                         icon: '🎉',
-                         style: {
-                           background: '#065f46',
-                           color: '#10b981',
-                           border: '1px solid #047857',
-                         },
-                       });
-                       toast('Done! 🎊', {
-                         icon: '🎊',
-                         style: {
-                           background: '#7c3aed',
-                           color: '#c4b5fd',
-                           border: '1px solid #6d28d9',
-                         },
-                       });
-                     } catch (error) {
-                       console.error('AI structuring failed:', error);
-                       console.log('Falling back to simple paragraph');
-                       // Fallback to simple paragraph
-                       const newBlock = {
-                         id: Date.now().toString(),
-                         type: 'paragraph',
-                         props: { textColor: 'default', backgroundColor: 'default', textAlignment: 'left' },
-                         content: result.text,
-                         children: []
-                       };
-                       if (editor) {
-                         const cursorPosition = editor.getTextCursorPosition();
-                         const blockId = cursorPosition.block;
-                         editor.insertBlocks([newBlock], blockId, 'after');
-                       } else {
-                         // Fallback: append to content
-                         const updatedContent = [...currentContent, newBlock];
-                         updateCurrentNoteContent(JSON.stringify(updatedContent));
-                       }
-                       toast.success('✅ Transcription complete', {
-                         id: loadingToast,
-                         icon: '📝',
-                         style: {
-                           background: '#92400e',
-                           color: '#fbbf24',
-                           border: '1px solid #78350f',
-                         },
-                       });
-                       toast('Done! 📝', {
-                         icon: '📝',
-                         style: {
-                           background: '#7c3aed',
-                           color: '#c4b5fd',
-                           border: '1px solid #6d28d9',
-                         },
-                       });
-                     }
-                   } else {
-                     // No API key, fallback to simple paragraph
-                     const newBlock = {
-                       id: Date.now().toString(),
-                       type: 'paragraph',
-                       props: { textColor: 'default', backgroundColor: 'default', textAlignment: 'left' },
-                       content: result.text,
-                       children: []
-                     };
-                     if (editor) {
-                       const cursorPosition = editor.getTextCursorPosition();
-                       const blockId = cursorPosition.block;
-                       editor.insertBlocks([newBlock], blockId, 'after');
-                     } else {
-                       // Fallback: append to content
-                       const updatedContent = [...currentContent, newBlock];
-                       updateCurrentNoteContent(JSON.stringify(updatedContent));
-                     }
-                     toast.success('✅ Transcription complete', {
-                       id: loadingToast,
-                       icon: '📝',
-                       style: {
-                         background: '#92400e',
-                         color: '#fbbf24',
-                         border: '1px solid #78350f',
-                       },
-                     });
-                     toast('Done! 📝', {
-                       icon: '📝',
-                       style: {
-                         background: '#7c3aed',
-                         color: '#c4b5fd',
-                         border: '1px solid #6d28d9',
-                       },
-                     });
-                   }
+                      // Force sync to store to ensure persistence even if user switches notes immediately
+                      const updatedContent = JSON.stringify(editor.document);
+                      updateCurrentNoteContent(updatedContent);
+                      // Explicitly save to backend to be safe
+                      useNotesStore.getState().saveCurrentNote();
+                    } else {
+                      // Fallback: append to content
+                      const updatedContent = [...currentContent, ...newBlocks];
+                      updateCurrentNoteContent(JSON.stringify(updatedContent));
+                    }
+
+                    toast.success('✅ Transcription structured by AI', {
+                      id: loadingToast,
+                      icon: '🎉',
+                      style: {
+                        background: '#065f46',
+                        color: '#10b981',
+                        border: '1px solid #047857',
+                      },
+                    });
+                    toast('Done! 🎊', {
+                      icon: '🎊',
+                      style: {
+                        background: '#7c3aed',
+                        color: '#c4b5fd',
+                        border: '1px solid #6d28d9',
+                      },
+                    });
+                  } catch (error: any) {
+                    console.error('AI structuring failed:', error);
+                    let errorMessage = 'AI structuring failed';
+                    if (error.name === 'AbortError') {
+                      errorMessage = 'AI request timed out (limit based on transcript length)';
+                    } else if (error.message) {
+                      errorMessage = `AI Error: ${error.message}`;
+                    }
+
+                    toast.error(`⚠️ ${errorMessage}. Falling back to raw transcript.`, {
+                      id: loadingToast,
+                      duration: 5000,
+                      style: {
+                        background: '#7f1d1d',
+                        color: '#fca5a5',
+                        border: '1px solid #dc2626',
+                      },
+                    });
+
+                    console.log('Falling back to simple paragraph');
+                    // Fallback to simple paragraph
+                    const newBlock = {
+                      id: Date.now().toString(),
+                      type: 'paragraph',
+                      props: { textColor: 'default', backgroundColor: 'default', textAlignment: 'left' },
+                      content: result.text,
+                      children: []
+                    };
+                    if (editor) {
+                      const cursorPosition = editor.getTextCursorPosition();
+                      const blockId = cursorPosition.block;
+                      editor.insertBlocks([newBlock], blockId, 'after');
+
+                      // Force sync fallback as well
+                      const updatedContent = JSON.stringify(editor.document);
+                      updateCurrentNoteContent(updatedContent);
+                      useNotesStore.getState().saveCurrentNote();
+                    } else {
+                      // Fallback: append to content
+                      const updatedContent = [...currentContent, newBlock];
+                      updateCurrentNoteContent(JSON.stringify(updatedContent));
+                    }
+                  }
                 } else {
-                  toast.success('Transcription complete (no text)', { id: loadingToast });
+                  // No API key, fallback to simple paragraph
+                  const newBlock = {
+                    id: Date.now().toString(),
+                    props: { textColor: 'default', backgroundColor: 'default', textAlignment: 'left' },
+                    content: result.text,
+                    children: []
+                  };
+                  if (editor) {
+                    const cursorPosition = editor.getTextCursorPosition();
+                    const blockId = cursorPosition.block;
+                    editor.insertBlocks([newBlock], blockId, 'after');
+                  } else {
+                    // Fallback: append to content
+                    const updatedContent = [...currentContent, newBlock];
+                    updateCurrentNoteContent(JSON.stringify(updatedContent));
+                  }
+                  toast.success('✅ Transcription complete', {
+                    id: loadingToast,
+                    icon: '📝',
+                    style: {
+                      background: '#92400e',
+                      color: '#fbbf24',
+                      border: '1px solid #78350f',
+                    },
+                  });
+                  toast('Done! 📝', {
+                    icon: '📝',
+                    style: {
+                      background: '#7c3aed',
+                      color: '#c4b5fd',
+                      border: '1px solid #6d28d9',
+                    },
+                  });
                 }
-             } catch (error) {
-               console.error('Transcription failed:', error);
-                toast.error(`❌ Transcription failed: ${error}`, {
-                  id: loadingToast,
-                  icon: '❌',
-                  style: {
-                    background: '#7f1d1d',
-                    color: '#fca5a5',
-                    border: '1px solid #dc2626',
-                  },
-                });
-               setIsRecording(false);
-             }
-           }} />
-         }
+              } else {
+                toast.success('Transcription complete (no text)', { id: loadingToast });
+              }
+            } catch (error) {
+              console.error('Transcription failed:', error);
+              toast.error(`❌ Transcription failed: ${error}`, {
+                id: loadingToast,
+                icon: '❌',
+                style: {
+                  background: '#7f1d1d',
+                  color: '#fca5a5',
+                  border: '1px solid #dc2626',
+                },
+              });
+              setIsRecording(false);
+            }
+          }} />
+        }
 
 
         {/* File Tree */}
@@ -639,13 +660,13 @@ RULES:
         </div>
       </Resizable>
 
-       {/* Delete confirmation dialog */}
-       <Dialog
-         open={deleteConfirmId !== null}
-         onClose={() => setDeleteConfirmId(null)}
-         className="relative z-[1000]"
-       >
-         <div className="fixed inset-0 bg-black/30 backdrop-blur-sm" onClick={() => setDeleteConfirmId(null)} />
+      {/* Delete confirmation dialog */}
+      <Dialog
+        open={deleteConfirmId !== null}
+        onClose={() => setDeleteConfirmId(null)}
+        className="relative z-[1000]"
+      >
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm" onClick={() => setDeleteConfirmId(null)} />
 
         <div className="fixed inset-0 flex items-center justify-center p-4">
           <DialogPanel className="bg-zinc-800 border border-zinc-700 rounded-xl p-6 max-w-sm w-full">
@@ -675,15 +696,15 @@ RULES:
             </div>
           </DialogPanel>
         </div>
-       </Dialog>
+      </Dialog>
 
-       {/* Delete folder confirmation dialog */}
-       <Dialog
-         open={deleteConfirmFolderId !== null}
-         onClose={() => setDeleteConfirmFolderId(null)}
-         className="relative z-[1000]"
-       >
-         <div className="fixed inset-0 bg-black/30 backdrop-blur-sm" onClick={() => setDeleteConfirmFolderId(null)} />
+      {/* Delete folder confirmation dialog */}
+      <Dialog
+        open={deleteConfirmFolderId !== null}
+        onClose={() => setDeleteConfirmFolderId(null)}
+        className="relative z-[1000]"
+      >
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm" onClick={() => setDeleteConfirmFolderId(null)} />
 
         <div className="fixed inset-0 flex items-center justify-center p-4">
           <DialogPanel className="bg-zinc-800 border border-zinc-700 rounded-xl p-6 max-w-sm w-full">
@@ -766,16 +787,16 @@ RULES:
         </div>
       )}
 
-       {/* Kanban dialog */}
-       {isKanbanOpen && (
-         <Dialog
-           open={isKanbanOpen}
-           onClose={() => setIsKanbanOpen(false)}
-           className="relative z-[1000]"
-         >
-           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" />
-           <div className="fixed inset-0 flex items-center justify-center p-4" onClick={() => setIsKanbanOpen(false)}>
-             <DialogPanel className="bg-zinc-900 border border-zinc-700 rounded-xl p-6 w-full max-w-6xl h-[80vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
+      {/* Kanban dialog */}
+      {isKanbanOpen && (
+        <Dialog
+          open={isKanbanOpen}
+          onClose={() => setIsKanbanOpen(false)}
+          className="relative z-[1000]"
+        >
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" />
+          <div className="fixed inset-0 flex items-center justify-center p-4" onClick={() => setIsKanbanOpen(false)}>
+            <DialogPanel className="bg-zinc-900 border border-zinc-700 rounded-xl p-6 w-full max-w-6xl h-[80vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
               <div className="flex justify-between items-center mb-4">
                 <DialogTitle className="text-white font-medium">
                   Kanban Board
@@ -787,14 +808,14 @@ RULES:
                   ×
                 </button>
               </div>
-               <KanbanProvider
-                 columns={kanbanColumns}
-                 data={kanbanData}
-                 onDataChange={(newData) => {
-                   setKanbanData(newData);
-                   saveKanbanData(newData);
-                 }}
-               >
+              <KanbanProvider
+                columns={kanbanColumns}
+                data={kanbanData}
+                onDataChange={(newData) => {
+                  setKanbanData(newData);
+                  saveKanbanData(newData);
+                }}
+              >
                 {(column) => (
                   <KanbanBoard id={column.id} className="flex-1">
                     <KanbanHeader>
@@ -832,7 +853,7 @@ RULES:
                             />
                           ) : (
                             <p
-                              className="m-0 font-medium text-sm cursor-pointer"
+                              className="m-0 font-medium text-sm cursor-pointer text-zinc-200"
                               onDoubleClick={() => startEditingTask(item.id, item.name)}
                             >
                               {item.name}

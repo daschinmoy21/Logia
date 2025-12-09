@@ -2,6 +2,7 @@
 
 import type {
   DragEndEvent,
+  DragStartEvent,
 } from '@dnd-kit/core';
 import {
   closestCenter,
@@ -13,6 +14,8 @@ import {
   useDroppable,
   useSensor,
   useSensors,
+  defaultDropAnimationSideEffects,
+  DropAnimation
 } from '@dnd-kit/core';
 import { arrayMove, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -26,6 +29,7 @@ import {
 import { GripVertical, Trash2 } from 'lucide-react';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
+import { motion } from 'framer-motion';
 
 type KanbanItemProps = {
   id: string;
@@ -67,8 +71,8 @@ export const KanbanBoard = ({ id, children, className }: KanbanBoardProps) => {
   return (
     <div
       className={cn(
-        'flex h-full min-h-[150px] flex-col rounded-xl border border-zinc-800/50 bg-zinc-950/30 text-zinc-300 transition-all duration-200',
-        isOver ? 'bg-zinc-900/80 ring-2 ring-blue-500/20' : '',
+        'flex h-full min-h-[150px] flex-col rounded-lg bg-zinc-900/40 transition-colors duration-200',
+        isOver ? 'bg-zinc-900/60 ring-1 ring-zinc-700/50' : '',
         className
       )}
       ref={setNodeRef}
@@ -82,14 +86,17 @@ export type KanbanCardProps<T extends KanbanItemProps = KanbanItemProps> = T & {
   children?: ReactNode;
   className?: string;
   onDelete?: (id: string) => void;
+  isOverlay?: boolean;
 };
 
 export const KanbanCard = <T extends KanbanItemProps = KanbanItemProps>({
   id,
   name,
+  column,
   children,
   className,
   onDelete,
+  isOverlay,
 }: KanbanCardProps<T>) => {
   const {
     attributes,
@@ -104,41 +111,69 @@ export const KanbanCard = <T extends KanbanItemProps = KanbanItemProps>({
 
   const style = {
     transition,
-    transform: CSS.Transform.toString(transform),
+    transform: CSS.Translate.toString(transform),
   };
 
-  return (
-    <div style={style} ref={setNodeRef} className={cn("relative group", isDragging ? "z-50" : "z-0")}>
+  const isDone = column === 'done';
+
+  if (isOverlay) {
+    return (
       <div
         className={cn(
-          'relative flex w-full items-center gap-3 rounded-lg border border-zinc-800 bg-zinc-900 p-3 shadow-sm transition-all duration-200',
-          'hover:border-zinc-700 hover:shadow-md',
-          isDragging ? 'cursor-grabbing opacity-90 ring-2 ring-blue-500/30 scale-105 rotate-1 shadow-xl' : 'cursor-grab',
+          'relative flex w-full cursor-grabbing items-center gap-2 rounded-md border border-zinc-700 bg-zinc-800 p-2.5 shadow-xl',
+          className
+        )}
+      >
+        <div className="text-zinc-500">
+          <GripVertical size={14} />
+        </div>
+        <div className="flex-1 min-w-0 text-sm font-medium text-zinc-200">
+          {children ?? <p className="truncate">{name}</p>}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <motion.div
+      layoutId={id}
+      initial={{ opacity: 0, scale: 0.98 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.95 }}
+      style={style}
+      ref={setNodeRef}
+      className={cn("relative group mb-1.5 last:mb-0", isDragging ? "opacity-30" : "")}
+    >
+      <div
+        className={cn(
+          'relative flex w-full value-list-item items-center gap-2 rounded-md border border-transparent bg-zinc-800/80 p-2 shadow-sm transition-all duration-200',
+          'hover:bg-zinc-800 hover:shadow-md hover:border-zinc-700/50',
+          isDone && 'opacity-60 hover:opacity-100',
           className
         )}
       >
         <div
-          className="cursor-grab p-1.5 text-zinc-600 hover:text-zinc-400 hover:bg-zinc-800 rounded-md transition-colors"
+          className="cursor-grab p-0.5 text-zinc-600 hover:text-zinc-400 rounded transition-colors"
           {...listeners}
           {...attributes}
         >
-          <GripVertical size={16} />
+          <GripVertical size={14} />
         </div>
-        <div className="flex-1 min-w-0">
-          {children ?? <p className="m-0 font-medium text-sm truncate">{name}</p>}
+        <div className={cn("flex-1 min-w-0 transition-all", isDone && "line-through text-zinc-500")}>
+          {children ?? <p className={cn("m-0 text-sm truncate", isDone ? "text-zinc-500" : "text-zinc-300")}>{name}</p>}
         </div>
         <button
           onClick={(e) => {
             e.stopPropagation();
             onDelete?.(id);
           }}
-          className="opacity-0 group-hover:opacity-100 focus:opacity-100 p-1.5 text-zinc-500 hover:text-red-400 hover:bg-zinc-800 rounded-md transition-all"
+          className="opacity-0 group-hover:opacity-100 focus:opacity-100 p-1 text-zinc-500 hover:text-red-400 hover:bg-zinc-700/50 rounded transition-all"
           title="Delete Task"
         >
-          <Trash2 size={15} />
+          <Trash2 size={13} />
         </button>
       </div>
-    </div>
+    </motion.div>
   );
 };
 
@@ -159,22 +194,35 @@ export const KanbanCards = <T extends KanbanItemProps = KanbanItemProps>({
   return (
     <ScrollArea className="flex-1">
       <div
-        className={cn('flex flex-grow flex-col gap-3 p-3', className)}
+        className={cn('flex flex-grow flex-col p-2', className)}
       >
-        {filteredData.map(children)}
+        {filteredData.length > 0 ? (
+          filteredData.map(children)
+        ) : (
+          <div className="flex h-16 items-center justify-center rounded-md border border-dashed border-zinc-800/50 bg-zinc-900/5 hover:bg-zinc-900/10 transition-colors">
+            <span className="text-xs text-zinc-600 font-medium">Empty</span>
+          </div>
+        )}
       </div>
       <ScrollBar orientation="vertical" />
     </ScrollArea>
   );
 };
 
-export type KanbanHeaderProps = HTMLAttributes<HTMLDivElement>;
+export type KanbanHeaderProps = HTMLAttributes<HTMLDivElement> & {
+  count?: number;
+};
 
-export const KanbanHeader = ({ className, ...props }: KanbanHeaderProps) => (
-  <div 
-    className={cn('flex items-center border-b border-zinc-800/50 p-4 font-semibold text-sm text-zinc-200 bg-zinc-900/20 rounded-t-xl', className)} 
-    {...props} 
-  />
+export const KanbanHeader = ({ className, children, ...props }: KanbanHeaderProps) => (
+  <div
+    className={cn(
+      'flex items-center justify-between p-3 font-semibold text-xs text-zinc-400 uppercase tracking-wider',
+      className
+    )}
+    {...props}
+  >
+    {children}
+  </div>
 );
 
 export type KanbanProviderProps<
@@ -186,6 +234,16 @@ export type KanbanProviderProps<
   columns: C[];
   data: T[];
   onDataChange?: (data: T[]) => void;
+};
+
+const dropAnimation: DropAnimation = {
+  sideEffects: defaultDropAnimationSideEffects({
+    styles: {
+      active: {
+        opacity: '0.5',
+      },
+    },
+  }),
 };
 
 export const KanbanProvider = <
@@ -210,8 +268,8 @@ export const KanbanProvider = <
     useSensor(KeyboardSensor)
   );
 
-  const handleDragStart = (event: any) => {
-    setActiveCardId(event.active.id);
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveCardId(event.active.id as string);
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -261,19 +319,19 @@ export const KanbanProvider = <
       >
         <div
           className={cn(
-            'grid size-full auto-cols-fr grid-flow-col gap-6',
+            'grid size-full auto-cols-fr grid-flow-col gap-4 p-2',
             className
           )}
         >
           {columns.map((column) => children(column))}
         </div>
-        <DragOverlay>
+        <DragOverlay dropAnimation={dropAnimation}>
           {activeCardId && (
             <KanbanCard
               id={activeCardId}
               name={data.find(d => d.id === activeCardId)?.name || ''}
-              column=""
-              isDragging
+              column={data.find(d => d.id === activeCardId)?.column || ''}
+              isOverlay
             />
           )}
         </DragOverlay>
