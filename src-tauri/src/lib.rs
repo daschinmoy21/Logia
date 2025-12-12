@@ -530,8 +530,17 @@ async fn start_recording(app_handle: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn stop_recording() -> Result<String, String> {
-    audio::os_capture::stop_capture()
+async fn stop_recording(app_handle: tauri::AppHandle) -> Result<String, String> {
+    // Stop capture and get the WAV file path
+    let wav_path = audio::os_capture::stop_capture()?;
+    
+    // Run transcription
+    let result = audio::transcription::transcribe(&app_handle, &wav_path);
+    
+    // Clean up the WAV file
+    let _ = std::fs::remove_file(&wav_path);
+    
+    result
 }
 
 // Helper to find the python executable inside a venv across platforms

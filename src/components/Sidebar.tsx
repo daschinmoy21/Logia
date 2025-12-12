@@ -338,12 +338,24 @@ export const Sidebar = () => {
             });
 
             try {
-              const audioPath = await invoke<string>('stop_recording');
-              setIsRecording(false);
+              // stop_recording now handles both stopping and transcription, returning the result JSON string
+              const transcriptionResult = await invoke<string>('stop_recording');
+              // Note: 'appHandle' is injected by Tauri automatically on the rust side, we don't need to pass it from JS usually, 
+              // but the command signature in Rust is `fn stop_recording(app_handle: AppHandle)`. 
+              // Tauri commands automatically providing AppHandle do not need it in the JS invoke arguments.
+              // So `invoke('stop_recording')` is correct.
 
-              const transcriptionResult = await invoke<string>('transcribe_audio', { audioPath });
+              setIsRecording(false);
               console.log('Transcription result:', transcriptionResult);
-              const result = JSON.parse(transcriptionResult);
+
+              let result;
+              try {
+                result = JSON.parse(transcriptionResult);
+              } catch (e) {
+                console.error("Failed to parse transcription result JSON:", e);
+                // If parsing fails, treat the whole string as text if it's not empty
+                result = { text: transcriptionResult };
+              }
 
               if (result.error) {
                 throw new Error(result.error);

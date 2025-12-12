@@ -12,13 +12,13 @@ struct SystemAudioDump {
 
       // Check screen recording permission
       // Temporarily disabled for dev
-      // if !CGPreflightScreenCaptureAccess() {
-      //   fputs("❌ Screen recording permission required!\n", Darwin.stderr)
-      //   if !CGRequestScreenCaptureAccess() {
-      //     fputs("Permission denied. Exiting.\n", Darwin.stderr)
-      //     exit(1)
-      //   }
-      // }
+      if !CGPreflightScreenCaptureAccess() {
+        fputs("❌ Screen recording permission required!\n", Darwin.stderr)
+        if !CGRequestScreenCaptureAccess() {
+          fputs("Permission denied. Exiting.\n", Darwin.stderr)
+          exit(1)
+        }
+      }
       fputs("✅ Permissions OK (skipped check)\n", Darwin.stderr)
 
       // Get display
@@ -142,7 +142,7 @@ final class AudioDumper: NSObject, SCStreamDelegate, SCStreamOutput {
   }
 }
 
-@MainActor var standardError = FileHandle.standardError
+// @MainActor var standardError = FileHandle.standardError
 extension FileHandle: @retroactive TextOutputStream {
   public func write(_ string: String) {
     if let data = string.data(using: .utf8) {
