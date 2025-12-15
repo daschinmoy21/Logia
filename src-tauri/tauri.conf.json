@@ -14,8 +14,9 @@
       {
         "title": "kortex",
         "width": 1080,
-        "height": 780,
-        "decorations": true
+        "decorations": true,
+        "theme": "Dark",
+        "titleBarStyle": "Overlay"
       }
     ],
     "security": {
