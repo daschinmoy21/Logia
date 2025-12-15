@@ -32,3 +32,8 @@ tauri-plugin-shell = "2"
 aes-gcm = "0.10"
 base64 = "0.22"
 
+
+[target.'cfg(target_os = "macos")'.dependencies]
+screencapturekit = "0.2.0"
+objc2 = "0.5.2"
+objc2-foundation = { version = "0.2.2", features = ["std"]  }
