@@ -5,14 +5,7 @@ use tauri::{AppHandle, Manager};
 
 // Note: These imports assume screencapturekit 0.3.2+ API structure.
 #[cfg(target_os = "macos")]
-use screencapturekit::{
-    sc_content_filter::SCContentFilter,
-    sc_shareable_content::SCShareableContent,
-    sc_stream::SCStream,
-    sc_stream_configuration::SCStreamConfiguration,
-    sc_output_handler::{SCStreamOutputTrait, SCStreamOutputType},
-    cm_sample_buffer::CMSampleBuffer,
-};
+use screencapturekit::prelude::*;
 
 // Global state to hold the running stream
 #[cfg(target_os = "macos")]
