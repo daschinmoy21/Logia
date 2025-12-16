@@ -1,5 +1,5 @@
 [env]
-MACOSX_DEPLOYMENT_TARGET = "12.3"
+MACOSX_DEPLOYMENT_TARGET = "14.0"
 
 # Fix for Swift runtime library linking (screencapturekit crate)
 # This ensures libswift_Concurrency.dylib and other Swift libs are found
