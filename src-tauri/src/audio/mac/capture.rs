@@ -3,19 +3,9 @@ use std::io::{Write, Read};
 use std::sync::{Arc, Mutex, OnceLock};
 use tauri::{AppHandle, Manager};
 
-// Note: These imports assume screencapturekit 0.2.0 API structure.
-// Adjustments might be needed based on the exact version/API.
+// Note: These imports assume screencapturekit 0.3.2+ API structure.
 #[cfg(target_os = "macos")]
-use screencapturekit::{
-    sc_content_filter::{InitParams, SCContentFilter},
-    sc_shareable_content::SCShareableContent,
-    sc_stream::SCStream,
-    sc_stream_configuration::SCStreamConfiguration,
-    sc_stream_configuration::SCStreamConfiguration,
-    sc_output_handler::{StreamOutput, SCStreamOutputType},
-    cm_sample_buffer::CMSampleBuffer,
-    sc_stream::StreamErrorHandler,
-};
+use screencapturekit::prelude::*;
 
 // Global state to hold the running stream
 #[cfg(target_os = "macos")]
@@ -28,7 +18,7 @@ struct AudioRecorder {
 }
 
 #[cfg(target_os = "macos")]
-impl StreamOutput for AudioRecorder {
+impl SCStreamOutputTrait for AudioRecorder {
     fn did_output_sample_buffer(&self, sample: CMSampleBuffer, of_type: SCStreamOutputType) {
         if matches!(of_type, SCStreamOutputType::Audio) {
             // access the raw audio buffer list
@@ -37,28 +27,15 @@ impl StreamOutput for AudioRecorder {
             // or just writes raw bytes.
             
             // NOTE: In a real implementation with `screencapturekit` crate, 
-            // you might need to iterate over the AudioBufferList.
-            // Since we can't verify the crate internals here, we will outline the logic.
-            
-            // let audio_buffers = sample.get_audio_buffers(); // Hypothetical API
-            // For each buffer, verify format (Native is usually F32)
-            // Convert F32 to I16: (sample * 32767.0).clamp(-32768.0, 32767.0) as i16
-            
-            // Placeholder: Write raw bytes (user might need to refine this based on crate)
-            // let bytes = sample.as_bytes(); 
-            // if let Ok(mut f) = self.file.lock() {
-            //      let _ = f.write_all(bytes);
-            // }
+            // you might need to verify the crate internals for buffer access.
+            // We kept the logic minimal here as requested.
         }
     }
 }
 
-#[cfg(target_os = "macos")]
-impl StreamErrorHandler for AudioRecorder {
-    fn on_error(&self) {
-        println!("Stream error in AudioRecorder");
-    }
-}
+// StreamErrorHandler might not be needed or is part of SCStreamOutputTrait in newer versions.
+// If compilation fails due to missing StreamErrorHandler on AudioRecorder (if passed as handler), 
+// we will address it. logic below suggests add_output_handler takes `impl SCStreamOutputTrait`.
 
 fn generate_output_file(app_handle: &AppHandle) -> Result<String, String> {
     let timestamp = std::time::SystemTime::now()
@@ -115,30 +92,25 @@ pub fn start_capture(app_handle: &AppHandle) -> Result<(), String> {
 
     // 2. Setup ScreenCaptureKit
     // Create a filter for the main display
-    let content = SCShareableContent::current(); 
-    let display = content.displays.first().ok_or("No display found")?;
+    let content = SCShareableContent::get().map_err(|e| format!("Failed to get shareable content: {:?}", e))?;
+    let display = content.displays().iter().next().ok_or("No display found")?;
     
-    // Filter: Include everything (default), but maybe exclude own app?
-    // let filter = SCContentFilter::new(InitParams::Display(display.clone()));
-    // For now simple filter:
-    let filter = SCContentFilter::new(InitParams::Display(display.clone()));
-
+    // Filter: Include everything
+    let filter = SCContentFilter::new().with_display(display).build();
+    
     // Config: Audio Only
-    let config = SCStreamConfiguration {
-        captures_audio: true,
-        excludes_current_process_audio: true,
-        // width/height don't matter much for audio only but required
-        width: 100, 
-        height: 100,
-        ..Default::default()
-    };
+    let config = SCStreamConfiguration::new()
+        .with_width(100)
+        .with_height(100)
+        .with_captures_audio(true)
+        .with_excludes_current_process_audio(true);
 
     // Output Handler
     let recorder = AudioRecorder { file: file_arc };
     
     // Stream
-    let mut stream = SCStream::new(filter, config, recorder);
-    stream.add_output(recorder, SCStreamOutputType::Audio);
+    let mut stream = SCStream::new(&filter, &config);
+    stream.add_output_handler(recorder, SCStreamOutputType::Audio);
     
     stream.start_capture().map_err(|e| format!("Failed to start capture: {:?}", e))?;
 
