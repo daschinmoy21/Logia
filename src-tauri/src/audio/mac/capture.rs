@@ -93,7 +93,8 @@ pub fn start_capture(app_handle: &AppHandle) -> Result<(), String> {
     // 2. Setup ScreenCaptureKit
     // Create a filter for the main display
     let content = SCShareableContent::get().map_err(|e| format!("Failed to get shareable content: {:?}", e))?;
-    let display = content.displays().iter().next().ok_or("No display found")?;
+    let displays = content.displays();
+    let display = displays.first().ok_or("No display found")?;
     
     // Filter: Include everything
     let filter = SCContentFilter::builder().display(display).build();
