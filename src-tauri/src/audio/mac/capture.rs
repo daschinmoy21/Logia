@@ -96,7 +96,7 @@ pub fn start_capture(app_handle: &AppHandle) -> Result<(), String> {
     let display = content.displays().iter().next().ok_or("No display found")?;
     
     // Filter: Include everything
-    let filter = SCContentFilter::builder().display(display.clone()).build();
+    let filter = SCContentFilter::builder().display(display).build();
     
     // Config: Audio Only
     let config = SCStreamConfiguration::new()
