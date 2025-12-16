@@ -32,16 +32,26 @@ export const Settings = () => {
   };
 
   const handleSave = async () => {
+    if (!apiKey.trim()) {
+      setStatus('error');
+      toast.error("API Key cannot be empty");
+      return;
+    }
+
     setIsLoading(true);
     setStatus('saving');
     try {
       await invoke('save_google_api_key', { key: apiKey });
-      setGoogleApiKey(apiKey); // Update the store
+      // Update store inside a transition or timeout to avoid blocking UI during render if expensive? 
+      // Actually standard SetState is fine. 
+      setGoogleApiKey(apiKey);
       setStatus('saved');
+      toast.success('API Key saved successfully');
       setTimeout(() => setStatus('idle'), 2000);
     } catch (error) {
       console.error('Failed to save API key:', error);
       setStatus('error');
+      toast.error('Failed to save API key');
     } finally {
       setIsLoading(false);
     }
@@ -126,65 +136,65 @@ export const Settings = () => {
             </button>
           </div>
 
-            <div className="space-y-6">
-             <div>
-               <h3 className="text-sm font-medium text-zinc-300 mb-2">General</h3>
-               <div className="space-y-4">
-                 <div>
-                   <label htmlFor="apiKey" className="block text-xs text-zinc-400 mb-1.5">
-                     Gemini API Key
-                   </label>
-                   <Description className="text-xs text-zinc-500 mb-2">
-                     Required for AI features. The key is stored locally on your device.
-                   </Description>
-                   <input
-                     id="apiKey"
-                     type="password"
-                     value={apiKey}
-                     onChange={(e) => setApiKey(e.target.value)}
-                     placeholder="Enter your API key"
-                     className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 transition-colors"
-                   />
-                 </div>
-               </div>
-             </div>
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-sm font-medium text-zinc-300 mb-2">General</h3>
+              <div className="space-y-4">
+                <div>
+                  <label htmlFor="apiKey" className="block text-xs text-zinc-400 mb-1.5">
+                    Gemini API Key
+                  </label>
+                  <Description className="text-xs text-zinc-500 mb-2">
+                    Required for AI features. The key is stored locally on your device.
+                  </Description>
+                  <input
+                    id="apiKey"
+                    type="password"
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    placeholder="Enter your API key"
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 transition-colors"
+                  />
+                </div>
+              </div>
+            </div>
 
-             <div>
-               <h3 className="text-sm font-medium text-zinc-300 mb-2">Transcription</h3>
-               <div className="space-y-4">
-                 <div>
-                   <Description className="text-xs text-zinc-500 mb-2">
-                     Install Python dependencies required for audio transcription. This will download faster-whisper and other required packages.
-                   </Description>
-                   <div className="flex items-center gap-3">
+            <div>
+              <h3 className="text-sm font-medium text-zinc-300 mb-2">Transcription</h3>
+              <div className="space-y-4">
+                <div>
+                  <Description className="text-xs text-zinc-500 mb-2">
+                    Install Python dependencies required for audio transcription. This will download faster-whisper and other required packages.
+                  </Description>
+                  <div className="flex items-center gap-3">
                     <div className="flex-1">
                       <button
-                       onClick={handleInstallTranscriptionDeps}
-                       disabled={isInstallingDeps}
-                       className={`
+                        onClick={handleInstallTranscriptionDeps}
+                        disabled={isInstallingDeps}
+                        className={`
                          px-4 py-2 rounded-lg text-sm font-medium transition-all
                          ${installStatus === 'installed'
-                           ? 'bg-green-600 text-white hover:bg-green-700'
-                           : installStatus === 'error'
-                           ? 'bg-red-600 text-white hover:bg-red-700'
-                           : 'bg-zinc-100 text-zinc-900 hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed'}
+                            ? 'bg-green-600 text-white hover:bg-green-700'
+                            : installStatus === 'error'
+                              ? 'bg-red-600 text-white hover:bg-red-700'
+                              : 'bg-zinc-100 text-zinc-900 hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed'}
                        `}
-                     >
-                       {isInstallingDeps ? 'Installing...' :
-                        installStatus === 'installed' ? 'Installed ✓' :
-                        installStatus === 'error' ? 'Error' : 'Install Dependencies'}
-                     </button>
+                      >
+                        {isInstallingDeps ? 'Installing...' :
+                          installStatus === 'installed' ? 'Installed ✓' :
+                            installStatus === 'error' ? 'Error' : 'Install Dependencies'}
+                      </button>
                     </div>
                     <div className="w-48 text-xs text-zinc-400">
                       {isInstallingDeps ? 'Downloading / installing...' : ''}
                     </div>
-                   </div>
-                   <div className="mt-3">
-                     <pre className="max-h-40 overflow-auto text-xs bg-zinc-900 border border-zinc-800 p-2 rounded text-zinc-300">{installLog}</pre>
-                   </div>
-                 </div>
-               </div>
-             </div>
+                  </div>
+                  <div className="mt-3">
+                    <pre className="max-h-40 overflow-auto text-xs bg-zinc-900 border border-zinc-800 p-2 rounded text-zinc-300">{installLog}</pre>
+                  </div>
+                </div>
+              </div>
+            </div>
 
             <div className="flex justify-end pt-4 border-t border-zinc-800">
               {apiKey && (
@@ -204,16 +214,16 @@ export const Settings = () => {
                 disabled={isLoading || !apiKey}
                 className={`
                   px-4 py-2 rounded-lg text-sm font-medium transition-all
-                  ${status === 'saved' 
-                    ? 'bg-green-600 text-white hover:bg-green-700' 
+                  ${status === 'saved'
+                    ? 'bg-green-600 text-white hover:bg-green-700'
                     : status === 'error'
-                    ? 'bg-red-600 text-white hover:bg-red-700'
-                    : 'bg-zinc-100 text-zinc-900 hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed'}
+                      ? 'bg-red-600 text-white hover:bg-red-700'
+                      : 'bg-zinc-100 text-zinc-900 hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed'}
                 `}
               >
-                {status === 'saving' ? 'Saving...' : 
-                 status === 'saved' ? 'Saved!' : 
-                 status === 'error' ? 'Error' : 'Save Changes'}
+                {status === 'saving' ? 'Saving...' :
+                  status === 'saved' ? 'Saved!' :
+                    status === 'error' ? 'Error' : 'Save Changes'}
               </button>
             </div>
           </div>

@@ -1,4 +1,3 @@
-import {useMemo} from 'react';
 import { PromptInputBox } from "@/components/ui/ai-prompt-box";
 import { useNotesStore } from "@/store/notesStore";
 import useUiStore from "../store/UiStore";
@@ -35,13 +34,19 @@ const AiSidebar = ({ isOpen, onClose }: AiSidebarProps) => {
     }
   }, [messages, streamingMessage]);
 
-  const googleClient = useMemo(() => {
-    if (!googleApiKey) return null;
-     try {
-        return createGoogleGenerativeAI({ apiKey: googleApiKey });
+  const [googleClient, setGoogleClient] = useState<any>(null);
+
+  useEffect(() => {
+    if (!googleApiKey) {
+      setGoogleClient(null);
+      return;
+    }
+    try {
+      const client = createGoogleGenerativeAI({ apiKey: googleApiKey });
+      setGoogleClient(() => client);
     } catch (e) {
-        console.error("Failed to create Google AI client", e);
-        return null;
+      console.error("Failed to create Google AI client", e);
+      setGoogleClient(null);
     }
   }, [googleApiKey]);
 
@@ -60,11 +65,13 @@ const AiSidebar = ({ isOpen, onClose }: AiSidebarProps) => {
   const handleSendMessage = async (message: string) => {
     if (!message.trim()) return;
     if (!googleApiKey || !googleClient) {
-      toast.error("Google API key not configured. Please set GOOGLE_GENERATIVE_AI_API_KEY in settings",{    style: {
-      borderRadius: '10px',
-      background: '#333',
-      color: '#fff',}
-    },);
+      toast.error("Google API key not configured. Please set GOOGLE_GENERATIVE_AI_API_KEY in settings", {
+        style: {
+          borderRadius: '10px',
+          background: '#333',
+          color: '#fff',
+        }
+      },);
       return;
     }
     if (!currentNote) return;
@@ -163,12 +170,11 @@ const AiSidebar = ({ isOpen, onClose }: AiSidebarProps) => {
                 </div>
               </div>
             )}
-            
+
             {messages.map((msg, index) => (
               <div key={index} className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
-                <div className={`flex-shrink-0 mt-1 size-7 rounded-full flex items-center justify-center border ${
-                  msg.role === 'user' ? 'bg-zinc-800/60 border-zinc-700' : 'bg-blue-600/10 border-blue-500/20'
-                }`}>
+                <div className={`flex-shrink-0 mt-1 size-7 rounded-full flex items-center justify-center border ${msg.role === 'user' ? 'bg-zinc-800/60 border-zinc-700' : 'bg-blue-600/10 border-blue-500/20'
+                  }`}>
                   {msg.role === 'user' ? (
                     <User size={14} className="text-zinc-400" />
                   ) : (
@@ -176,65 +182,64 @@ const AiSidebar = ({ isOpen, onClose }: AiSidebarProps) => {
                   )}
                 </div>
 
-                <div className={`flex-1 max-w-[85%] text-sm leading-relaxed ${
-                  msg.role === 'user' 
-                    ? 'bg-zinc-800 text-zinc-100 px-4 py-2.5 rounded-2xl rounded-tr-sm border border-zinc-700/50' 
-                    : 'text-zinc-300'
-                }`}>
+                <div className={`flex-1 max-w-[85%] text-sm leading-relaxed ${msg.role === 'user'
+                  ? 'bg-zinc-800 text-zinc-100 px-4 py-2.5 rounded-2xl rounded-tr-sm border border-zinc-700/50'
+                  : 'text-zinc-300'
+                  }`}>
                   <div className="prose prose-invert prose-p:my-1 prose-pre:bg-zinc-900 prose-pre:border prose-pre:border-zinc-800 prose-pre:rounded-md prose-code:text-blue-300 prose-code:bg-zinc-800/50 prose-code:px-1 prose-code:rounded prose-sm max-w-none">
-                  <Markdown 
-                    remarkPlugins={[remarkGfm]}
-                    components={{
-                      code({className, children, ...props}) {
-                        const match = /language-(\w+)/.exec(className || '')
-                        return match ? (
-                          <div className="relative group my-2">
-                             <code className={className} {...props}>
+                    <Markdown
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        code({ className, children, ...props }) {
+                          const match = /language-(\w+)/.exec(className || '')
+                          return match ? (
+                            <div className="relative group my-2">
+                              <code className={className} {...props}>
                                 {children}
-                             </code>
-                          </div>
-                        ) : (
-                          <code className={className} {...props}>
-                            {children}
-                          </code>
-                        )
-                      }
-                    }}
-                  >
-                    {msg.content}
-                  </Markdown>
+                              </code>
+                            </div>
+                          ) : (
+                            <code className={className} {...props}>
+                              {children}
+                            </code>
+                          )
+                        }
+                      }}
+                    >
+                      {msg.content}
+                    </Markdown>
                   </div>
                 </div>
               </div>
             ))}
 
             {isLoading && streamingMessage && (
-               <div className="flex gap-3">
-                 <div className="flex-shrink-0 mt-1 size-7 rounded-full flex items-center justify-center bg-blue-600/10 border border-blue-500/20">
-                   <Bot size={14} className="text-blue-400" />
-                 </div>
-                 <div className="flex-1 text-sm text-zinc-300 leading-relaxed">
-                   <div className="prose prose-invert prose-p:my-1 prose-pre:bg-zinc-900 prose-pre:border prose-pre:border-zinc-800 prose-pre:rounded-md prose-code:text-blue-300 prose-code:bg-zinc-800/50 prose-code:px-1 prose-code:rounded prose-sm max-w-none">
-                   <Markdown 
-                    remarkPlugins={[remarkGfm]} 
-                   >
-                     {streamingMessage}
-                   </Markdown>
-                   </div>
-                 </div>
-               </div>
+              <div className="flex gap-3">
+                <div className="flex-shrink-0 mt-1 size-7 rounded-full flex items-center justify-center bg-blue-600/10 border border-blue-500/20">
+                  <Bot size={14} className="text-blue-400" />
+                </div>
+                <div className="flex-1 text-sm text-zinc-300 leading-relaxed">
+                  <div className="prose prose-invert prose-p:my-1 prose-pre:bg-zinc-900 prose-pre:border prose-pre:border-zinc-800 prose-pre:rounded-md prose-code:text-blue-300 prose-code:bg-zinc-800/50 prose-code:px-1 prose-code:rounded prose-sm max-w-none">
+                    <Markdown
+                      remarkPlugins={[remarkGfm]}
+                    >
+                      {streamingMessage}
+                    </Markdown>
+                  </div>
+                </div>
+              </div>
             )}
 
             {isLoading && !streamingMessage && (
               <div className="flex gap-3 items-center">
-                 <div className="flex-shrink-0 size-7 rounded-full flex items-center justify-center bg-blue-600/10 border border-blue-500/20">
-                    <Loader />      
-                 </div>
-                 <ShimmeringText
-                    className="text-xs font-medium text-zinc-500"
-                    text="Thinking..."
-                    wave 
-                 />
+                <div className="flex-shrink-0 size-7 rounded-full flex items-center justify-center bg-blue-600/10 border border-blue-500/20">
+                  <Loader />
+                </div>
+                <ShimmeringText
+                  className="text-xs font-medium text-zinc-500"
+                  text="Thinking..."
+                  wave
+                />
               </div>
             )}
           </div>

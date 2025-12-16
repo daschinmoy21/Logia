@@ -203,10 +203,13 @@ export const useNotesStore = create<NotesState>()(
           get().saveCurrentNote();
         }, 200); // Aggressive save for canvas
 
-        set({
+        set((state) => ({
           currentNote: updatedNote,
+          notes: state.notes.map((note) =>
+            note.id === updatedNote.id ? updatedNote : note
+          ),
           saveTimeout: newTimeout,
-        });
+        }));
       } else {
         console.log('No current note to update');
       }

@@ -118,6 +118,12 @@
   * {
     @apply border-border outline-ring/50;
   }
+  html, body, #root {
+    @apply h-full w-full bg-zinc-950 overflow-hidden;
+    background-color: #09090b; /* Fallback/Enforce zinc-950 */
+    margin: 0;
+    padding: 0;
+  }
   body {
     @apply bg-background text-foreground;
   }

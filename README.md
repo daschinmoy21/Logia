@@ -42,14 +42,18 @@ A powerful, AI-enhanced notes application built with Tauri and React, designed f
 
 4. Build for production:
    ```bash
-   bun run tauri build
+   bun tauri build
    ```
+
+   For linux, there is a known issue with linuxdeploy in tauri and hence build throws a error and doesnt create a proper appimage. 
+   Use ```bash 
+   NO_STRIP=true bun tauri build```
 
 ## Usage
 
 - **Creating Notes**: Use the file tree sidebar to create new notes or organize existing ones
 - **AI Assistance**: Access AI features through the AI sidebar for content generation and editing
-- **Drawing**: Click the drawing tool to open Excalidraw for visual notes
+- **Drawing**: Click the drawing tool to open TLDRAW for visual notes
 - **Recording**: Use the recording feature to capture audio and automatically transcribe it
 - **Search**: Press `Alt+P` or `Meta/Cmd+P`(for Mac) to open the command palette and search across all content
 

@@ -49,8 +49,9 @@ export default function PreflightModal() {
       const res = await invoke("prereflight_check") as PreflightResult;
       setResult(res);
 
-      // Only show if there are issues
-      if (checkNeedsAttention(res)) {
+      // Only show if there are issues AND not dismissed
+      const dismissed = localStorage.getItem('kortex_preflight_dismissed') === 'true';
+      if (checkNeedsAttention(res) && !dismissed) {
         setVisible(true);
       }
     } catch (e) {
@@ -280,6 +281,15 @@ export default function PreflightModal() {
                   disabled={installing}
                 >
                   Ignore
+                </button>
+                <button
+                  onClick={() => {
+                    localStorage.setItem('kortex_preflight_dismissed', 'true');
+                    setVisible(false);
+                  }}
+                  className="px-4 py-2 rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors text-sm font-medium"
+                >
+                  Don't Show Again
                 </button>
                 <button
                   onClick={handleInstall}

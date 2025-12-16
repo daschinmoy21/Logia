@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { Resizable } from 're-resizable';
-import { GoPersonFill } from 'react-icons/go';
 import { IoSettingsOutline } from 'react-icons/io5';
 import { AiOutlineLayout, AiOutlineFolderAdd } from 'react-icons/ai';
 import { CiSearch } from 'react-icons/ci';
@@ -46,7 +45,7 @@ export const Sidebar = () => {
   const contextMenu = useUiStore((state) => state.contextMenu);
   const isSettingsOpen = useUiStore((state) => state.isSettingsOpen);
   const isKanbanOpen = useUiStore((state) => state.isKanbanOpen);
-  const isSupportOpen = useUiStore((state) => state.isSupportOpen);
+  // const isSupportOpen = useUiStore((state) => state.isSupportOpen);
   const isRecording = useUiStore((state) => state.isRecording);
   const googleApiKey = useUiStore((state) => state.googleApiKey);
   const editor = useUiStore((state) => state.editor);
@@ -249,7 +248,7 @@ export const Sidebar = () => {
               Search
               <kbd className="hidden md:inline-flex items-center gap-0.5 text-xs text-zinc-500 font-sans border border-zinc-700 rounded px-1.5 py-0.5 ml-2 bg-zinc-900/50">
                 {isMac ? <Command size={10} /> : <span className="text-[10px]">Alt</span>}
-                <span>P</span>
+                <span>+P</span>
               </kbd>
             </span>
           </button>
@@ -259,8 +258,14 @@ export const Sidebar = () => {
         <div className='bg-zinc-900 flex justify-around text-sm mb-1 pb-2 border-b border-zinc-700'>
           <button
             title="Notes Agent"
-            className={`p-2 focus:outline-none transition-colors ${isRecording ? 'text-red-400' : 'text-zinc-400 hover:text-blue-400'} cursor-pointer`}
+            disabled={!currentNote || currentNote.note_type === 'canvas'}
+            className={`p-2 focus:outline-none transition-colors 
+              ${!currentNote || currentNote.note_type === 'canvas' ? 'text-zinc-700 cursor-not-allowed' :
+                isRecording ? 'text-red-400' : 'text-zinc-400 hover:text-blue-400 cursor-pointer'
+              }`}
             onClick={async () => {
+              if (!currentNote || currentNote.note_type === 'canvas') return;
+
               if (!isRecording) {
                 try {
                   await invoke('start_recording');
@@ -664,7 +669,7 @@ RULES:
             </button>
           </div>
 
-          <div className="px-2 py-1">
+          {/* <div className="px-2 py-1">
             <button
               className="w-full text-left text-zinc-400 hover:text-purple-400 hover:bg-zinc-800/50 cursor-pointer focus:outline-none px-3 py-1 rounded-md transition-all duration-200 active:scale-95"
               onClick={() => {
@@ -679,7 +684,7 @@ RULES:
                 Support
               </span>
             </button>
-          </div>
+          </div> */}
         </div>
       </Resizable>
 

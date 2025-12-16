@@ -52,7 +52,6 @@ export function EditorProvider({
   updateCurrentNoteTitle: (title: string) => void;
 }) {
   const { googleApiKey, setEditor } = useUiStore();
-  const isUpdatingRef = useRef(false);
 
   // Create model only when API key changes
   const model = useMemo(() => {
@@ -60,7 +59,7 @@ export function EditorProvider({
       const googleAI = createGoogleGenerativeAI({
         apiKey: googleApiKey,
       });
-       return googleAI('gemini-2.5-flash');
+      return googleAI('gemini-2.5-flash');
     }
     return null;
   }, [googleApiKey]);
@@ -86,21 +85,26 @@ export function EditorProvider({
     initialContent: currentNote?.content ? JSON.parse(currentNote.content) : undefined,
   });
 
+  const previousNoteIdRef = useRef<string | null>(null);
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   // Set editor in store
   useEffect(() => {
     setEditor(editor);
   }, [editor, setEditor]);
 
-  // Update editor content when currentNote changes
+  // Sync: Only load content when the NOTE ID changes (switching notes)
+  // We do NOT update the editor if `currentNote.content` changes while ID is the same,
+  // because the Editor itself is the source of truth for the content while active.
   useEffect(() => {
-    if (currentNote && !isUpdatingRef.current) {
-      console.log('Updating editor content for note:', currentNote.id, 'content length:', currentNote.content?.length);
+    if (currentNote && currentNote.id !== previousNoteIdRef.current) {
+      console.log('Switching to note:', currentNote.id);
+      previousNoteIdRef.current = currentNote.id;
+
       try {
         const content = currentNote.content ? JSON.parse(currentNote.content) : [];
         editor.replaceBlocks(editor.document, content);
-        console.log('Editor content updated with', content.length, 'blocks');
       } catch (error) {
-        // If content is not valid JSON, treat as plain text
         console.warn("Invalid JSON content, treating as plain text");
         editor.replaceBlocks(editor.document, [
           {
@@ -110,30 +114,34 @@ export function EditorProvider({
         ]);
       }
     }
-  }, [currentNote?.id, currentNote?.content, editor]); // Trigger when note ID or content changes
+  }, [currentNote?.id, editor]);
+  // Removed `currentNote.content` from dependency to prevent re-entrancy loops/overwrites
 
-  // Handle content changes with auto-save
+  // Handle content changes with DEBOUNCE (not throttle)
+  // This ensures the LAST keystroke is always saved.
   useEffect(() => {
     const handleChange = () => {
-      if (currentNote && !isUpdatingRef.current) {
-        isUpdatingRef.current = true;
-
-        // Get the current document content
-        const content = JSON.stringify(editor.document);
-        updateCurrentNoteContent(content);
-
-        // Reset the flag after a short delay
-        setTimeout(() => {
-          isUpdatingRef.current = false;
-        }, 100);
+      // Clear previous timeout to reset the timer (debounce)
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
       }
+
+      // Set new timeout
+      saveTimeoutRef.current = setTimeout(() => {
+        if (currentNote) {
+          const content = JSON.stringify(editor.document);
+          updateCurrentNoteContent(content);
+        }
+      }, 500); // 500ms debounce
     };
 
     // Listen for editor changes
     editor.onChange(handleChange);
 
     return () => {
-      // Cleanup if needed
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
     };
   }, [editor, currentNote, updateCurrentNoteContent]);
 
@@ -162,7 +170,7 @@ export function FormattingToolbarWithAI() {
 // Slash menu with the AI option added
 export function SuggestionMenuWithAI({ editor }: { editor: BlockNoteEditor<any, any, any> }) {
   const { googleApiKey } = useUiStore();
-  
+
   return (
     <SuggestionMenuController
       triggerCharacter="/"
