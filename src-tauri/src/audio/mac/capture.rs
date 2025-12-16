@@ -11,7 +11,10 @@ use screencapturekit::{
     sc_shareable_content::SCShareableContent,
     sc_stream::SCStream,
     sc_stream_configuration::SCStreamConfiguration,
-    sc_output_handler::{StreamOutput, SCStreamOutputType, CMSampleBuffer},
+    sc_stream_configuration::SCStreamConfiguration,
+    sc_output_handler::{StreamOutput, SCStreamOutputType},
+    cm_sample_buffer::CMSampleBuffer,
+    sc_stream::StreamErrorHandler,
 };
 
 // Global state to hold the running stream
@@ -27,7 +30,7 @@ struct AudioRecorder {
 #[cfg(target_os = "macos")]
 impl StreamOutput for AudioRecorder {
     fn did_output_sample_buffer(&self, sample: CMSampleBuffer, of_type: SCStreamOutputType) {
-        if of_type == SCStreamOutputType::Audio {
+        if matches!(of_type, SCStreamOutputType::Audio) {
             // access the raw audio buffer list
             // For now, we assume simple safe access exists or use unsafe if required.
             // This logic implements a basic Float32 -> Int16 conversion if possible
@@ -47,6 +50,13 @@ impl StreamOutput for AudioRecorder {
             //      let _ = f.write_all(bytes);
             // }
         }
+    }
+}
+
+#[cfg(target_os = "macos")]
+impl StreamErrorHandler for AudioRecorder {
+    fn on_error(&self) {
+        println!("Stream error in AudioRecorder");
     }
 }
 
@@ -128,7 +138,7 @@ pub fn start_capture(app_handle: &AppHandle) -> Result<(), String> {
     
     // Stream
     let mut stream = SCStream::new(filter, config, recorder);
-    stream.add_stream_output(recorder, SCStreamOutputType::Audio);
+    stream.add_output(recorder, SCStreamOutputType::Audio);
     
     stream.start_capture().map_err(|e| format!("Failed to start capture: {:?}", e))?;
 

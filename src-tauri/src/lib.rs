@@ -567,7 +567,6 @@ fn python_executable_in_venv(venv_path: &std::path::PathBuf) -> std::path::PathB
 
 async fn ensure_transcription_dependencies(app_handle: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
     use std::process::Command;
-    use std::path::PathBuf;
     use tauri::path::BaseDirectory;
 
     let requirements_path = app_handle.path().resolve("src/audio/transcription/requirements.txt", BaseDirectory::Resource)
@@ -916,7 +915,6 @@ async fn install_transcription_dependencies(app_handle: tauri::AppHandle) -> Res
 #[tauri::command]
 async fn install_system_dependencies(app_handle: tauri::AppHandle) -> Result<serde_json::Value, String> {
     use std::process::Command;
-    use tauri::path::BaseDirectory;
 
     let app_data_dir = app_handle
         .path()
@@ -1044,7 +1042,6 @@ async fn install_system_dependencies(app_handle: tauri::AppHandle) -> Result<ser
 async fn prereflight_check(app_handle: tauri::AppHandle) -> Result<serde_json::Value, String> {
     use std::process::Command;
     use std::time::Duration;
-    use std::net::TcpStream;
     use tauri::path::BaseDirectory;
 
     let mut map = serde_json::Map::new();
