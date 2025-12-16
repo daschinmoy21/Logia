@@ -4,7 +4,7 @@
 <dict>
     <key>com.apple.security.screensaver.get-recent-screenshots</key>
     <true/>
-    <key>NSMicrophoneUsageDescription</key>
-    <string>This app needs microphone access to record audio for transcription.</string>
+    <key>com.apple.security.device.audio-input</key>
+    <true/>
 </dict>
 </plist>
