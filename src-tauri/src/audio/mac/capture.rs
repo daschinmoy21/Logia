@@ -19,7 +19,7 @@ struct AudioRecorder {
 
 #[cfg(target_os = "macos")]
 impl SCStreamOutputTrait for AudioRecorder {
-    fn did_output_sample_buffer(&self, sample: CMSampleBuffer, of_type: SCStreamOutputType) {
+    fn did_output_sample_buffer(&self, _sample: CMSampleBuffer, of_type: SCStreamOutputType) {
         if matches!(of_type, SCStreamOutputType::Audio) {
             // access the raw audio buffer list
             // For now, we assume simple safe access exists or use unsafe if required.
@@ -96,7 +96,7 @@ pub fn start_capture(app_handle: &AppHandle) -> Result<(), String> {
     let display = content.displays().iter().next().ok_or("No display found")?;
     
     // Filter: Include everything
-    let filter = SCContentFilter::new().with_display(display).build();
+    let filter = SCContentFilter::builder().display(display.clone()).build();
     
     // Config: Audio Only
     let config = SCStreamConfiguration::new()
