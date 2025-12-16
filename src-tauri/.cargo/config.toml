@@ -1,2 +1,16 @@
 [env]
 MACOSX_DEPLOYMENT_TARGET = "12.3"
+
+# Fix for Swift runtime library linking (screencapturekit crate)
+# This ensures libswift_Concurrency.dylib and other Swift libs are found
+[target.aarch64-apple-darwin]
+rustflags = [
+    "-L", "/usr/lib/swift",
+    "-C", "link-arg=-Wl,-rpath,/usr/lib/swift",
+]
+
+[target.x86_64-apple-darwin]
+rustflags = [
+    "-L", "/usr/lib/swift",
+    "-C", "link-arg=-Wl,-rpath,/usr/lib/swift",
+]
