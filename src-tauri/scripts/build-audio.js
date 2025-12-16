@@ -34,6 +34,14 @@ async function build() {
         const sourceBin = join(tempDir, 'AudioCapture.exe');
 
         console.log(`Moving ${sourceBin} to ${targetBin}`);
+
+        // Explicitly remove target if it exists to avoid EPERM on Windows
+        try {
+            await rm(targetBin, { force: true });
+        } catch (e) {
+            console.warn(`Warning: Failed to remove existing ${targetBin}: ${e.message}`);
+        }
+
         // fs.rename handles overwriting
         await rename(sourceBin, targetBin);
 

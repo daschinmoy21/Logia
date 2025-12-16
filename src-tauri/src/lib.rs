@@ -17,7 +17,7 @@ mod audio;
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
 
-fn hide_console(_cmd: &mut std::process::Command) {
+fn hide_console(cmd: &mut std::process::Command) {
     #[cfg(windows)]
     {
         // CREATE_NO_WINDOW
