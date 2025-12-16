@@ -230,7 +230,7 @@ export const Sidebar = () => {
     <>
       <Resizable
         as="aside"
-        className="bg-zinc-900 py-2 border-r border-zinc-850 flex flex-col h-full"
+        className="bg-zinc-900 pb-2 border-r border-zinc-850 flex flex-col h-full"
         defaultSize={{ width: 270, height: '100%' }}
         minWidth={230}
         maxWidth={340}
@@ -238,7 +238,7 @@ export const Sidebar = () => {
         handleClasses={{ right: 'w-1 bg-zinc-900 hover:bg-zinc-700 transition-colors' }}
       >
         {/* Search button */}
-        <div className='mb-2 px-2'>
+        <div className='mb-2 px-2 mt-2'>
           <button
             onClick={openCommandPalette}
             className='w-full bg-zinc-800/50 border border-zinc-700 hover:bg-zinc-800 transition-colors text-zinc-400 text-sm flex items-center gap-2 p-2 rounded-md active:scale-95'
@@ -270,16 +270,40 @@ export const Sidebar = () => {
                 try {
                   await invoke('start_recording');
                   setIsRecording(true);
-                } catch (error) {
+                } catch (error: any) {
                   console.error('Failed to start recording:', error);
-                  toast.error('❌ Failed to start recording', {
-                    icon: '❌',
-                    style: {
-                      background: '#7f1d1d',
-                      color: '#fca5a5',
-                      border: '1px solid #dc2626',
-                    },
-                  });
+                  const errorMsg = error.toString();
+                  if (errorMsg.includes("PERMISSION_DENIED")) {
+                    toast.error((t) => (
+                      <div className="flex flex-col gap-2">
+                        <span>🔒 Screen Recording Permission Required</span>
+                        <span className="text-xs opacity-90">Kortex needs screen recording permission to capture system audio.</span>
+                        <span className="text-xs opacity-90">Please go to System Settings {'>'} Privacy & Security {'>'} Screen Recording and enable it for Kortex.</span>
+                        <button
+                          className="bg-zinc-700 hover:bg-zinc-600 text-white text-xs px-2 py-1 rounded mt-1"
+                          onClick={() => toast.dismiss(t.id)}
+                        >
+                          Dismiss
+                        </button>
+                      </div>
+                    ), {
+                      duration: 10000,
+                      style: {
+                        background: '#7f1d1d',
+                        color: '#fca5a5',
+                        border: '1px solid #dc2626',
+                      },
+                    });
+                  } else {
+                    toast.error(`❌ Failed to start recording: ${errorMsg}`, {
+                      icon: '❌',
+                      style: {
+                        background: '#7f1d1d',
+                        color: '#fca5a5',
+                        border: '1px solid #dc2626',
+                      },
+                    });
+                  }
                 }
               }
             }}

@@ -84,6 +84,17 @@ fn create_wav_header(data_size: u32) -> Vec<u8> {
 pub fn start_capture(app_handle: &AppHandle) -> Result<(), String> {
     println!("Starting audio capture (sc-kit)");
 
+    match start_capture_inner(app_handle) {
+        Ok(_) => Ok(()),
+        Err(e) => {
+            println!("Error starting audio capture: {}", e);
+            Err(e)
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn start_capture_inner(app_handle: &AppHandle) -> Result<(), String> {
     // 1. Setup Output File
     let output_base = generate_output_file(app_handle)?;
     let pcm_path = format!("{}.pcm", output_base);
@@ -92,7 +103,14 @@ pub fn start_capture(app_handle: &AppHandle) -> Result<(), String> {
 
     // 2. Setup ScreenCaptureKit
     // Create a filter for the main display
-    let content = SCShareableContent::get().map_err(|e| format!("Failed to get shareable content: {:?}", e))?;
+    let content = SCShareableContent::get().map_err(|e| {
+        let err_str = format!("{:?}", e);
+        if err_str.contains("user declined TCCs") || err_str.contains("NoShareableContent") {
+            "PERMISSION_DENIED: Please enable Screen Recording permission for Kortex in System Settings > Privacy & Security.".to_string()
+        } else {
+            format!("Failed to get shareable content: {:?}", e)
+        }
+    })?;
     let displays = content.displays();
     let display = displays.first().ok_or("No display found")?;
     

@@ -12,11 +12,11 @@
   "app": {
     "windows": [
       {
-        "title": "kortex",
+        "title": "",
+        "titleBarStyle": "Visible",
         "width": 1080,
         "decorations": true,
-        "theme": "Dark",
-        "titleBarStyle": "Overlay"
+        "theme": "Dark"
       }
     ],
     "security": {

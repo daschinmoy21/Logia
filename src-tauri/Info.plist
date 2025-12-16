@@ -6,5 +6,7 @@
     <string>12.3</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>This app needs microphone access to record audio for transcription.</string>
+    <key>NSScreenCaptureUsageDescription</key>
+    <string>This app needs screen recording access to capture system audio.</string>
 </dict>
 </plist>
