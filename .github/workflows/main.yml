@@ -9,19 +9,16 @@ jobs:
   build:
     permissions:
       contents: write
+
     strategy:
       fail-fast: false
       matrix:
         include:
-          # Apple Silicon
+          # Apple Silicon Mac
           - os: macos-latest
             target: aarch64-apple-darwin
 
-          # Intel Mac
-          - os: macos-13
-            target: x86_64-apple-darwin
-
-          # Linux
+          # Linux AppImage
           - os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
 
@@ -45,8 +42,8 @@ jobs:
           curl -fsSL https://bun.sh/install | bash
           echo "$HOME/.bun/bin" >> $GITHUB_PATH
 
-      # Linux deps
-      - name: Install Linux system deps
+      # Linux system deps
+      - name: Install Linux deps
         if: matrix.os == 'ubuntu-22.04'
         run: |
           sudo apt update
@@ -61,8 +58,15 @@ jobs:
       - name: Install frontend deps
         run: bun install
 
-      # Build + release
-      - uses: tauri-apps/tauri-action@v1
+      # Create dummy resource for non-Windows (prevent build failure)
+      - name: Create dummy Windows resource
+        if: matrix.os != 'windows-latest'
+        run: |
+          mkdir -p src-tauri/bin
+          touch src-tauri/bin/AudioCapture-x86_64-pc-windows-msvc.exe
+
+      # Build + Release
+      - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
