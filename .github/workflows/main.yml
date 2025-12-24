@@ -79,8 +79,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: v__VERSION__
-          releaseName: "Kortex v__VERSION__"
+          tagName: ${{ github.ref_name }}
+          releaseName: "Kortex ${{ github.ref_name }}"
           releaseBody: "See attached assets."
           releaseDraft: true
           prerelease: false
