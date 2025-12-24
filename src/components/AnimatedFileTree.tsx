@@ -85,8 +85,8 @@ export const AnimatedFileTree: React.FC<AnimatedFileTreeProps> = ({
       <FolderItem key={folder.id} value={folder.id}>
         <div
           className={`flex items-center py-1.5 px-1 rounded-md cursor-pointer transition-all duration-200 group
-            ${isSelected 
-              ? 'bg-blue-600/10 text-blue-100 border-l-2 border-blue-500' 
+            ${isSelected
+              ? 'bg-blue-600/10 text-blue-100 border-l-2 border-blue-500'
               : 'hover:bg-zinc-800/70 text-zinc-300'
             }`}
           style={{ paddingLeft: `${depth * 8}px` }}
@@ -132,9 +132,9 @@ export const AnimatedFileTree: React.FC<AnimatedFileTreeProps> = ({
                 onClick={(e) => e.stopPropagation()}
               />
             ) : (
-      <FolderLabel className={isSelected ? "text-blue-100 text-sm truncate px-1 py-0.5" : "text-zinc-300 text-sm truncate px-1 py-0.5"}>
-        {folder.name}
-      </FolderLabel>
+              <FolderLabel className={isSelected ? "text-blue-100/90 text-sm truncate px-1 py-0.5" : "text-zinc-300 text-sm truncate px-1 py-0.5"}>
+                {folder.name}
+              </FolderLabel>
             )}
           </FolderTrigger>
           <button
