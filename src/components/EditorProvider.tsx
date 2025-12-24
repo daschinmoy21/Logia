@@ -39,7 +39,16 @@ export function useEditorContext() {
 // Create provider with API key from environment variables
 // const provider = createGroq({
 //   apiKey: import.meta.env.VITE_GROQ_API_KEY,
-// });
+// // function to convert file to base64
+const convertFileToBase64 = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = (error) => reject(error);
+  });
+};
+
 export function EditorProvider({
   children,
   currentNote,
@@ -83,6 +92,9 @@ export function EditorProvider({
       }),
     ] : [],
     initialContent: currentNote?.content ? JSON.parse(currentNote.content) : undefined,
+    uploadFile: async (file: File) => {
+      return convertFileToBase64(file);
+    },
   });
 
   const previousNoteIdRef = useRef<string | null>(null);

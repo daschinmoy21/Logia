@@ -98,32 +98,41 @@ fn default_note_type() -> String {
     "text".to_string()
 }
 
-fn get_notes_directory(app_handle: &tauri::AppHandle) -> Result<PathBuf, String> {
-    let documents_dir = app_handle
+fn resolve_kortex_dir(app_handle: &tauri::AppHandle, subdir: &str) -> Result<PathBuf, String> {
+    // Try standard XDG documents directory first
+    let dir_result = app_handle
         .path()
-        .resolve("Kortex/notes", BaseDirectory::Document)
-        .map_err(|_| "Could not find document directory")?;
+        .resolve(format!("Kortex/{}", subdir), BaseDirectory::Document);
 
-    if !documents_dir.exists() {
-        fs::create_dir_all(&documents_dir)
-            .map_err(|e| format!("Failed to create notes directory:{}", e))?;
+    let target_dir = match dir_result {
+        Ok(path) => path,
+        Err(_) => {
+            // Fallback: Try manual construction relative to home
+            let home_dir = app_handle
+                .path()
+                .resolve("", BaseDirectory::Home)
+                .map_err(|_| "Could not resolve home directory")?;
+            
+            home_dir.join("Documents").join("Kortex").join(subdir)
+        }
+    };
+
+    if !target_dir.exists() {
+        fs::create_dir_all(&target_dir)
+            .map_err(|e| format!("Failed to create {} directory at {:?}: {}", subdir, target_dir, e))?;
     }
 
-    Ok(documents_dir)
+    Ok(target_dir)
+}
+
+fn get_notes_directory(app_handle: &tauri::AppHandle) -> Result<PathBuf, String> {
+    resolve_kortex_dir(app_handle, "notes")
+        .map_err(|_| "Could not find document directory (checked XDG and Home fallback)".to_string())
 }
 
 fn get_folders_directory(app_handle: &tauri::AppHandle) -> Result<PathBuf, String> {
-    let documents_dir = app_handle
-        .path()
-        .resolve("Kortex/folders", BaseDirectory::Document)
-        .map_err(|_| "Could not find document directory")?;
-
-    if !documents_dir.exists() {
-        fs::create_dir_all(&documents_dir)
-            .map_err(|e| format!("Failed to create folders directory:{}", e))?;
-    }
-
-    Ok(documents_dir)
+    resolve_kortex_dir(app_handle, "folders")
+        .map_err(|_| "Could not find document directory (checked XDG and Home fallback)".to_string())
 }
 
 fn get_config_directory(app_handle: &tauri::AppHandle) -> Result<PathBuf, String> {
@@ -141,17 +150,8 @@ fn get_config_directory(app_handle: &tauri::AppHandle) -> Result<PathBuf, String
 }
 
 fn get_kanban_directory(app_handle: &tauri::AppHandle) -> Result<PathBuf, String> {
-    let documents_dir = app_handle
-        .path()
-        .resolve("Kortex/kanban", BaseDirectory::Document)
-        .map_err(|_| "Could not find document directory")?;
-
-    if !documents_dir.exists() {
-        fs::create_dir_all(&documents_dir)
-            .map_err(|e| format!("Failed to create kanban directory:{}", e))?;
-    }
-
-    Ok(documents_dir)
+    resolve_kortex_dir(app_handle, "kanban")
+        .map_err(|_| "Could not find document directory (checked XDG and Home fallback)".to_string())
 }
 
 #[tauri::command]
