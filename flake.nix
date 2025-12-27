@@ -42,10 +42,12 @@
           rustc
           cargo-tauri
           bun
+          nodejs
           wrapGAppsHook4
           ffmpeg
           pulseaudio
           openssl
+          cacert
         ];
 
       in {
@@ -59,19 +61,28 @@
             nativeBuildInputs = nativeBuildDeps;
             buildInputs = runtimeLibs ++ [ pythonEnv ];
 
-            # Required for cargo to fetch dependencies
             CARGO_HOME = "$TMPDIR/cargo";
-            
-            # OpenSSL configuration
             OPENSSL_NO_VENDOR = 1;
             PKG_CONFIG_PATH = "${pkgs.openssl.dev}/lib/pkgconfig";
+
+            # Allow network access for bun install
+            # This is required because Bun doesn't have proper Nix integration yet
+            __noChroot = true;
+            
+            # SSL certificates for network access
+            SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
+            NIX_SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
 
             configurePhase = ''
               runHook preConfigure
               
-              # Set up cargo home
               export CARGO_HOME="$TMPDIR/cargo"
               mkdir -p $CARGO_HOME
+              export HOME=$TMPDIR
+              
+              # Install dependencies with bun
+              echo "Installing frontend dependencies..."
+              ${pkgs.bun}/bin/bun install --frozen-lockfile
               
               runHook postConfigure
             '';
@@ -79,11 +90,8 @@
             buildPhase = ''
               runHook preBuild
               
-              echo "Installing frontend dependencies..."
-              bun install --frozen-lockfile
-              
               echo "Building frontend..."
-              bun run build
+              ${pkgs.bun}/bin/bun run build
               
               echo "Building Tauri application..."
               cd src-tauri
@@ -96,16 +104,13 @@
             installPhase = ''
               runHook preInstall
               
-              # Install the binary
               mkdir -p $out/bin
               cp src-tauri/target/release/kortex $out/bin/
               
-              # Install transcription resources
               mkdir -p $out/share/kortex/transcription
               cp src-tauri/src/audio/transcription/transcribe.py $out/share/kortex/transcription/
               cp src-tauri/src/audio/transcription/requirements.txt $out/share/kortex/transcription/
               
-              # Install desktop file
               mkdir -p $out/share/applications
               cat > $out/share/applications/kortex.desktop << EOF
               [Desktop Entry]
@@ -118,7 +123,6 @@
               Categories=Office;Productivity;
               EOF
               
-              # Install icons if they exist
               if [ -d "src-tauri/icons" ]; then
                 mkdir -p $out/share/icons/hicolor/128x128/apps
                 cp src-tauri/icons/128x128.png $out/share/icons/hicolor/128x128/apps/kortex.png 2>/dev/null || true
@@ -127,7 +131,6 @@
               runHook postInstall
             '';
 
-            # Wrap the binary with necessary environment variables
             postFixup = ''
               wrapProgram $out/bin/kortex \
                 --set KORTEX_PYTHON_PATH "${pythonEnv}/bin/python" \
@@ -141,7 +144,7 @@
             meta = with pkgs.lib; {
               description = "A modern AI-powered workspace";
               homepage = "https://github.com/daschinmoy21/Kortex";
-              license = licenses.mit; # Change this to your actual license
+              license = licenses.mit;
               maintainers = [];
               platforms = platforms.linux;
               mainProgram = "kortex";
@@ -149,7 +152,7 @@
           };
         };
 
-        # Development shell (replaces your shell.nix)
+        # Development shell
         devShells.default = pkgs.mkShell {
           nativeBuildInputs = nativeBuildDeps ++ [ 
             pythonEnv 
@@ -157,23 +160,15 @@
             pkgs.xdg-utils
           ];
           
-          buildInputs = runtimeLibs ++ [
-            pkgs.cargo-tauri.hook
-          ];
+          buildInputs = runtimeLibs;
 
           OPENSSL_NO_VENDOR = 1;
           PKG_CONFIG_PATH = "${pkgs.openssl.dev}/lib/pkgconfig";
 
           shellHook = ''
-            # Points Tauri/WebKit to the portal and schema settings
             export XDG_DATA_DIRS=${pkgs.gsettings-desktop-schemas}/share/gsettings-schemas/${pkgs.gsettings-desktop-schemas.name}:${pkgs.gtk3}/share/gsettings-schemas/${pkgs.gtk3.name}:$XDG_DATA_DIRS
-
-            # Explicit python path for NixOS (uses the wrapped python with packages)
             export KORTEX_PYTHON_PATH="$(which python)"
-
-            # Fixes "Could not find document directory" by helping GIO find modules
             export GIO_MODULE_DIR="${pkgs.glib-networking}/lib/gio/modules/"
-
             export XDG_RUNTIME_DIR=''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
             export DBUS_SESSION_BUS_ADDRESS=''${DBUS_SESSION_BUS_ADDRESS:-unix:path=$XDG_RUNTIME_DIR/bus}
             
@@ -183,7 +178,6 @@
           '';
         };
 
-        # Convenient app output for `nix run`
         apps.default = flake-utils.lib.mkApp {
           drv = self.packages.${system}.default;
         };
