@@ -75,9 +75,18 @@
               
               cd src-tauri
               
-              # Use cargo-tauri build with config override to skip beforeBuildCommand
-              # since we have pre-built frontend
-              cargo tauri build --no-bundle --ci --config '{"build":{"beforeBuildCommand":""}}'
+              # Create a config override file to skip beforeBuildCommand
+              cat > tauri.nix.conf.json << 'EOF'
+              {
+                "build": {
+                  "beforeBuildCommand": "",
+                  "beforeDevCommand": ""
+                }
+              }
+              EOF
+              
+              # Use cargo-tauri build with config override file
+              cargo tauri build --no-bundle --ci --config tauri.nix.conf.json
               
               cd ..
               
