@@ -38,68 +38,47 @@
         nativeBuildDeps = with pkgs; [
           pkg-config
           gobject-introspection
-          cargo
-          rustc
-          cargo-tauri
           wrapGAppsHook4
           ffmpeg
           pulseaudio
-          openssl
         ];
 
       in {
         packages = {
-          default = pkgs.stdenv.mkDerivation rec {
+          default = pkgs.rustPlatform.buildRustPackage rec {
             pname = "kortex";
             version = "0.8.11";
 
             src = ./.;
 
-            nativeBuildInputs = nativeBuildDeps;
-            buildInputs = runtimeLibs ++ [ pythonEnv ];
+            # Point to the Cargo workspace in src-tauri
+            cargoRoot = "src-tauri";
+            buildAndTestSubdir = "src-tauri";
 
-            CARGO_HOME = "$TMPDIR/cargo";
+            cargoLock = {
+              lockFile = ./src-tauri/Cargo.lock;
+            };
+
+            nativeBuildInputs = nativeBuildDeps ++ [ pkgs.pkg-config ];
+            buildInputs = runtimeLibs ++ [ pythonEnv pkgs.openssl ];
+
+            # Environment variables for the build
             OPENSSL_NO_VENDOR = 1;
-            PKG_CONFIG_PATH = "${pkgs.openssl.dev}/lib/pkgconfig";
 
-            configurePhase = ''
-              runHook preConfigure
-              
-              export CARGO_HOME="$TMPDIR/cargo"
-              mkdir -p $CARGO_HOME
-              export HOME=$TMPDIR
-              
-              runHook postConfigure
-            '';
-
-            buildPhase = ''
-              runHook preBuild
-              
-              # Frontend is pre-built and included in the repo (dist/)
-              # No need to run bun install or bun build
-              
-              echo "Using pre-built frontend from dist/..."
+            # Copy pre-built frontend to the right location before build
+            preBuild = ''
+              # Tauri expects the frontend at ../dist relative to src-tauri
+              echo "Frontend dist contents:"
               ls -la dist/
-              
-              echo "Building Tauri application..."
-              cd src-tauri
-              # Build without specifying bundles - we just need the binary
-              cargo build --release
-              cd ..
-              
-              runHook postBuild
             '';
 
-            installPhase = ''
-              runHook preInstall
-              
-              mkdir -p $out/bin
-              cp src-tauri/target/release/kortex $out/bin/
-              
+            postInstall = ''
+              # Install transcription resources
               mkdir -p $out/share/kortex/transcription
               cp src-tauri/src/audio/transcription/transcribe.py $out/share/kortex/transcription/
               cp src-tauri/src/audio/transcription/requirements.txt $out/share/kortex/transcription/
               
+              # Install desktop file
               mkdir -p $out/share/applications
               cat > $out/share/applications/kortex.desktop << EOF
               [Desktop Entry]
@@ -112,12 +91,11 @@
               Categories=Office;Productivity;
               EOF
               
+              # Install icons if they exist
               if [ -d "src-tauri/icons" ]; then
                 mkdir -p $out/share/icons/hicolor/128x128/apps
                 cp src-tauri/icons/128x128.png $out/share/icons/hicolor/128x128/apps/kortex.png 2>/dev/null || true
               fi
-              
-              runHook postInstall
             '';
 
             postFixup = ''
@@ -145,13 +123,17 @@
         devShells.default = pkgs.mkShell {
           nativeBuildInputs = nativeBuildDeps ++ [ 
             pythonEnv 
+            pkgs.cargo
+            pkgs.rustc
+            pkgs.cargo-tauri
             pkgs.bun
             pkgs.nodejs
             pkgs.uv
             pkgs.xdg-utils
+            pkgs.pkg-config
           ];
           
-          buildInputs = runtimeLibs;
+          buildInputs = runtimeLibs ++ [ pkgs.openssl ];
 
           OPENSSL_NO_VENDOR = 1;
           PKG_CONFIG_PATH = "${pkgs.openssl.dev}/lib/pkgconfig";
