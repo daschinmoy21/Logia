@@ -49,6 +49,44 @@ A powerful, AI-enhanced notes application built with Tauri and React, designed f
    Use ```bash 
    NO_STRIP=true bun tauri build```
 
+### NixOS / Nix Installation
+
+Kortex is available as a Nix flake for easy installation on NixOS or any system with Nix.
+
+**Run without installing:**
+```bash
+nix run github:daschinmoy21/Kortex
+```
+
+**Install to user profile:**
+```bash
+nix profile install github:daschinmoy21/Kortex
+```
+
+**Add to NixOS configuration:**
+
+1. Add to your flake inputs:
+   ```nix
+   inputs.kortex = {
+     url = "github:daschinmoy21/Kortex";
+     inputs.nixpkgs.follows = "nixpkgs";
+   };
+   ```
+
+2. Pass it through `specialArgs` and use in your config:
+   ```nix
+   environment.systemPackages = [
+     kortex.packages.${pkgs.system}.default
+   ];
+   ```
+
+**Development shell:**
+```bash
+nix develop  # Enters a shell with all dependencies
+bun install
+bun tauri dev
+```
+
 ## Usage
 
 - **Creating Notes**: Use the file tree sidebar to create new notes or organize existing ones
@@ -82,6 +120,27 @@ GOOGLE_GENRATIVE_AI_API_KEY=your_google_key
 - `bun run build` - Build the frontend for production
 - `bun run tauri dev` - Start Tauri development mode
 - `bun run tauri build` - Build the native application
+
+### Updating Frontend for Nix Builds
+
+The `dist/` folder is committed to the repository for reproducible Nix builds. When you make frontend changes, you must rebuild and commit the dist folder:
+
+```bash
+# Enter dev shell (if on NixOS)
+nix develop
+
+# Make your frontend changes...
+
+# Rebuild the frontend
+bun run build
+
+# Commit the updated dist
+git add dist/
+git commit -m "Update frontend build"
+git push
+```
+
+> **Note**: This is required because Nix builds are sandboxed and cannot access the network to run `bun install`. Pre-building ensures reproducible builds for all users.
 
 ## Packaging and Dependencies (Windows)
 
