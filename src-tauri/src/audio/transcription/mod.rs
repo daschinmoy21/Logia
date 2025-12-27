@@ -25,6 +25,9 @@ pub struct TranscriptionError {
 
 // Helper to find the python executable inside a venv across platforms
 fn python_executable_in_venv(venv_path: &PathBuf) -> PathBuf {
+    if let Ok(path) = std::env::var("KORTEX_PYTHON_PATH") {
+        return PathBuf::from(path);
+    }
     if cfg!(windows) {
         let candidates = [
             venv_path.join("Scripts").join("python.exe"),
@@ -54,7 +57,10 @@ pub fn transcribe(app_handle: &AppHandle, wav_path: &str) -> Result<String, Stri
         return Err(format!("Python executable not found at {:?}", python_path));
     }
 
-    let script_path = if cfg!(debug_assertions) {
+    // Check for KORTEX_TRANSCRIBE_SCRIPT env var first (set by Nix package)
+    let script_path = if let Ok(script) = std::env::var("KORTEX_TRANSCRIBE_SCRIPT") {
+        PathBuf::from(script)
+    } else if cfg!(debug_assertions) {
         PathBuf::from("src/audio/transcription/transcribe.py")
     } else {
         app_handle.path().resolve("src/audio/transcription/transcribe.py", BaseDirectory::Resource)

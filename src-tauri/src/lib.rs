@@ -545,6 +545,11 @@ async fn stop_recording(app_handle: tauri::AppHandle) -> Result<String, String> 
 
 // Helper to find the python executable inside a venv across platforms
 fn python_executable_in_venv(venv_path: &std::path::PathBuf) -> std::path::PathBuf {
+    // Check for explicit override from environment (e.g. NixOS)
+    if let Ok(path) = std::env::var("KORTEX_PYTHON_PATH") {
+        return std::path::PathBuf::from(path);
+    }
+
     if cfg!(windows) {
         let candidates = [
             venv_path.join("Scripts").join("python.exe"),
@@ -561,6 +566,13 @@ fn python_executable_in_venv(venv_path: &std::path::PathBuf) -> std::path::PathB
         venv_path.join("Scripts").join("python.exe")
     } else {
         let p = venv_path.join("bin").join("python");
+        if p.exists() {
+            return p;
+        }
+        let p3 = venv_path.join("bin").join("python3");
+        if p3.exists() {
+            return p3;
+        }
         p
     }
 }
@@ -595,6 +607,14 @@ async fn ensure_transcription_dependencies(app_handle: &tauri::AppHandle) -> Res
 
     append_to_log(&log_path, &format!("[{}] Starting dependency check/install", chrono::Utc::now().to_rfc3339()));
 
+    // Check if we are using system python override
+    if let Ok(_) = std::env::var("KORTEX_PYTHON_PATH") {
+        println!("Using KORTEX_PYTHON_PATH from environment, skipping venv creation");
+        append_to_log(&log_path, "KORTEX_PYTHON_PATH set, skipping venv creation/check");
+        // Return a placeholder since python_executable_in_venv will ignore it anyway
+        return Ok(app_data_dir.join("system_python_override"));
+    }
+
     let venv_path = app_data_dir.join("transcription_venv");
 
     let mut cmd_uv_check = Command::new("uv");
@@ -626,6 +646,11 @@ async fn ensure_transcription_dependencies(app_handle: &tauri::AppHandle) -> Res
                     let _ = std::fs::remove_dir_all(&venv_path);
                 }
             }
+        } else {
+            // Venv dir exists but python binary is missing? it's broken.
+            println!("Venv directory exists but python binary missing. Recreating...");
+            append_to_log(&log_path, "Venv broken (no python binary), removing to recreate");
+            let _ = std::fs::remove_dir_all(&venv_path);
         }
     }
 
@@ -634,7 +659,7 @@ async fn ensure_transcription_dependencies(app_handle: &tauri::AppHandle) -> Res
         println!("Creating virtual environment...");
         append_to_log(&log_path, "Creating virtual environment...");
 
-        let venv_created = if uv_available {
+        let mut venv_created = if uv_available {
             let mut cmd_uv_venv = Command::new("uv");
             cmd_uv_venv.args(&["venv", &venv_path.to_string_lossy(), "--python", "3.12"]);
             hide_console(&mut cmd_uv_venv);
@@ -642,6 +667,9 @@ async fn ensure_transcription_dependencies(app_handle: &tauri::AppHandle) -> Res
             if status {
                 println!("Created venv with uv (Python 3.12)");
                 append_to_log(&log_path, "Created venv with uv (Python 3.12)");
+            } else {
+                 println!("uv failed to create venv");
+                 append_to_log(&log_path, "uv failed to create venv");
             }
             status
         } else if cfg!(windows) {
@@ -673,6 +701,13 @@ async fn ensure_transcription_dependencies(app_handle: &tauri::AppHandle) -> Res
                 true
             }
         } else {
+            false
+        };
+
+        if !venv_created {
+            println!("uv failed or not available, falling back to python3...");
+            append_to_log(&log_path, "uv failed/missing, falling back to python3");
+
             // Unix-like fallback to python3
             let mut cmd_py3 = Command::new("python3");
             cmd_py3.args(&["-m", "venv", &venv_path.to_string_lossy()]);
@@ -683,12 +718,14 @@ async fn ensure_transcription_dependencies(app_handle: &tauri::AppHandle) -> Res
                 println!("Created venv with python3");
                 append_to_log(&log_path, "Created venv with python3");
             }
-            status
-        };
+            venv_created = status;
+        }
 
         if !venv_created {
             append_to_log(&log_path, "Failed to create virtual environment");
             return Err("Failed to create virtual environment".to_string());
+        } else{
+            println!("Venv works gng");
         }
     }
 
@@ -697,6 +734,16 @@ async fn ensure_transcription_dependencies(app_handle: &tauri::AppHandle) -> Res
 
     if !python_path.exists() {
         append_to_log(&log_path, "Python executable not found in venv after creation");
+        // Debug: list directory
+        if let Ok(entries) = std::fs::read_dir(venv_path.join("bin")) {
+             for entry in entries {
+                 if let Ok(e) = entry {
+                     append_to_log(&log_path, &format!("Found in bin: {:?}", e.path()));
+                 }
+             }
+        } else {
+             append_to_log(&log_path, "Could not list bin directory (missing?)");
+        }
         return Err("Python executable not found in venv after creation".to_string());
     }
 

@@ -135,13 +135,10 @@ def main():
             return
 
         print("Detecting device...", file=sys.stderr)
-        # Detect CUDA availability
-        device = (
-            "cuda"
-            if os.path.exists("/dev/nvidia0") or os.path.exists("CUDA_PATH")
-            else "cpu"
-        )
-        compute_type = "float16" if device == "cuda" else "int8"
+        # Force CPU mode - the nixpkgs ctranslate2 doesn't have CUDA support
+        # To enable CUDA, install ctranslate2 with CUDA support
+        device = "cpu"
+        compute_type = "int8"
 
         print(f"Using device: {device}, compute_type: {compute_type}", file=sys.stderr)
 

@@ -42,10 +42,18 @@ export function useEditorContext() {
 // // function to convert file to base64
 const convertFileToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
+    console.log("Starting base64 conversion for:", file.name, file.type, file.size);
     const reader = new FileReader();
     reader.readAsDataURL(file);
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = (error) => reject(error);
+    reader.onload = () => {
+      const result = reader.result as string;
+      console.log("Base64 conversion successful. Length:", result.length, "Prefix:", result.substring(0, 50));
+      resolve(result);
+    };
+    reader.onerror = (error) => {
+      console.error("Base64 conversion failed:", error);
+      reject(error);
+    };
   });
 };
 
@@ -93,7 +101,14 @@ export function EditorProvider({
     ] : [],
     initialContent: currentNote?.content ? JSON.parse(currentNote.content) : undefined,
     uploadFile: async (file: File) => {
-      return convertFileToBase64(file);
+      console.log("uploadFile triggered for:", file);
+      try {
+        const base64 = await convertFileToBase64(file);
+        return base64;
+      } catch (e) {
+        console.error("uploadFile failed:", e);
+        throw e;
+      }
     },
   });
 

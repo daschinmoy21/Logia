@@ -11,6 +11,13 @@ in
       cargo-tauri
       bun
       wrapGAppsHook4 # Fixes portal/settings access by wrapping the binary
+      ffmpeg
+      pulseaudio # Provides pactl
+      (python3.withPackages (python-pkgs:
+        with python-pkgs; [
+          faster-whisper
+        ]))
+      uv
     ];
 
     buildInputs = with pkgs; [
@@ -36,6 +43,9 @@ in
     shellHook = ''
       # Points Tauri/WebKit to the portal and schema settings
       export XDG_DATA_DIRS=${pkgs.gsettings-desktop-schemas}/share/gsettings-schemas/${pkgs.gsettings-desktop-schemas.name}:${pkgs.gtk3}/share/gsettings-schemas/${pkgs.gtk3.name}:$XDG_DATA_DIRS
+
+      # Explicit python path for NixOS (uses the wrapped python with packages)
+      export KORTEX_PYTHON_PATH="$(which python)"
 
       # Fixes "Could not find document directory" by helping GIO find modules
       export GIO_MODULE_DIR="${pkgs.glib-networking}/lib/gio/modules/";
