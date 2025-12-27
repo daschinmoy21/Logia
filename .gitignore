@@ -8,7 +8,8 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
-dist
+# dist is tracked for Nix reproducible builds (pre-built frontend)
+# Run 'bun run build' to update it before committing
 dist-ssr
 *.local
 

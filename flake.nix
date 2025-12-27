@@ -41,13 +41,10 @@
           cargo
           rustc
           cargo-tauri
-          bun
-          nodejs
           wrapGAppsHook4
           ffmpeg
           pulseaudio
           openssl
-          cacert
         ];
 
       in {
@@ -65,14 +62,6 @@
             OPENSSL_NO_VENDOR = 1;
             PKG_CONFIG_PATH = "${pkgs.openssl.dev}/lib/pkgconfig";
 
-            # Allow network access for bun install
-            # This is required because Bun doesn't have proper Nix integration yet
-            __noChroot = true;
-            
-            # SSL certificates for network access
-            SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
-            NIX_SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
-
             configurePhase = ''
               runHook preConfigure
               
@@ -80,18 +69,17 @@
               mkdir -p $CARGO_HOME
               export HOME=$TMPDIR
               
-              # Install dependencies with bun
-              echo "Installing frontend dependencies..."
-              ${pkgs.bun}/bin/bun install --frozen-lockfile
-              
               runHook postConfigure
             '';
 
             buildPhase = ''
               runHook preBuild
               
-              echo "Building frontend..."
-              ${pkgs.bun}/bin/bun run build
+              # Frontend is pre-built and included in the repo (dist/)
+              # No need to run bun install or bun build
+              
+              echo "Using pre-built frontend from dist/..."
+              ls -la dist/
               
               echo "Building Tauri application..."
               cd src-tauri
@@ -152,10 +140,12 @@
           };
         };
 
-        # Development shell
+        # Development shell (still uses bun for live development)
         devShells.default = pkgs.mkShell {
           nativeBuildInputs = nativeBuildDeps ++ [ 
             pythonEnv 
+            pkgs.bun
+            pkgs.nodejs
             pkgs.uv
             pkgs.xdg-utils
           ];
@@ -173,8 +163,8 @@
             export DBUS_SESSION_BUS_ADDRESS=''${DBUS_SESSION_BUS_ADDRESS:-unix:path=$XDG_RUNTIME_DIR/bus}
             
             echo "🚀 Kortex development shell loaded!"
-            echo "   Run 'bun tauri dev' to start development"
-            echo "   Run 'bun tauri build' to build for release"
+            echo "   Run 'bun install' then 'bun tauri dev' to start development"
+            echo "   Run 'bun run build' to rebuild the frontend (commit dist/ for Nix builds)"
           '';
         };
 
