@@ -41,6 +41,7 @@
           wrapGAppsHook4
           ffmpeg
           pulseaudio
+          cargo-tauri
         ];
 
       in {
@@ -65,14 +66,30 @@
             # Environment variables for the build
             OPENSSL_NO_VENDOR = 1;
 
-            # Copy pre-built frontend to the right location before build
-            preBuild = ''
-              # Tauri expects the frontend at ../dist relative to src-tauri
+            # Override the default build phase to use cargo-tauri properly
+            buildPhase = ''
+              runHook preBuild
+              
               echo "Frontend dist contents:"
               ls -la dist/
+              
+              cd src-tauri
+              
+              # Use cargo-tauri build with config override to skip beforeBuildCommand
+              # since we have pre-built frontend
+              cargo tauri build --no-bundle --ci --config '{"build":{"beforeBuildCommand":""}}'
+              
+              cd ..
+              
+              runHook postBuild
             '';
 
-            postInstall = ''
+            installPhase = ''
+              runHook preInstall
+              
+              mkdir -p $out/bin
+              cp src-tauri/target/release/kortex $out/bin/
+              
               # Install transcription resources
               mkdir -p $out/share/kortex/transcription
               cp src-tauri/src/audio/transcription/transcribe.py $out/share/kortex/transcription/
@@ -96,6 +113,8 @@
                 mkdir -p $out/share/icons/hicolor/128x128/apps
                 cp src-tauri/icons/128x128.png $out/share/icons/hicolor/128x128/apps/kortex.png 2>/dev/null || true
               fi
+              
+              runHook postInstall
             '';
 
             postFixup = ''
@@ -125,7 +144,6 @@
             pythonEnv 
             pkgs.cargo
             pkgs.rustc
-            pkgs.cargo-tauri
             pkgs.bun
             pkgs.nodejs
             pkgs.uv
