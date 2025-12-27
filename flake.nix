@@ -83,7 +83,8 @@
               
               echo "Building Tauri application..."
               cd src-tauri
-              cargo tauri build --bundles none
+              # Build without specifying bundles - we just need the binary
+              cargo build --release
               cd ..
               
               runHook postBuild
