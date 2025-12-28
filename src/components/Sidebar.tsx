@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { Resizable } from 're-resizable';
 import { IoSettingsOutline } from 'react-icons/io5';
 import { AiOutlineLayout, AiOutlineFolderAdd } from 'react-icons/ai';
@@ -335,109 +336,117 @@ export const Sidebar = () => {
           </button>
         </div>
         {/* Recording animation div visible when capturing system audio */}
-        {isRecording &&
-          <RecStatus isRecording={isRecording} onStop={async () => {
-            let noteToUpdate = currentNote;
+        <AnimatePresence>
+          {isRecording && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.3, ease: "easeInOut" }}
+              className="overflow-hidden"
+            >
+              <RecStatus isRecording={isRecording} onStop={async () => {
+                let noteToUpdate = currentNote;
 
-            // Create a new note if none exists
-            if (!currentNote) {
-              try {
-                await createNote('text');
-                noteToUpdate = useNotesStore.getState().currentNote;
-              } catch (error) {
-                console.error('Failed to create note:', error);
-                toast.error('❌ Failed to create new note', {
-                  icon: '❌',
-                  style: {
-                    background: '#7f1d1d',
-                    color: '#fca5a5',
-                    border: '1px solid #dc2626',
-                  },
-                });
-                return;
-              }
-            }
-
-            const loadingToast = toast.loading('🎙️ Transcribing audio...', {
-              style: {
-                background: '#1f2937',
-                color: '#fbbf24',
-                border: '1px solid #374151',
-              },
-            });
-
-            try {
-              // stop_recording now handles both stopping and transcription, returning the result JSON string
-              const transcriptionResult = await invoke<string>('stop_recording');
-              // Note: 'appHandle' is injected by Tauri automatically on the rust side, we don't need to pass it from JS usually, 
-              // but the command signature in Rust is `fn stop_recording(app_handle: AppHandle)`. 
-              // Tauri commands automatically providing AppHandle do not need it in the JS invoke arguments.
-              // So `invoke('stop_recording')` is correct.
-
-              setIsRecording(false);
-              console.log('Transcription result:', transcriptionResult);
-
-              let result;
-              try {
-                result = JSON.parse(transcriptionResult);
-              } catch (e) {
-                console.error("Failed to parse transcription result JSON:", e);
-                // If parsing fails, treat the whole string as text if it's not empty
-                result = { text: transcriptionResult };
-              }
-
-              if (result.error) {
-                throw new Error(result.error);
-              }
-
-              if (noteToUpdate && result.text) {
-                // Parse current content, default to empty array if invalid
-                let currentContent = [];
-                if (noteToUpdate.content && noteToUpdate.content.trim()) {
+                // Create a new note if none exists
+                if (!currentNote) {
                   try {
-                    currentContent = JSON.parse(noteToUpdate.content);
-                    if (!Array.isArray(currentContent)) {
-                      currentContent = [];
-                    }
-                  } catch {
-                    currentContent = [];
+                    await createNote('text');
+                    noteToUpdate = useNotesStore.getState().currentNote;
+                  } catch (error) {
+                    console.error('Failed to create note:', error);
+                    toast.error('❌ Failed to create new note', {
+                      icon: '❌',
+                      style: {
+                        background: '#7f1d1d',
+                        color: '#fca5a5',
+                        border: '1px solid #dc2626',
+                      },
+                    });
+                    return;
                   }
                 }
 
-                // Refresh API key from backend at time of processing (avoids race where store wasn't populated yet in packaged builds)
-                let apiKey = googleApiKey;
+                const loadingToast = toast.loading('🎙️ Transcribing audio...', {
+                  style: {
+                    background: '#1f2937',
+                    color: '#fbbf24',
+                    border: '1px solid #374151',
+                  },
+                });
+
                 try {
-                  const runtimeKey = await invoke<string>('get_google_api_key');
-                  if (runtimeKey) apiKey = runtimeKey;
-                } catch (e) {
-                  console.warn('Could not fetch API key at runtime', e);
-                }
+                  // stop_recording now handles both stopping and transcription, returning the result JSON string
+                  const transcriptionResult = await invoke<string>('stop_recording');
+                  // Note: 'appHandle' is injected by Tauri automatically on the rust side, we don't need to pass it from JS usually, 
+                  // but the command signature in Rust is `fn stop_recording(app_handle: AppHandle)`. 
+                  // Tauri commands automatically providing AppHandle do not need it in the JS invoke arguments.
+                  // So `invoke('stop_recording')` is correct.
 
-                if (apiKey) {
-                  // Update toast to processing with AI
-                  toast.loading('🤖 Processing transcription with AI...', {
-                    id: loadingToast,
-                    style: {
-                      background: '#1f2937',
-                      color: '#60a5fa',
-                      border: '1px solid #374151',
-                    },
-                  });
+                  setIsRecording(false);
+                  console.log('Transcription result:', transcriptionResult);
 
+                  let result;
                   try {
-                    // Calculate dynamic timeout based on transcript length
-                    // Base 30s + 10ms per character (approx 1s per 100 chars)
-                    // e.g., 5000 chars (~1000 words) -> 30s + 50s = 80s
-                    const timeoutDuration = Math.max(30000, 30000 + (result.text.length * 10));
-                    console.log(`Setting AI timeout to ${timeoutDuration}ms for ${result.text.length} chars`);
+                    result = JSON.parse(transcriptionResult);
+                  } catch (e) {
+                    console.error("Failed to parse transcription result JSON:", e);
+                    // If parsing fails, treat the whole string as text if it's not empty
+                    result = { text: transcriptionResult };
+                  }
 
-                    const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), timeoutDuration);
+                  if (result.error) {
+                    throw new Error(result.error);
+                  }
 
-                    const client = createGoogleGenerativeAI({ apiKey });
-                    const { text: structuredJson } = await generateText({
-                      model: client('gemini-2.5-flash'),
-                      system: `You are an expert note-taker. Transform the raw transcription into a highly structured, educational note using BlockNote JSON blocks.
+                  if (noteToUpdate && result.text) {
+                    // Parse current content, default to empty array if invalid
+                    let currentContent = [];
+                    if (noteToUpdate.content && noteToUpdate.content.trim()) {
+                      try {
+                        currentContent = JSON.parse(noteToUpdate.content);
+                        if (!Array.isArray(currentContent)) {
+                          currentContent = [];
+                        }
+                      } catch {
+                        currentContent = [];
+                      }
+                    }
+
+                    // Refresh API key from backend at time of processing (avoids race where store wasn't populated yet in packaged builds)
+                    let apiKey = googleApiKey;
+                    try {
+                      const runtimeKey = await invoke<string>('get_google_api_key');
+                      if (runtimeKey) apiKey = runtimeKey;
+                    } catch (e) {
+                      console.warn('Could not fetch API key at runtime', e);
+                    }
+
+                    if (apiKey) {
+                      // Update toast to processing with AI
+                      toast.loading('🤖 Processing transcription with AI...', {
+                        id: loadingToast,
+                        style: {
+                          background: '#1f2937',
+                          color: '#60a5fa',
+                          border: '1px solid #374151',
+                        },
+                      });
+
+                      try {
+                        // Calculate dynamic timeout based on transcript length
+                        // Base 30s + 10ms per character (approx 1s per 100 chars)
+                        // e.g., 5000 chars (~1000 words) -> 30s + 50s = 80s
+                        const timeoutDuration = Math.max(30000, 30000 + (result.text.length * 10));
+                        console.log(`Setting AI timeout to ${timeoutDuration}ms for ${result.text.length} chars`);
+
+                        const controller = new AbortController();
+                        const timeoutId = setTimeout(() => controller.abort(), timeoutDuration);
+
+                        const client = createGoogleGenerativeAI({ apiKey });
+                        const { text: structuredJson } = await generateText({
+                          model: client('gemini-2.5-flash'),
+                          system: `You are an expert note-taker. Transform the raw transcription into a highly structured, educational note using BlockNote JSON blocks.
 
 Your goal is to organize the information for effective learning, using the most appropriate block types.
 
@@ -478,147 +487,149 @@ RULES:
 - Use BOLD text for key terms (using the content array format).
 - Do NOT use generic "list" type. Use specific list item types.
 - Ensure valid JSON syntax with all required fields.`,
-                      prompt: result.text,
-                      abortSignal: controller.signal,
-                    });
-                    clearTimeout(timeoutId);
+                          prompt: result.text,
+                          abortSignal: controller.signal,
+                        });
+                        clearTimeout(timeoutId);
 
-                    // Clean up markdown code blocks if present
-                    const cleanedJson = structuredJson.replace(/```json/g, '').replace(/```/g, '').trim();
-                    console.log('AI structured response:', cleanedJson);
-                    const newBlocks = JSON.parse(cleanedJson);
-                    if (!Array.isArray(newBlocks)) throw new Error("AI output is not an array");
+                        // Clean up markdown code blocks if present
+                        const cleanedJson = structuredJson.replace(/```json/g, '').replace(/```/g, '').trim();
+                        console.log('AI structured response:', cleanedJson);
+                        const newBlocks = JSON.parse(cleanedJson);
+                        if (!Array.isArray(newBlocks)) throw new Error("AI output is not an array");
 
-                    // Insert blocks at cursor position
-                    if (editor) {
-                      const cursorPosition = editor.getTextCursorPosition();
-                      const blockId = cursorPosition.block;
-                      editor.insertBlocks(newBlocks, blockId, 'after');
+                        // Insert blocks at cursor position
+                        if (editor) {
+                          const cursorPosition = editor.getTextCursorPosition();
+                          const blockId = cursorPosition.block;
+                          editor.insertBlocks(newBlocks, blockId, 'after');
 
-                      // Force sync to store to ensure persistence even if user switches notes immediately
-                      const updatedContent = JSON.stringify(editor.document);
-                      updateCurrentNoteContent(updatedContent);
-                      // Explicitly save to backend to be safe
-                      useNotesStore.getState().saveCurrentNote();
+                          // Force sync to store to ensure persistence even if user switches notes immediately
+                          const updatedContent = JSON.stringify(editor.document);
+                          updateCurrentNoteContent(updatedContent);
+                          // Explicitly save to backend to be safe
+                          useNotesStore.getState().saveCurrentNote();
+                        } else {
+                          // Fallback: append to content
+                          const updatedContent = [...currentContent, ...newBlocks];
+                          updateCurrentNoteContent(JSON.stringify(updatedContent));
+                        }
+
+                        toast.success('✅ Transcription structured by AI', {
+                          id: loadingToast,
+                          icon: '🎉',
+                          style: {
+                            background: '#065f46',
+                            color: '#10b981',
+                            border: '1px solid #047857',
+                          },
+                        });
+                        toast('Done! 🎊', {
+                          icon: '🎊',
+                          style: {
+                            background: '#7c3aed',
+                            color: '#c4b5fd',
+                            border: '1px solid #6d28d9',
+                          },
+                        });
+                      } catch (error: any) {
+                        console.error('AI structuring failed:', error);
+                        let errorMessage = 'AI structuring failed';
+                        if (error.name === 'AbortError') {
+                          errorMessage = 'AI request timed out (limit based on transcript length)';
+                        } else if (error.message) {
+                          errorMessage = `AI Error: ${error.message}`;
+                        }
+
+                        toast.error(`⚠️ ${errorMessage}. Falling back to raw transcript.`, {
+                          id: loadingToast,
+                          duration: 5000,
+                          style: {
+                            background: '#7f1d1d',
+                            color: '#fca5a5',
+                            border: '1px solid #dc2626',
+                          },
+                        });
+
+                        console.log('Falling back to simple paragraph');
+                        // Fallback to simple paragraph
+                        const newBlock = {
+                          id: Date.now().toString(),
+                          type: 'paragraph',
+                          props: { textColor: 'default', backgroundColor: 'default', textAlignment: 'left' },
+                          content: result.text,
+                          children: []
+                        };
+                        if (editor) {
+                          const cursorPosition = editor.getTextCursorPosition();
+                          const blockId = cursorPosition.block;
+                          editor.insertBlocks([newBlock], blockId, 'after');
+
+                          // Force sync fallback as well
+                          const updatedContent = JSON.stringify(editor.document);
+                          updateCurrentNoteContent(updatedContent);
+                          useNotesStore.getState().saveCurrentNote();
+                        } else {
+                          // Fallback: append to content
+                          const updatedContent = [...currentContent, newBlock];
+                          updateCurrentNoteContent(JSON.stringify(updatedContent));
+                        }
+                      }
                     } else {
-                      // Fallback: append to content
-                      const updatedContent = [...currentContent, ...newBlocks];
-                      updateCurrentNoteContent(JSON.stringify(updatedContent));
+                      // No API key, fallback to simple paragraph
+                      const newBlock = {
+                        id: Date.now().toString(),
+                        props: { textColor: 'default', backgroundColor: 'default', textAlignment: 'left' },
+                        content: result.text,
+                        children: []
+                      };
+                      if (editor) {
+                        const cursorPosition = editor.getTextCursorPosition();
+                        const blockId = cursorPosition.block;
+                        editor.insertBlocks([newBlock], blockId, 'after');
+                      } else {
+                        // Fallback: append to content
+                        const updatedContent = [...currentContent, newBlock];
+                        updateCurrentNoteContent(JSON.stringify(updatedContent));
+                      }
+                      toast.success('✅ Transcription complete', {
+                        id: loadingToast,
+                        icon: '📝',
+                        style: {
+                          background: '#92400e',
+                          color: '#fbbf24',
+                          border: '1px solid #78350f',
+                        },
+                      });
+                      toast('Done! 📝', {
+                        icon: '📝',
+                        style: {
+                          background: '#7c3aed',
+                          color: '#c4b5fd',
+                          border: '1px solid #6d28d9',
+                        },
+                      });
                     }
-
-                    toast.success('✅ Transcription structured by AI', {
-                      id: loadingToast,
-                      icon: '🎉',
-                      style: {
-                        background: '#065f46',
-                        color: '#10b981',
-                        border: '1px solid #047857',
-                      },
-                    });
-                    toast('Done! 🎊', {
-                      icon: '🎊',
-                      style: {
-                        background: '#7c3aed',
-                        color: '#c4b5fd',
-                        border: '1px solid #6d28d9',
-                      },
-                    });
-                  } catch (error: any) {
-                    console.error('AI structuring failed:', error);
-                    let errorMessage = 'AI structuring failed';
-                    if (error.name === 'AbortError') {
-                      errorMessage = 'AI request timed out (limit based on transcript length)';
-                    } else if (error.message) {
-                      errorMessage = `AI Error: ${error.message}`;
-                    }
-
-                    toast.error(`⚠️ ${errorMessage}. Falling back to raw transcript.`, {
-                      id: loadingToast,
-                      duration: 5000,
-                      style: {
-                        background: '#7f1d1d',
-                        color: '#fca5a5',
-                        border: '1px solid #dc2626',
-                      },
-                    });
-
-                    console.log('Falling back to simple paragraph');
-                    // Fallback to simple paragraph
-                    const newBlock = {
-                      id: Date.now().toString(),
-                      type: 'paragraph',
-                      props: { textColor: 'default', backgroundColor: 'default', textAlignment: 'left' },
-                      content: result.text,
-                      children: []
-                    };
-                    if (editor) {
-                      const cursorPosition = editor.getTextCursorPosition();
-                      const blockId = cursorPosition.block;
-                      editor.insertBlocks([newBlock], blockId, 'after');
-
-                      // Force sync fallback as well
-                      const updatedContent = JSON.stringify(editor.document);
-                      updateCurrentNoteContent(updatedContent);
-                      useNotesStore.getState().saveCurrentNote();
-                    } else {
-                      // Fallback: append to content
-                      const updatedContent = [...currentContent, newBlock];
-                      updateCurrentNoteContent(JSON.stringify(updatedContent));
-                    }
-                  }
-                } else {
-                  // No API key, fallback to simple paragraph
-                  const newBlock = {
-                    id: Date.now().toString(),
-                    props: { textColor: 'default', backgroundColor: 'default', textAlignment: 'left' },
-                    content: result.text,
-                    children: []
-                  };
-                  if (editor) {
-                    const cursorPosition = editor.getTextCursorPosition();
-                    const blockId = cursorPosition.block;
-                    editor.insertBlocks([newBlock], blockId, 'after');
                   } else {
-                    // Fallback: append to content
-                    const updatedContent = [...currentContent, newBlock];
-                    updateCurrentNoteContent(JSON.stringify(updatedContent));
+                    toast.success('Transcription complete (no text)', { id: loadingToast });
                   }
-                  toast.success('✅ Transcription complete', {
+                } catch (error) {
+                  console.error('Transcription failed:', error);
+                  toast.error(`❌ Transcription failed: ${error}`, {
                     id: loadingToast,
-                    icon: '📝',
+                    icon: '❌',
                     style: {
-                      background: '#92400e',
-                      color: '#fbbf24',
-                      border: '1px solid #78350f',
+                      background: '#7f1d1d',
+                      color: '#fca5a5',
+                      border: '1px solid #dc2626',
                     },
                   });
-                  toast('Done! 📝', {
-                    icon: '📝',
-                    style: {
-                      background: '#7c3aed',
-                      color: '#c4b5fd',
-                      border: '1px solid #6d28d9',
-                    },
-                  });
+                  setIsRecording(false);
                 }
-              } else {
-                toast.success('Transcription complete (no text)', { id: loadingToast });
-              }
-            } catch (error) {
-              console.error('Transcription failed:', error);
-              toast.error(`❌ Transcription failed: ${error}`, {
-                id: loadingToast,
-                icon: '❌',
-                style: {
-                  background: '#7f1d1d',
-                  color: '#fca5a5',
-                  border: '1px solid #dc2626',
-                },
-              });
-              setIsRecording(false);
-            }
-          }} />
-        }
+              }} />
+            </motion.div>
+          )}
+        </AnimatePresence>
 
 
         {/* File Tree */}

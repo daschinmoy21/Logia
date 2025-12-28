@@ -1,9 +1,8 @@
 import useUiStore from "../store/UiStore";
-import { Sparkles } from 'lucide-react';
 
 interface FooterProps {
-  wordCount: number
-  isSaved: boolean
+  wordCount: number;
+  isSaved: boolean;
 }
 
 export default function Footer({ wordCount }: FooterProps) {
@@ -15,12 +14,6 @@ export default function Footer({ wordCount }: FooterProps) {
         <span>Words: {wordCount}</span>
         {/* <span>{isSaved ? 'Saved' : 'Unsaved'}</span> */}
       </div>
-      <button
-        onClick={() => setIsAiSidebarOpen(!isAiSidebarOpen)}
-        className="text-zinc-400 hover:text-zinc-200 transition-colors"
-      >
-        <Sparkles size={17} />
-      </button>
     </footer>
-  )
+  );
 }

@@ -158,6 +158,22 @@ export function EditorProvider({
         if (currentNote) {
           const content = JSON.stringify(editor.document);
           updateCurrentNoteContent(content);
+
+          // Update title based on first block
+          const firstBlock = editor.document[0];
+          let title = "Untitled";
+          if (firstBlock) {
+            const content = firstBlock.content;
+            if (typeof content === 'string') {
+              title = content || "Untitled";
+            } else if (Array.isArray(content)) {
+              title = content.map((c: any) => c.text).join('') || "Untitled";
+            }
+          }
+          // Only update if changed to avoid loop (store check might be enough but let's be safe)
+          if (currentNote.title !== title) {
+            updateCurrentNoteTitle(title);
+          }
         }
       }, 500); // 500ms debounce
     };

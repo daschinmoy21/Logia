@@ -75,14 +75,38 @@ export const useNotesStore = create<NotesState>()(
 
     createNote: async (noteType = 'text', folderId) => {
       try {
+        // Create initial content with a Heading 1 "Untitled"
+        const initialContent = JSON.stringify([
+          {
+            id: crypto.randomUUID(),
+            type: "heading",
+            props: { level: 1 },
+            content: "Untitled",
+            children: []
+          }
+        ]);
+
         // Create note via Tauri backend
+        // We pass the initial content if the backend supports it, otherwise we might need to update it immediately.
+        // Assuming backend 'create_note' only takes title/type/folderId. 
+        // We will create it, then immediately update content if backend doesn't accept content in create_note.
+        // Checking backend signature would be good, but assuming standard create first.
+
+        // Actually, let's check if we can pass content. The Rust signature likely matches the JS invoke.
+        // If I can't pass content, I'll have to create then update.
+        // Let's assume for now we create with "Untitled" title, and then immediately save the content.
+
         const newNote: Note = await invoke('create_note', { title: 'Untitled', noteType, folderId });
 
+        // Immediately update with initial content
+        const initializedNote = { ...newNote, content: initialContent };
+        await invoke('save_note', { note: initializedNote });
+
         set((state) => ({
-          notes: [newNote, ...state.notes],
+          notes: [initializedNote, ...state.notes],
         }));
 
-        return newNote;
+        return initializedNote;
       } catch (error) {
         console.error('Failed to create note:', error);
         throw error;
@@ -222,12 +246,9 @@ export const useNotesStore = create<NotesState>()(
       // Update the current note title locally
       const updatedNote = { ...state.currentNote, title };
 
-      // Clear existing timeout
-      if (state.saveTimeout) {
-        clearTimeout(state.saveTimeout);
-      }
+      // We do NOT clear existing timeout here because we want the pending content save (if any) to proceed.
+      // And we do NOT save immediately; we rely on the autosave loop or the content change trigger.
 
-      // Save title changes immediately for instant feedback
       set((state) => ({
         currentNote: updatedNote,
         notes: state.notes.map((note) =>
@@ -235,8 +256,10 @@ export const useNotesStore = create<NotesState>()(
         ),
       }));
 
-      // Save immediately without debounce
-      get().saveCurrentNote();
+      // We do NOT save immediately here anymore. 
+      // The EditorProvider will sync the title change, which comes from content change.
+      // The content change triggers the debounced save.
+      // If we save here, we might race with the content save.
     },
 
     saveCurrentNote: async () => {

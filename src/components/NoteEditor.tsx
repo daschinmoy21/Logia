@@ -8,22 +8,23 @@ import { Note } from "../types/Note";
 import { AIMenuController } from "@blocknote/xl-ai";
 import useUiStore from "../store/UiStore";
 
-export function NoteEditor({
-  currentNote,
-  updateCurrentNoteTitle,
-}: {
-  currentNote: Note;
-  updateCurrentNoteTitle: (title: string) => void;
-}) {
+// export function NoteEditor({
+//   currentNote,
+//   updateCurrentNoteTitle,
+// }: {
+//   currentNote: Note;
+//   updateCurrentNoteTitle: (title: string) => void;
+// }) {
+export function NoteEditor() {
   const { editor } = useEditorContext();
   const { googleApiKey } = useUiStore();
 
-  const handleTitleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      editor?.focus();
-    }
-  };
+  // const handleTitleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  //   if (e.key === "Enter") {
+  //     e.preventDefault();
+  //     editor?.focus();
+  //   }
+  // };
 
   if (!editor) {
     return (
@@ -35,8 +36,8 @@ export function NoteEditor({
 
   return (
     <div className="flex flex-col w-full h-full bg-zinc-930">
-      {/* Note title input */}
-      <div className="ml-7 px-6 pt-6 pb-4 border-b border-zinc-700">
+      {/* Note title input removed - syncing with first block */}
+      {/* <div className="ml-7 px-6 pt-6 pb-4 border-b border-zinc-700">
         <input
           type="text"
           value={currentNote?.title || ""}
@@ -45,7 +46,7 @@ export function NoteEditor({
           placeholder="Note title..."
           className="w-full bg-transparent text-2xl font-semibold text-zinc-100 placeholder-zinc-500 focus:outline-none"
         />
-      </div>
+      </div> */}
 
       {/* BlockNote Editor */}
       <div className="flex-1">

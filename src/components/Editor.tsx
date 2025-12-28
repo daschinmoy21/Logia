@@ -30,10 +30,7 @@ function Editor() {
       updateCurrentNoteContent={updateCurrentNoteContent}
       updateCurrentNoteTitle={updateCurrentNoteTitle}
     >
-      <NoteEditor 
-        currentNote={currentNote}
-        updateCurrentNoteTitle={updateCurrentNoteTitle}
-      />
+      <NoteEditor />
     </EditorProvider>
   );
 }
