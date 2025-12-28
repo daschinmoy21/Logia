@@ -1,5 +1,5 @@
 import React from 'react';
-import { FileMinus, PencilRuler, Folder, FolderOpen, ChevronRight, ChevronDown } from 'lucide-react';
+import { FileMinus, PencilRuler, Folder, FolderOpen, ChevronRight, ChevronDown, MoreHorizontal } from 'lucide-react';
 import { RiDeleteBin6Line } from 'react-icons/ri';
 import { useNotesStore } from '../store/notesStore';
 import { Folder as FolderType } from '../types/Note';
@@ -138,8 +138,18 @@ export const AnimatedFileTree: React.FC<AnimatedFileTreeProps> = ({
             )}
           </FolderTrigger>
           <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onContextMenu(e, { folder });
+            }}
+            className="opacity-0 group-hover:opacity-100 p-1 text-zinc-500 hover:text-white ml-auto mr-1 active:scale-95 transition-all"
+            title="More options"
+          >
+            <MoreHorizontal size={14} />
+          </button>
+          <button
             onClick={(e) => onDeleteFolder(folder.id, e)}
-            className="opacity-0 group-hover:opacity-100 p-1 text-zinc-500 hover:text-red-400 ml-2 active:scale-95"
+            className="opacity-0 group-hover:opacity-100 p-1 text-zinc-500 hover:text-red-400 active:scale-95 transition-all"
             title="Delete folder"
           >
             <RiDeleteBin6Line size={12} />
@@ -197,9 +207,19 @@ export const AnimatedFileTree: React.FC<AnimatedFileTreeProps> = ({
                 </div>
 
                 <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onContextMenu(e, { note });
+                  }}
+                  className='opacity-0 group-hover:opacity-100 p-1 text-zinc-500 hover:text-white hover:bg-zinc-700/50 rounded transition-all duration-200 flex-shrink-0 active:scale-95 ml-auto mr-1'
+                  title="More options"
+                >
+                  <MoreHorizontal size={14} />
+                </button>
+                <button
                   onClick={(e) => onDeleteNote(note.id, e)}
                   className='opacity-0 group-hover:opacity-100 p-1 text-zinc-500 hover:text-red-400
-                  hover:bg-zinc-700 rounded transition-all duration-200 flex-shrink-0 active:scale-95 ml-auto'
+                  hover:bg-zinc-700 rounded transition-all duration-200 flex-shrink-0 active:scale-95'
                   title="Delete note"
                 >
                   <RiDeleteBin6Line size={12} />
@@ -273,9 +293,19 @@ export const AnimatedFileTree: React.FC<AnimatedFileTreeProps> = ({
             </div>
 
             <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onContextMenu(e, { note });
+              }}
+              className='opacity-0 group-hover:opacity-100 p-1 text-zinc-500 hover:text-white hover:bg-zinc-700/50 rounded transition-all duration-200 flex-shrink-0 active:scale-95 ml-auto mr-1'
+              title="More options"
+            >
+              <MoreHorizontal size={14} />
+            </button>
+            <button
               onClick={(e) => onDeleteNote(note.id, e)}
               className='opacity-0 group-hover:opacity-100 p-1 text-zinc-500 hover:text-red-400
-              hover:bg-zinc-700 rounded transition-all duration-200 flex-shrink-0 active:scale-95 ml-auto'
+              hover:bg-zinc-700 rounded transition-all duration-200 flex-shrink-0 active:scale-95'
               title="Delete note"
             >
               <RiDeleteBin6Line size={12} />

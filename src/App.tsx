@@ -10,6 +10,7 @@ import useUiStore from "./store/UiStore.ts";
 import { CommandPalette } from "./components/CommandPalette.tsx";
 import Footer from "./components/Footer.tsx";
 import AiSidebar from "./components/AiSidebar.tsx";
+import { Settings } from "./components/Settings.tsx";
 
 import { useNotesStore } from "./store/notesStore";
 import { Toaster } from "react-hot-toast";
@@ -60,6 +61,7 @@ function App() {
   return (
     <div className="bg-zinc-950 flex flex-col h-screen overflow-hidden">
       <PreflightModal />
+      <Settings />
       <CommandPalette />
       <Header />
 
@@ -81,6 +83,9 @@ function App() {
         />
       </div>
       <Toaster
+        containerStyle={{
+          zIndex: 99999,
+        }}
         position="bottom-center"
         reverseOrder={false}
         toastOptions={{

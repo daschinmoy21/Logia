@@ -7,12 +7,8 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { useState, useEffect, useRef } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import Loader from "@/components/Ai-loader";
-import { ShimmeringText } from "../components/animate-ui/text/shimmering";
 import {
-  Bot,
   User,
-  Trash2,
   X,
   Sparkles,
   Calendar as CalendarIcon,
@@ -74,15 +70,6 @@ const AiSidebar = ({ isOpen, onClose }: AiSidebarProps) => {
     }
   }, [googleApiKey]);
 
-  const handleClearChat = () => {
-    if (currentNote) {
-      setMessagesMap((prev) => ({
-        ...prev,
-        [currentNote.id]: [],
-      }));
-    }
-  };
-
   const handleSendMessage = async (message: string) => {
     if (!message.trim()) return;
     if (!googleApiKey || !googleClient) {
@@ -109,7 +96,7 @@ const AiSidebar = ({ isOpen, onClose }: AiSidebarProps) => {
         : "";
 
       const result = await streamText({
-        model: googleClient("gemini-2.5-flash-lite"),
+        model: googleClient("gemini-2.5-flash"),
         system: systemPrompt + noteContext,
         messages: [...messages, userMessage],
       });
@@ -182,8 +169,8 @@ const AiSidebar = ({ isOpen, onClose }: AiSidebarProps) => {
         <motion.div
           initial={{ width: 0, opacity: 0 }}
           animate={{ width: "auto", opacity: 1 }}
-          exit={{ width: 0, opacity: 0 }}
-          transition={{ duration: 0.3, ease: "easeInOut" }}
+          exit={{ width: 0, opacity: 1 }}
+          transition={{ duration: 0.2, ease: "easeInOut" }}
           style={{ height: "100%" }}
         >
           <Resizable
@@ -366,16 +353,6 @@ const AiSidebar = ({ isOpen, onClose }: AiSidebarProps) => {
                           {date?.getDate()}
                         </div>
                       ))}
-                    </div>
-
-                    {/* Placeholder for "Upcoming" or events */}
-                    <div className="mt-auto border-t border-zinc-900 pt-4">
-                      <h4 className="text-xs font-medium text-zinc-500 mb-2 uppercase tracking-wide">
-                        Events
-                      </h4>
-                      <div className="text-zinc-600 text-sm py-2 italic text-center">
-                        No upcoming events
-                      </div>
                     </div>
                   </div>
                 )}

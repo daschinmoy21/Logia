@@ -54,7 +54,7 @@ export function NoteEditor() {
           editor={editor}
           formattingToolbar={false}
           slashMenu={false}
-          className="h-full bg-zinc-950 px-1 py-2"
+          className="h-full bg-zinc-950 pl-24 pt-20 pr-12"
           data-theming-css-variables-demo
         >
           {/* AI Menu - Only show if API key is present */}
