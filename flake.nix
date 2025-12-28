@@ -76,17 +76,14 @@
               cd src-tauri
               
               # Create a config override file to skip beforeBuildCommand
-              cat > tauri.nix.conf.json << 'EOF'
-              {
-                "build": {
-                  "beforeBuildCommand": "",
-                  "beforeDevCommand": ""
-                }
-              }
+              cat > tauri.nix.conf.toml << 'EOF'
+              [build]
+              beforeBuildCommand = ""
+              beforeDevCommand = ""
               EOF
               
               # Use cargo-tauri build with config override file
-              cargo tauri build --no-bundle --ci --config tauri.nix.conf.json
+              cargo tauri build --no-bundle --ci --config tauri.nix.conf.toml
               
               cd ..
               
