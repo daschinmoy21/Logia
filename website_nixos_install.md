@@ -1,7 +1,3 @@
----
-title: Install on NixOS
-description: How to install Kortex on NixOS and other Linux distributions using Nix.
----
 
 # Install on NixOS
 
