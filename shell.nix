@@ -10,6 +10,7 @@ in
       xdg-utils
       cargo-tauri
       bun
+      nodejs
       wrapGAppsHook4 # Fixes portal/settings access by wrapping the binary
       ffmpeg
       pulseaudio # Provides pactl
