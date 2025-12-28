@@ -1,0 +1,290 @@
+import { useState, useEffect } from "react";
+import { Dialog, DialogPanel } from "@headlessui/react";
+import {
+  KanbanProvider,
+  KanbanBoard,
+  KanbanHeader,
+  KanbanCards,
+  KanbanCard,
+} from "./ui/shadcn-io/kanban";
+import { invoke } from "@tauri-apps/api/core";
+import { Plus, ListTodo, Clock, CheckCircle, Layout } from "lucide-react";
+
+type KanbanTask = {
+  id: string;
+  name: string;
+  column: string;
+  created_at: string;
+  updated_at: string;
+};
+
+interface KanbanBoardContainerProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+export default function KanbanBoardContainer({
+  isOpen,
+  onClose,
+}: KanbanBoardContainerProps) {
+  const [kanbanData, setKanbanData] = useState<KanbanTask[]>([]);
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [editingTaskName, setEditingTaskName] = useState("");
+  const [activeTab, setActiveTab] = useState<"kanban" | "table">("kanban");
+
+  const kanbanColumns = [
+    { id: "todo", name: "Todo" },
+    { id: "in-progress", name: "Doing" },
+    { id: "done", name: "Done" },
+  ];
+
+  const loadKanbanTasks = async () => {
+    try {
+      const tasks = await invoke<KanbanTask[]>("get_kanban_data");
+      setKanbanData(tasks);
+    } catch (error) {
+      console.error("Failed to load kanban tasks:", error);
+    }
+  };
+
+  const saveKanbanData = async (data: KanbanTask[]) => {
+    try {
+      await invoke("save_kanban_data", { tasks: data });
+    } catch (error) {
+      console.error("Failed to save kanban data:", error);
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen) {
+      loadKanbanTasks();
+    }
+  }, [isOpen]);
+
+  const addTask = (columnId: string) => {
+    const newId = Date.now().toString();
+    const newTask: KanbanTask = {
+      id: newId,
+      name: "New Task",
+      column: columnId,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    const newData = [...kanbanData, newTask];
+    setKanbanData(newData);
+    saveKanbanData(newData);
+  };
+
+  const deleteTask = (taskId: string) => {
+    const newData = kanbanData.filter((task) => task.id !== taskId);
+    setKanbanData(newData);
+    saveKanbanData(newData);
+  };
+
+  const startEditingTask = (taskId: string, currentName: string) => {
+    setEditingTaskId(taskId);
+    setEditingTaskName(currentName);
+  };
+
+  const saveTaskName = () => {
+    if (editingTaskId && editingTaskName.trim()) {
+      const newData = kanbanData.map((task) =>
+        task.id === editingTaskId
+          ? {
+              ...task,
+              name: editingTaskName.trim(),
+              updated_at: new Date().toISOString(),
+            }
+          : task,
+      );
+      setKanbanData(newData);
+      saveKanbanData(newData);
+    }
+    setEditingTaskId(null);
+    setEditingTaskName("");
+  };
+
+  const cancelEditing = () => {
+    setEditingTaskId(null);
+    setEditingTaskName("");
+  };
+
+  const getColumnTaskCount = (columnId: string) => {
+    return kanbanData.filter((task) => task.column === columnId).length;
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <Dialog open={isOpen} onClose={onClose} className="relative z-[1000]">
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" />
+      <div
+        className="fixed inset-0 flex items-center justify-center p-4"
+        onClick={onClose}
+      >
+        <DialogPanel
+          className="bg-zinc-900/10 backdrop-blur-xl border border-zinc-400/30 rounded-xl w-full max-w-6xl h-[85vh] overflow-hidden flex flex-col shadow-2xl"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Header Section with Tabs */}
+          <div className="flex items-center border border-zinc-400/40 justify-between px-6 py-4 border-b border-zinc-800/50">
+            <div className="flex items-center space-x-6">
+              <div className="flex items-center space-x-1">
+                <button
+                  onClick={() => setActiveTab("kanban")}
+                  className={`flex items-center px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                    activeTab === "kanban"
+                      ? "bg-zinc-800 text-zinc-100"
+                      : "text-zinc-500 hover:text-zinc-300"
+                  }`}
+                >
+                  <Layout size={16} className="mr-2" />
+                  Kanban View
+                </button>
+              </div>
+            </div>
+
+            {/* Close Button */}
+            {/* <button
+              onClick={onClose}
+              className="text-zinc-500 hover:text-zinc-300 transition-colors"
+            >
+               ✕
+            </button> */}
+          </div>
+
+          {/* Kanban Content */}
+          <div className="flex-1 border overflow-x-auto p-6">
+            {activeTab === "kanban" ? (
+              <KanbanProvider
+                columns={kanbanColumns}
+                data={kanbanData}
+                onDataChange={(newData) => {
+                  setKanbanData(newData);
+                  saveKanbanData(newData);
+                }}
+              >
+                {(column) => (
+                  <KanbanBoard
+                    id={column.id}
+                    className="flex-1 min-w-[300px] h-full flex flex-col mr-4"
+                  >
+                    <KanbanHeader className="mb-4">
+                      <div className="flex items-center justify-between group">
+                        <div className="flex items-center gap-2">
+                          <div
+                            className={`px-2 py-0.5 rounded text-xs font-medium flex items-center ${
+                              column.id === "todo"
+                                ? "bg-zinc-800 text-zinc-400"
+                                : column.id === "in-progress"
+                                  ? "bg-blue-900/30 text-blue-400"
+                                  : "bg-green-900/30 text-green-400"
+                            }`}
+                          >
+                            {column.id === "todo" && (
+                              <ListTodo size={12} className="mr-1.5" />
+                            )}
+                            {column.id === "in-progress" && (
+                              <Clock size={12} className="mr-1.5" />
+                            )}
+                            {column.id === "done" && (
+                              <CheckCircle size={12} className="mr-1.5" />
+                            )}
+                            {column.name}
+                          </div>
+                          <span className="text-zinc-600 text-xs font-medium px-1.5 bg-zinc-800/50 rounded-sm">
+                            {getColumnTaskCount(column.id)}
+                          </span>
+
+                          <button
+                            onClick={() => addTask(column.id)}
+                            className="p-1 text-zinc-500 hover:text-zinc-200 hover:bg-zinc-700/50 rounded transition-colors opacity-0 group-hover:opacity-100"
+                            title="Add Task"
+                          >
+                            <Plus size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    </KanbanHeader>
+
+                    <KanbanCards
+                      id={column.id}
+                      className="flex-1 overflow-y-auto pr-2 space-y-3"
+                    >
+                      {(item) => (
+                        <KanbanCard
+                          key={item.id}
+                          {...item}
+                          onDelete={deleteTask}
+                          className="bg-zinc-950 border border-zinc-800/60 rounded-lg p-3 hover:border-zinc-700 transition-colors group shadow-sm"
+                        >
+                          {editingTaskId === item.id ? (
+                            <input
+                              type="text"
+                              value={editingTaskName}
+                              onChange={(e) =>
+                                setEditingTaskName(e.target.value)
+                              }
+                              onBlur={saveTaskName}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") saveTaskName();
+                                if (e.key === "Escape") cancelEditing();
+                              }}
+                              className="bg-zinc-900 border border-zinc-700/80 rounded px-2 py-1 text-zinc-300 w-full outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20 transition-all text-sm placeholder-zinc-600"
+                              autoFocus
+                            />
+                          ) : (
+                            <div className="flex flex-col gap-2">
+                              <p
+                                className="m-0 font-medium text-sm cursor-pointer text-zinc-300 line-clamp-2"
+                                onDoubleClick={() =>
+                                  startEditingTask(item.id, item.name)
+                                }
+                              >
+                                {item.name}
+                              </p>
+
+                              <div className="flex items-center mt-1">
+                                {/* Type Icon Placeholder */}
+                                <div className="w-5 h-5 flex items-center justify-center rounded bg-zinc-900 border border-zinc-800 text-zinc-600 mr-2">
+                                  <span className="text-[10px] font-serif">
+                                    T
+                                  </span>
+                                </div>
+
+                                {/* Status Pill in Card */}
+                                <div
+                                  className={`px-1.5 py-0.5 rounded text-[10px] font-medium border ${
+                                    item.column === "todo"
+                                      ? "border-zinc-800 text-zinc-500"
+                                      : item.column === "in-progress"
+                                        ? "border-blue-900/30 text-blue-500 bg-blue-900/10"
+                                        : "border-green-900/30 text-green-500 bg-green-900/10"
+                                  }`}
+                                >
+                                  {item.column === "todo"
+                                    ? "Todo"
+                                    : item.column === "in-progress"
+                                      ? "Doing"
+                                      : "Done"}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </KanbanCard>
+                      )}
+                    </KanbanCards>
+                  </KanbanBoard>
+                )}
+              </KanbanProvider>
+            ) : (
+              <div className="flex items-center justify-center h-full text-zinc-500">
+                Table view coming soon
+              </div>
+            )}
+          </div>
+        </DialogPanel>
+      </div>
+    </Dialog>
+  );
+}

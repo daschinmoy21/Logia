@@ -120,7 +120,7 @@ export const KanbanCard = <T extends KanbanItemProps = KanbanItemProps>({
     return (
       <div
         className={cn(
-          'relative flex w-full cursor-grabbing items-center gap-2 rounded-md border border-zinc-700 bg-zinc-800 p-2.5 shadow-xl',
+          'relative flex w-full cursor-grabbing items-center gap-2 rounded-md border border-zinc-700 bg-zinc-800 p-2 shadow-xl',
           className
         )}
       >
@@ -234,6 +234,7 @@ export type KanbanProviderProps<
   columns: C[];
   data: T[];
   onDataChange?: (data: T[]) => void;
+  renderOverlayCard?: (item: T) => ReactNode;
 };
 
 const dropAnimation: DropAnimation = {
@@ -255,6 +256,7 @@ export const KanbanProvider = <
   columns,
   data,
   onDataChange,
+  renderOverlayCard,
 }: KanbanProviderProps<T, C>) => {
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
 
@@ -327,12 +329,16 @@ export const KanbanProvider = <
         </div>
         <DragOverlay dropAnimation={dropAnimation}>
           {activeCardId && (
-            <KanbanCard
-              id={activeCardId}
-              name={data.find(d => d.id === activeCardId)?.name || ''}
-              column={data.find(d => d.id === activeCardId)?.column || ''}
-              isOverlay
-            />
+            renderOverlayCard ? (
+              renderOverlayCard(data.find(d => d.id === activeCardId)!)
+            ) : (
+              <KanbanCard
+                id={activeCardId}
+                name={data.find(d => d.id === activeCardId)?.name || ''}
+                column={data.find(d => d.id === activeCardId)?.column || ''}
+                isOverlay
+              />
+            )
           )}
         </DragOverlay>
       </DndContext>

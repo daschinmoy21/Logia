@@ -4,18 +4,12 @@ import { Resizable } from 're-resizable';
 import { IoSettingsOutline } from 'react-icons/io5';
 import { AiOutlineLayout, AiOutlineFolderAdd } from 'react-icons/ai';
 import { CiSearch } from 'react-icons/ci';
-import { Bot, Plus, ListTodo, Clock, CheckCircle, Command } from 'lucide-react';
+import { Bot, Plus, ListTodo, Command } from 'lucide-react';
 import { Description, Dialog, DialogPanel, DialogTitle } from '@headlessui/react';
 import { useNotesStore } from '../store/notesStore';
 import RecStatus from './RecStatus';
 import useUiStore from '../store/UiStore';
-import {
-  KanbanProvider,
-  KanbanBoard,
-  KanbanHeader,
-  KanbanCards,
-  KanbanCard,
-} from './ui/shadcn-io/kanban';
+import KanbanBoardContainer from './KanbanBoard';
 import { invoke } from '@tauri-apps/api/core';
 import { AnimatedFileTree } from './AnimatedFileTree';
 import { Settings } from './Settings';
@@ -23,13 +17,7 @@ import toast from 'react-hot-toast';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { generateText } from 'ai';
 
-type KanbanTask = {
-  id: string;
-  name: string;
-  column: string;
-  created_at: string;
-  updated_at: string;
-};
+
 
 export const Sidebar = () => {
   // Subscribing to state changes individually
@@ -62,74 +50,7 @@ export const Sidebar = () => {
     setIsMac(navigator.platform.toUpperCase().indexOf('MAC') >= 0);
   }, []);
 
-  // Kanban state
-  const [kanbanData, setKanbanData] = useState<KanbanTask[]>([]);
 
-  // Load kanban tasks
-  const loadKanbanTasks = async () => {
-    try {
-      const tasks = await invoke<KanbanTask[]>('get_kanban_data');
-      setKanbanData(tasks);
-    } catch (error) {
-      console.error('Failed to load kanban tasks:', error);
-    }
-  };
-
-  // Save kanban data
-  const saveKanbanData = async (data: KanbanTask[]) => {
-    try {
-      await invoke('save_kanban_data', { tasks: data });
-    } catch (error) {
-      console.error('Failed to save kanban data:', error);
-    }
-  };
-
-  useEffect(() => {
-    loadKanbanTasks();
-  }, []);
-  const kanbanColumns = [
-    { id: 'todo', name: 'To Do' },
-    { id: 'in-progress', name: 'In Progress' },
-    { id: 'done', name: 'Done' },
-  ];
-  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
-  const [editingTaskName, setEditingTaskName] = useState('');
-
-  const addTask = (columnId: string) => {
-    const newId = Date.now().toString();
-    const newTask: KanbanTask = { id: newId, name: 'New Task', column: columnId, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
-    const newData = [...kanbanData, newTask];
-    setKanbanData(newData);
-    saveKanbanData(newData);
-  };
-
-  const deleteTask = (taskId: string) => {
-    const newData = kanbanData.filter(task => task.id !== taskId);
-    setKanbanData(newData);
-    saveKanbanData(newData);
-  };
-
-  const startEditingTask = (taskId: string, currentName: string) => {
-    setEditingTaskId(taskId);
-    setEditingTaskName(currentName);
-  };
-
-  const saveTaskName = () => {
-    if (editingTaskId && editingTaskName.trim()) {
-      const newData = kanbanData.map(task =>
-        task.id === editingTaskId ? { ...task, name: editingTaskName.trim(), updated_at: new Date().toISOString() } : task
-      );
-      setKanbanData(newData);
-      saveKanbanData(newData);
-    }
-    setEditingTaskId(null);
-    setEditingTaskName('');
-  };
-
-  const cancelEditing = () => {
-    setEditingTaskId(null);
-    setEditingTaskName('');
-  };
 
   // Getting UI actions
   const {
@@ -851,87 +772,8 @@ RULES:
       )}
 
       {/* Kanban dialog */}
-      {isKanbanOpen && (
-        <Dialog
-          open={isKanbanOpen}
-          onClose={() => setIsKanbanOpen(false)}
-          className="relative z-[1000]"
-        >
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" />
-          <div className="fixed inset-0 flex items-center justify-center p-4" onClick={() => setIsKanbanOpen(false)}>
-            <DialogPanel className="bg-zinc-900 border border-zinc-700 rounded-xl p-6 w-full max-w-6xl h-[80vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
-              <div className="flex justify-between items-center mb-4">
-                <DialogTitle className="text-white font-medium">
-                  Kanban Board
-                </DialogTitle>
-                <button
-                  onClick={() => setIsKanbanOpen(false)}
-                  className="text-zinc-400 hover:text-white text-xl font-bold"
-                >
-                  ×
-                </button>
-              </div>
-              <KanbanProvider
-                columns={kanbanColumns}
-                data={kanbanData}
-                onDataChange={(newData) => {
-                  setKanbanData(newData);
-                  saveKanbanData(newData);
-                }}
-              >
-                {(column) => (
-                  <KanbanBoard id={column.id} className="flex-1">
-                    <KanbanHeader>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 text-zinc-200">
-                          {column.id === 'todo' && <ListTodo size={16} className="text-blue-400" />}
-                          {column.id === 'in-progress' && <Clock size={16} className="text-yellow-400" />}
-                          {column.id === 'done' && <CheckCircle size={16} className="text-green-400" />}
-                          <span className="font-semibold">{column.name}</span>
-                        </div>
-                        <button
-                          onClick={() => addTask(column.id)}
-                          className="p-1 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700 rounded transition-colors"
-                          title="Add Task"
-                        >
-                          <Plus size={14} />
-                        </button>
-                      </div>
-                    </KanbanHeader>
-                    <KanbanCards id={column.id}>
-                      {(item) => (
-                        <KanbanCard key={item.id} {...item} onDelete={deleteTask}>
-                          {editingTaskId === item.id ? (
-                            <input
-                              type="text"
-                              value={editingTaskName}
-                              onChange={(e) => setEditingTaskName(e.target.value)}
-                              onBlur={saveTaskName}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') saveTaskName();
-                                if (e.key === 'Escape') cancelEditing();
-                              }}
-                              className="bg-zinc-950 border border-zinc-700/80 rounded px-2 py-1 text-zinc-300 w-full outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20 transition-all placeholder-zinc-600"
-                              autoFocus
-                            />
-                          ) : (
-                            <p
-                              className="m-0 font-medium text-sm cursor-pointer text-zinc-200"
-                              onDoubleClick={() => startEditingTask(item.id, item.name)}
-                            >
-                              {item.name}
-                            </p>
-                          )}
-                        </KanbanCard>
-                      )}
-                    </KanbanCards>
-                  </KanbanBoard>
-                )}
-              </KanbanProvider>
-            </DialogPanel>
-          </div>
-        </Dialog>
-      )}
+      {/* Kanban dialog moved to separate component */}
+      <KanbanBoardContainer isOpen={isKanbanOpen} onClose={() => setIsKanbanOpen(false)} />
 
       {/* Settings dialog */}
       <Settings />

@@ -4,7 +4,7 @@ import {
   FormattingToolbarWithAI,
   SuggestionMenuWithAI,
 } from "./EditorProvider";
-import { Note } from "../types/Note";
+
 import { AIMenuController } from "@blocknote/xl-ai";
 import useUiStore from "../store/UiStore";
 
