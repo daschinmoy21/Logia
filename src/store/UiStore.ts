@@ -25,6 +25,8 @@ interface UiState {
   isSupportOpen: boolean;
   isRecording: boolean;
   isAiSidebarOpen: boolean;
+  isSidebarFloating: boolean;
+  expandedFolders: Set<string>;
   googleApiKey: string;
   editor: any | null;
 
@@ -40,6 +42,8 @@ interface UiState {
   setIsSupportOpen: (isOpen: boolean) => void;
   setIsRecording: (isRecording: boolean) => void;
   setIsAiSidebarOpen: (isOpen: boolean) => void;
+  setIsSidebarFloating: (isFloating: boolean) => void;
+  setExpandedFolders: (folders: Set<string>) => void;
   setGoogleApiKey: (key: string) => void;
   setEditor: (editor: any) => void;
 }
@@ -86,7 +90,9 @@ const useUiStore = create<UiState>((set) => ({
   isSupportOpen: false,
   isRecording: false,
   isAiSidebarOpen: false,
-  deleteConfirmFolderId:null,
+  isSidebarFloating: false,
+  expandedFolders: new Set(),
+  deleteConfirmFolderId: null,
   googleApiKey: '',
   editor: null,
 
@@ -102,6 +108,8 @@ const useUiStore = create<UiState>((set) => ({
   setIsSupportOpen: (isOpen) => set({ isSupportOpen: isOpen }),
   setIsRecording: (isRecording) => set({ isRecording }),
   setIsAiSidebarOpen: (isOpen) => set({ isAiSidebarOpen: isOpen }),
+  setIsSidebarFloating: (isFloating) => set({ isSidebarFloating: isFloating }),
+  setExpandedFolders: (expandedFolders) => set({ expandedFolders }),
   setGoogleApiKey: (key) => set({ googleApiKey: key }),
   setEditor: (editor) => set({ editor }),
 }));

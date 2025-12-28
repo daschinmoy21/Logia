@@ -12,10 +12,10 @@ import {
   Download,
   ShoppingBag,
   ChevronDown,
-  UserCircle,
   ExternalLink,
   SettingsIcon,
   Layout,
+  PanelLeft,
 } from "lucide-react";
 import {
   Description,
@@ -66,9 +66,7 @@ export const Sidebar = () => {
   const [renamingFolderId, setRenamingFolderId] = useState<string | null>(null);
   const [folderRenameValue, setFolderRenameValue] = useState("");
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
-  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(
-    new Set(),
-  );
+  const expandedFolders = useUiStore((state) => state.expandedFolders);
 
   // Getting UI actions
   const {
@@ -82,6 +80,8 @@ export const Sidebar = () => {
     setIsKanbanOpen,
     setIsRecording,
     setIsSettingsOpen,
+    setIsSidebarFloating,
+    setExpandedFolders,
   } = useUiStore.getState();
 
   useEffect(() => {
@@ -182,19 +182,29 @@ export const Sidebar = () => {
             "w-0.5 bg-zinc-900 hover:bg-blue-500/50 transition-colors delay-150",
         }}
       >
-        {/* === Header: User/Workspace === */}
-        <div className="px-4 py-3 flex items-center justify-between group">
-          <div className="flex items-center gap-2 text-zinc-200 hover:bg-zinc-900/50 p-1.5 -ml-1.5 rounded-md transition-colors cursor-pointer w-full">
-            <div className="w-5 h-5 rounded-sm bg-gradient-to-br from-red-500 to-cyan-400 flex items-center justify-center text-[10px] text-white font-bold shadow-sm"></div>
-            <span className="text-sm font-medium truncate">User</span>
-            <ChevronDown
-              size={14}
-              className="ml-auto text-zinc-500 opacity-0 group-hover:opacity-100 transition-opacity"
-            />
+        {/* === Header: Toggle & Mode === */}
+        <div className="px-4 py-1 flex items-center border border-blue-300/20 justify-between">
+          <div className="flex items-center gap-2 text-zinc-400 text-xs font-medium">
+            Username
           </div>
-          <div className="w-6 h-6 rounded-full bg-zinc-800 flex items-center justify-center text-zinc-400">
-            <UserCircle size={16} />
-          </div>
+
+          <button
+            onClick={() =>
+              setIsSidebarFloating(!useUiStore.getState().isSidebarFloating)
+            }
+            className={`p-1.5 rounded-md transition-colors ${
+              useUiStore.getState().isSidebarFloating
+                ? "text-blue-400 bg-blue-400/10"
+                : "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800"
+            }`}
+            title={
+              useUiStore.getState().isSidebarFloating
+                ? "Pin Sidebar"
+                : "Float Sidebar"
+            }
+          >
+            <PanelLeft size={18} />
+          </button>
         </div>
 
         {/* === Scrollable Content Area === */}
@@ -373,7 +383,8 @@ export const Sidebar = () => {
 
                   try {
                     // 1. Stop recording and get transcript
-                    const transcriptionResult = await invoke<string>("stop_recording");
+                    const transcriptionResult =
+                      await invoke<string>("stop_recording");
                     let transcriptText = "";
 
                     try {
@@ -411,7 +422,8 @@ export const Sidebar = () => {
                     // 3. Process with AI Utility
                     const googleApiKey = useUiStore.getState().googleApiKey;
                     const editor = useUiStore.getState().editor; // Access editor instance
-                    const currentContent = JSON.parse(noteToUpdate.content || "[]") || [];
+                    const currentContent =
+                      JSON.parse(noteToUpdate.content || "[]") || [];
 
                     await processTranscription({
                       transcriptionText: transcriptText,
@@ -419,9 +431,8 @@ export const Sidebar = () => {
                       editor,
                       updateCurrentNoteContent,
                       saveCurrentNote: useNotesStore.getState().saveCurrentNote,
-                      currentContent
+                      currentContent,
                     });
-
                   } catch (e) {
                     console.error("Audio capture process failed", e);
                     toast.error("Recording process failed");

@@ -5,7 +5,7 @@ export default function Header() {
   const { isAiSidebarOpen, setIsAiSidebarOpen } = useUiStore();
 
   return (
-    <header className="h-10 bg-zinc-900 px-4 flex items-center justify-between flex-shrink-0">
+    <header className="h-10 bg-zinc-950/90 px-4 border-b border-zinc-300/20 flex items-center justify-between flex-shrink-0">
       {/* Left side content (if any)
        */}
       <div className="flex items-center text-xs text-zinc-500 font-medium">

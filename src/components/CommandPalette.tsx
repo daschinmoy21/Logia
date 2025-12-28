@@ -10,46 +10,9 @@ export const CommandPalette = () => {
 
   useEffect(() => {
     if (isCommandPaletteOpen) {
-      const handleKeyDown = (e: KeyboardEvent) => {
-        if (e.key === 'ArrowDown') {
-          e.preventDefault();
-          setSelectedIndex((prevIndex) => (prevIndex + 1) % searchResults.length);
-        } else if (e.key === 'ArrowUp') {
-          e.preventDefault();
-          setSelectedIndex((prevIndex) => (prevIndex - 1 + searchResults.length) % searchResults.length);
-        } else if (e.key === 'Enter') {
-          e.preventDefault();
-          if (searchResults[selectedIndex]) {
-            selectNote(searchResults[selectedIndex]);
-            closeCommandPalette();
-            
-            // Focus editor after a short delay to allow component to mount/update
-            setTimeout(() => {
-              // Try to find the BlockNote editor content editable area
-              const editorElement = document.querySelector('.bn-editor') as HTMLElement;
-              if (editorElement) {
-                editorElement.focus();
-              } else {
-                // Fallback for other editor types or if class is different
-                const contentEditable = document.querySelector('[contenteditable="true"]') as HTMLElement;
-                if (contentEditable) {
-                  contentEditable.focus();
-                }
-              }
-            }, 100);
-          }
-        } else if (e.key === 'Escape') {
-          e.preventDefault();
-          closeCommandPalette();
-        }
-      };
-
-      window.addEventListener('keydown', handleKeyDown);
-      return () => {
-        window.removeEventListener('keydown', handleKeyDown);
-      };
+      // Focus the input when palette opens (though autoFocus handles init)
     }
-  }, [isCommandPaletteOpen, searchResults, selectedIndex, selectNote, closeCommandPalette]);
+  }, [isCommandPaletteOpen]);
 
   useEffect(() => {
     setSelectedIndex(0);
@@ -58,6 +21,39 @@ export const CommandPalette = () => {
   if (!isCommandPaletteOpen) {
     return null;
   }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSelectedIndex((prevIndex) => (prevIndex + 1) % searchResults.length);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSelectedIndex((prevIndex) => (prevIndex - 1 + searchResults.length) % searchResults.length);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (searchResults[selectedIndex]) {
+        selectNote(searchResults[selectedIndex]);
+        closeCommandPalette();
+
+        // Focus editor after a short delay
+        setTimeout(() => {
+          const editorElement = document.querySelector('.bn-editor') as HTMLElement;
+          if (editorElement) {
+            editorElement.focus();
+          } else {
+            const contentEditable = document.querySelector('[contenteditable="true"]') as HTMLElement;
+            if (contentEditable) {
+              contentEditable.focus();
+            }
+          }
+        }, 100);
+      }
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      console.log("Escape key pressed in input");
+      closeCommandPalette();
+    }
+  };
 
   return (
     <div className="command-palette-overlay" onClick={closeCommandPalette}>
@@ -68,6 +64,7 @@ export const CommandPalette = () => {
             placeholder="Search notes (Esc to close)"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value, notes)}
+            onKeyDown={handleKeyDown}
             autoFocus
           />
           <ul>
@@ -78,8 +75,7 @@ export const CommandPalette = () => {
                 onClick={() => {
                   selectNote(note);
                   closeCommandPalette();
-                  
-                  // Focus editor after a short delay
+
                   setTimeout(() => {
                     const editorElement = document.querySelector('.bn-editor') as HTMLElement;
                     if (editorElement) {
