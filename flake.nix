@@ -1,5 +1,5 @@
 {
-  description = "Kortex - A modern AI-powered workspace";
+  description = "Logia - A modern AI-powered workspace";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -47,7 +47,7 @@
       in {
         packages = {
           default = pkgs.rustPlatform.buildRustPackage rec {
-            pname = "kortex";
+            pname = "logia";
             version = "0.8.11";
 
             src = ./.;
@@ -94,21 +94,21 @@
               runHook preInstall
               
               mkdir -p $out/bin
-              cp src-tauri/target/release/kortex $out/bin/
+              cp src-tauri/target/release/logia $out/bin/
               
               # Install transcription resources
-              mkdir -p $out/share/kortex/transcription
-              cp src-tauri/src/audio/transcription/transcribe.py $out/share/kortex/transcription/
-              cp src-tauri/src/audio/transcription/requirements.txt $out/share/kortex/transcription/
+              mkdir -p $out/share/logia/transcription
+              cp src-tauri/src/audio/transcription/transcribe.py $out/share/logia/transcription/
+              cp src-tauri/src/audio/transcription/requirements.txt $out/share/logia/transcription/
               
               # Install desktop file
               mkdir -p $out/share/applications
-              cat > $out/share/applications/kortex.desktop << EOF
+              cat > $out/share/applications/logia.desktop << EOF
               [Desktop Entry]
-              Name=Kortex
+              Name=Logia
               Comment=A modern AI-powered workspace
-              Exec=$out/bin/kortex
-              Icon=kortex
+              Exec=$out/bin/logia
+              Icon=logia
               Terminal=false
               Type=Application
               Categories=Office;Productivity;
@@ -117,16 +117,16 @@
               # Install icons if they exist
               if [ -d "src-tauri/icons" ]; then
                 mkdir -p $out/share/icons/hicolor/128x128/apps
-                cp src-tauri/icons/128x128.png $out/share/icons/hicolor/128x128/apps/kortex.png 2>/dev/null || true
+                cp src-tauri/icons/128x128.png $out/share/icons/hicolor/128x128/apps/logia.png 2>/dev/null || true
               fi
               
               runHook postInstall
             '';
 
             postFixup = ''
-              wrapProgram $out/bin/kortex \
-                --set KORTEX_PYTHON_PATH "${pythonEnv}/bin/python" \
-                --set KORTEX_TRANSCRIBE_SCRIPT "$out/share/kortex/transcription/transcribe.py" \
+              wrapProgram $out/bin/logia \
+                --set LOGIA_PYTHON_PATH "${pythonEnv}/bin/python" \
+                --set LOGIA_TRANSCRIBE_SCRIPT "$out/share/logia/transcription/transcribe.py" \
                 --prefix PATH : "${pkgs.lib.makeBinPath [ pkgs.ffmpeg pkgs.pulseaudio ]}" \
                 --prefix XDG_DATA_DIRS : "${pkgs.gsettings-desktop-schemas}/share/gsettings-schemas/${pkgs.gsettings-desktop-schemas.name}" \
                 --prefix XDG_DATA_DIRS : "${pkgs.gtk3}/share/gsettings-schemas/${pkgs.gtk3.name}" \
@@ -135,11 +135,11 @@
 
             meta = with pkgs.lib; {
               description = "A modern AI-powered workspace";
-              homepage = "https://github.com/daschinmoy21/Kortex";
+              homepage = "https://github.com/daschinmoy21/Logia";
               license = licenses.mit;
               maintainers = [];
               platforms = platforms.linux;
-              mainProgram = "kortex";
+              mainProgram = "logia";
             };
           };
         };
@@ -164,12 +164,12 @@
 
           shellHook = ''
             export XDG_DATA_DIRS=${pkgs.gsettings-desktop-schemas}/share/gsettings-schemas/${pkgs.gsettings-desktop-schemas.name}:${pkgs.gtk3}/share/gsettings-schemas/${pkgs.gtk3.name}:$XDG_DATA_DIRS
-            export KORTEX_PYTHON_PATH="$(which python)"
+            export LOGIA_PYTHON_PATH="$(which python)"
             export GIO_MODULE_DIR="${pkgs.glib-networking}/lib/gio/modules/"
             export XDG_RUNTIME_DIR=''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
             export DBUS_SESSION_BUS_ADDRESS=''${DBUS_SESSION_BUS_ADDRESS:-unix:path=$XDG_RUNTIME_DIR/bus}
             
-            echo "🚀 Kortex development shell loaded!"
+            echo "🚀 Logia development shell loaded!"
             echo "   Run 'bun install' then 'bun tauri dev' to start development"
             echo "   Run 'bun run build' to rebuild the frontend (commit dist/ for Nix builds)"
           '';

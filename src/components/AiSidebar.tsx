@@ -103,7 +103,7 @@ const AiSidebar = ({ isOpen, onClose }: AiSidebarProps) => {
     setStreamingMessage("");
 
     try {
-      const systemPrompt = `You are KAi, a helpful AI assistant in a note-taking app called Kortex.
+      const systemPrompt = `You are DaddyAI, a helpful AI assistant in a note-taking app called Logia.
 
 CAPABILITIES:
 1. Chat: Answer questions normally.

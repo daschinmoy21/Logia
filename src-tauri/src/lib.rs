@@ -27,7 +27,7 @@ fn hide_console(cmd: &mut std::process::Command) {
 
 // Encryption key derived from app name (in production, this should be more secure)
 fn get_encryption_key() -> &'static [u8; 32] {
-    b"kortex-app-encryption-key-32byte"
+    b"logia-app-encryption-key--32byte"
 }
 
 fn encrypt_api_key(key: &str) -> Result<String, String> {
@@ -98,11 +98,11 @@ fn default_note_type() -> String {
     "text".to_string()
 }
 
-fn resolve_kortex_dir(app_handle: &tauri::AppHandle, subdir: &str) -> Result<PathBuf, String> {
+fn resolve_logia_dir(app_handle: &tauri::AppHandle, subdir: &str) -> Result<PathBuf, String> {
     // Try standard XDG documents directory first
     let dir_result = app_handle
         .path()
-        .resolve(format!("Kortex/{}", subdir), BaseDirectory::Document);
+        .resolve(format!("Logia/{}", subdir), BaseDirectory::Document);
 
     let target_dir = match dir_result {
         Ok(path) => path,
@@ -113,7 +113,7 @@ fn resolve_kortex_dir(app_handle: &tauri::AppHandle, subdir: &str) -> Result<Pat
                 .resolve("", BaseDirectory::Home)
                 .map_err(|_| "Could not resolve home directory")?;
             
-            home_dir.join("Documents").join("Kortex").join(subdir)
+            home_dir.join("Documents").join("Logia").join(subdir)
         }
     };
 
@@ -126,19 +126,19 @@ fn resolve_kortex_dir(app_handle: &tauri::AppHandle, subdir: &str) -> Result<Pat
 }
 
 fn get_notes_directory(app_handle: &tauri::AppHandle) -> Result<PathBuf, String> {
-    resolve_kortex_dir(app_handle, "notes")
+    resolve_logia_dir(app_handle, "notes")
         .map_err(|_| "Could not find document directory (checked XDG and Home fallback)".to_string())
 }
 
 fn get_folders_directory(app_handle: &tauri::AppHandle) -> Result<PathBuf, String> {
-    resolve_kortex_dir(app_handle, "folders")
+    resolve_logia_dir(app_handle, "folders")
         .map_err(|_| "Could not find document directory (checked XDG and Home fallback)".to_string())
 }
 
 fn get_config_directory(app_handle: &tauri::AppHandle) -> Result<PathBuf, String> {
     let config_dir = app_handle
         .path()
-        .resolve("Kortex", BaseDirectory::AppConfig)
+        .resolve("Logia", BaseDirectory::AppConfig)
         .map_err(|_| "Could not find config directory")?;
 
     if !config_dir.exists() {
@@ -150,7 +150,7 @@ fn get_config_directory(app_handle: &tauri::AppHandle) -> Result<PathBuf, String
 }
 
 fn get_kanban_directory(app_handle: &tauri::AppHandle) -> Result<PathBuf, String> {
-    resolve_kortex_dir(app_handle, "kanban")
+    resolve_logia_dir(app_handle, "kanban")
         .map_err(|_| "Could not find document directory (checked XDG and Home fallback)".to_string())
 }
 
@@ -374,7 +374,7 @@ fn try_delete_keyring(service: &str, username: &str) -> bool {
 }
 
 // Service/username used for storing the Google API key
-const KEYRING_SERVICE: &str = "Kortex";
+const KEYRING_SERVICE: &str = "Logia";
 const KEYRING_USERNAME: &str = "google_api_key";
 
 #[tauri::command]
@@ -546,7 +546,7 @@ async fn stop_recording(app_handle: tauri::AppHandle) -> Result<String, String> 
 // Helper to find the python executable inside a venv across platforms
 fn python_executable_in_venv(venv_path: &std::path::PathBuf) -> std::path::PathBuf {
     // Check for explicit override from environment (e.g. NixOS)
-    if let Ok(path) = std::env::var("KORTEX_PYTHON_PATH") {
+    if let Ok(path) = std::env::var("LOGIA_PYTHON_PATH") {
         return std::path::PathBuf::from(path);
     }
 
@@ -608,9 +608,9 @@ async fn ensure_transcription_dependencies(app_handle: &tauri::AppHandle) -> Res
     append_to_log(&log_path, &format!("[{}] Starting dependency check/install", chrono::Utc::now().to_rfc3339()));
 
     // Check if we are using system python override
-    if let Ok(_) = std::env::var("KORTEX_PYTHON_PATH") {
-        println!("Using KORTEX_PYTHON_PATH from environment, skipping venv creation");
-        append_to_log(&log_path, "KORTEX_PYTHON_PATH set, skipping venv creation/check");
+    if let Ok(_) = std::env::var("LOGIA_PYTHON_PATH") {
+        println!("Using LOGIA_PYTHON_PATH from environment, skipping venv creation");
+        append_to_log(&log_path, "LOGIA_PYTHON_PATH set, skipping venv creation/check");
         // Return a placeholder since python_executable_in_venv will ignore it anyway
         return Ok(app_data_dir.join("system_python_override"));
     }

@@ -1,4 +1,4 @@
-# Kortex
+# Logia
 
 A powerful, AI-enhanced notes application built with Tauri and React, designed for technical content creators and knowledge workers.
 
@@ -26,8 +26,8 @@ A powerful, AI-enhanced notes application built with Tauri and React, designed f
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/daschinmoy21/Kortex.git
-   cd kortex
+   git clone https://github.com/daschinmoy21/Logia.git
+   cd logia
    ```
 
 2. Install dependencies:
@@ -51,24 +51,24 @@ A powerful, AI-enhanced notes application built with Tauri and React, designed f
 
 ### NixOS / Nix Installation
 
-Kortex is available as a Nix flake for easy installation on NixOS or any system with Nix.
+Logia is available as a Nix flake for easy installation on NixOS or any system with Nix.
 
 **Run without installing:**
 ```bash
-nix run github:daschinmoy21/Kortex
+nix run github:daschinmoy21/Logia
 ```
 
 **Install to user profile:**
 ```bash
-nix profile install github:daschinmoy21/Kortex
+nix profile install github:daschinmoy21/Logia
 ```
 
 **Add to NixOS configuration:**
 
 1. Add to your flake inputs:
    ```nix
-   inputs.kortex = {
-     url = "github:daschinmoy21/Kortex";
+   inputs.logia = {
+     url = "github:daschinmoy21/Logia";
      inputs.nixpkgs.follows = "nixpkgs";
    };
    ```
@@ -76,7 +76,7 @@ nix profile install github:daschinmoy21/Kortex
 2. Pass it through `specialArgs` and use in your config:
    ```nix
    environment.systemPackages = [
-     kortex.packages.${pkgs.system}.default
+     logia.packages.${pkgs.system}.default
    ];
    ```
 

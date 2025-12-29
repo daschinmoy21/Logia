@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "kortex",
-  "version": "0.8.20",
-  "identifier": "com.kortex.app",
+  "productName": "logia",
+  "version": "0.9.0",
+  "identifier": "com.logia.app",
   "build": {
     "beforeDevCommand": "bun run dev",
     "devUrl": "http://localhost:1420",
@@ -27,8 +27,8 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "shortDescription": "A modern AI-powered workspace",
-    "copyright": "Copyright © 2025 Kortex",
+    "shortDescription": "A modern AI-powered notes app.",
+    "copyright": "Copyright © 2025 Logia",
     "category": "Productivity",
     "icon": [
       "icons/32x32.png",
