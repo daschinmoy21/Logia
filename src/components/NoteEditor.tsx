@@ -7,24 +7,21 @@ import {
 
 import { AIMenuController } from "@blocknote/xl-ai";
 import useUiStore from "../store/UiStore";
+import { useNotesStore } from "../store/notesStore";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
+import { Slash, Star, Upload } from "lucide-react";
 
-// export function NoteEditor({
-//   currentNote,
-//   updateCurrentNoteTitle,
-// }: {
-//   currentNote: Note;
-//   updateCurrentNoteTitle: (title: string) => void;
-// }) {
 export function NoteEditor() {
   const { editor } = useEditorContext();
   const { googleApiKey } = useUiStore();
-
-  // const handleTitleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-  //   if (e.key === "Enter") {
-  //     e.preventDefault();
-  //     editor?.focus();
-  //   }
-  // };
+  const { currentNote, folders } = useNotesStore();
 
   if (!editor) {
     return (
@@ -34,19 +31,71 @@ export function NoteEditor() {
     );
   }
 
+  const getBreadcrumbPath = () => {
+    if (!currentNote?.folder_id) return [];
+
+    const path: typeof folders = []; // Explicit type for path array
+    let currentFolderId: string | undefined = currentNote.folder_id;
+
+    // Safety break to prevent infinite loops (though shouldn't happen with tree structure)
+    let iterations = 0;
+    while (currentFolderId && iterations < 50) {
+      const folder = folders.find(f => f.id === currentFolderId);
+      if (folder) {
+        path.unshift(folder);
+        currentFolderId = folder.parent_id; // Handle undefined assignment
+      } else {
+        break;
+      }
+      iterations++;
+    }
+    return path;
+  };
+
+  const breadcrumbs = getBreadcrumbPath();
+
   return (
-    <div className="flex flex-col w-full h-full bg-zinc-930">
-      {/* Note title input removed - syncing with first block */}
-      {/* <div className="ml-7 px-6 pt-6 pb-4 border-b border-zinc-700">
-        <input
-          type="text"
-          value={currentNote?.title || ""}
-          onChange={(e) => updateCurrentNoteTitle(e.target.value)}
-          onKeyDown={handleTitleKeyDown}
-          placeholder="Note title..."
-          className="w-full bg-transparent text-2xl font-semibold text-zinc-100 placeholder-zinc-500 focus:outline-none"
-        />
-      </div> */}
+    <div className="flex flex-col w-full h-full bg-zinc-930 relative">
+      {/* Breadcrumbs positioned above the editor */}
+      <div className="absolute top-8 left-24 z-10 w-[calc(100%-8rem)] flex items-center justify-between pointer-events-none">
+        {/* Pointer events auto for children to allow interaction */}
+        <div className="pointer-events-auto overflow-hidden">
+          <Breadcrumb>
+            <BreadcrumbList>
+              <BreadcrumbItem>
+                <BreadcrumbLink className="text-zinc-500 hover:text-zinc-300 text-xs">Home</BreadcrumbLink>
+              </BreadcrumbItem>
+              {breadcrumbs.length > 0 && <BreadcrumbSeparator ><Slash className="size-3 text-zinc-600" /></BreadcrumbSeparator>}
+
+              {breadcrumbs.map((folder) => (
+                <div key={folder.id} className="flex items-center gap-1.5 sm:gap-2.5">
+                  <BreadcrumbItem>
+                    <BreadcrumbLink className="text-zinc-500 hover:text-zinc-300 text-xs text-nowrap">
+                      {folder.name}
+                    </BreadcrumbLink>
+                  </BreadcrumbItem>
+                  <BreadcrumbSeparator><Slash className="size-3 text-zinc-600" /></BreadcrumbSeparator>
+                </div>
+              ))}
+
+              <BreadcrumbItem>
+                <BreadcrumbPage className="text-zinc-300 text-xs font-medium truncate max-w-[200px]">
+                  {currentNote?.title || "Untitled"}
+                </BreadcrumbPage>
+              </BreadcrumbItem>
+            </BreadcrumbList>
+          </Breadcrumb>
+        </div>
+
+        <div className="flex items-center gap-1 pointer-events-auto bg-zinc-930 pl-2">
+          <button className="p-1.5 text-zinc-500 hover:text-yellow-400 hover:bg-zinc-800 rounded-md transition-colors" title="Favorite">
+            <Star size={16} />
+          </button>
+          <button className="p-1.5 text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 rounded-md transition-colors" title="Export">
+            <Upload size={16} />
+          </button>
+        </div>
+      </div>
 
       {/* BlockNote Editor */}
       <div className="flex-1">

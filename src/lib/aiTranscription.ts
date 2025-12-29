@@ -63,6 +63,14 @@ Output MUST be a valid JSON array of blocks. Do not wrap in markdown.
 
 Each block must have: "id" (unique string), "type", "props" (object), "content", "children" (array, usually []).
 
+CRITICAL STRUCTURE RULES:
+1. 'content': This is where the text goes. It can be a simple string OR an array of styled text objects.
+   - Simple: "content": "Hello world"
+   - Styled: "content": [{"type":"text", "text":"Bold", "styles":{"bold":true}}, {"type":"text", "text":" normal", "styles":{}}]
+2. 'children': This is ONLY for nested blocks (like sub-bullets). It MUST NOT contain text objects.
+   - CORRECT: "children": [{"id": "...", "type": "bulletListItem", ...}]
+   - INCORRECT: "children": [{"type":"text", "text":"..."}] -> THIS WILL CRASH THE APP.
+
 AVAILABLE BLOCK STRUCTURES:
 
 1. PARAGRAPHS & QUOTES:
@@ -74,13 +82,15 @@ AVAILABLE BLOCK STRUCTURES:
    - {"id": "unique-id-4", "type": "heading", "props": {"level": 1, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"}, "content": "Main Title", "children": []}
    - {"id": "unique-id-5", "type": "heading", "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"}, "content": "Section Title", "children": []}
    - {"id": "unique-id-6", "type": "heading", "props": {"level": 3, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"}, "content": "Subsection", "children": []}
-   - {"id": "unique-id-7", "type": "heading", "props": {"level": 2, "isToggleable": true, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"}, "content": "Toggleable Section", "children": []}
 
 3. LISTS (Use for steps, features, pros/cons):
    - {"id": "unique-id-8", "type": "bulletListItem", "props": {}, "content": "Point", "children": []}
    - {"id": "unique-id-9", "type": "numberedListItem", "props": {}, "content": "Step 1", "children": []}
    - {"id": "unique-id-10", "type": "checkListItem", "props": {}, "content": "Task", "children": []}
    - {"id": "unique-id-11", "type": "toggleListItem", "props": {}, "content": "Click to reveal detail", "children": []}
+   
+   *NESTING LISTS*: To nest a list item, put the child list item block inside the 'children' array of the parent.
+   - {"id": "parent", "type": "bulletListItem", "content": "Parent", "children": [{"id": "child", "type": "bulletListItem", "content": "Child", "children": []}]}
 
 4. CODE (For technical terms/snippets):
    - {"id": "unique-id-12", "type": "codeBlock", "props": {"language": "javascript", "textColor": "default", "backgroundColor": "default", "textAlignment": "left"}, "content": "console.log('code');", "children": []}
@@ -91,11 +101,9 @@ AVAILABLE BLOCK STRUCTURES:
 RULES:
 - Generate unique IDs for each block (e.g., using random strings or sequential numbers).
 - Organize content logically with headings.
-- Use TABLES for comparisons (e.g., "Option A vs Option B").
-- Use CODE BLOCKS for any programming code or command line output.
+- Use TABLES for comparisons.
+- Use CODE BLOCKS for code.
 - Use BOLD text for key terms (using the content array format).
-- Do NOT use generic "list" type. Use specific list item types.
-- Ensure valid JSON syntax with all required fields.
 - **CRITICAL RULE: The first block MUST be a Heading Level 1 with a VERY SHORT, concise title (max 3-5 words) summarizing the note. This will be used as the filename.**`;
 
         // 4. Generate Content

@@ -20,7 +20,7 @@ import {
   MoreHorizontal,
   Plus,
 } from "lucide-react";
-import toast, { Toaster } from "react-hot-toast";
+import toast from "react-hot-toast";
 import { AnimatePresence, motion } from "framer-motion";
 
 interface AiSidebarProps {
@@ -467,7 +467,7 @@ const AiSidebar = ({ isOpen, onClose }: AiSidebarProps) => {
                 )}
               </div>
             </div>
-            <Toaster />
+
           </Resizable>
         </motion.div>
       )}
