@@ -15,7 +15,7 @@
         "title": "",
         "titleBarStyle": "Visible",
         "width": 1080,
-        "decorations": false,
+        "decorations": true,
         "theme": "Dark",
         "dragDropEnabled": true
       }
