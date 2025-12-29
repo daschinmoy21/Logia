@@ -210,8 +210,8 @@ export const Sidebar = () => {
                     await invoke("start_recording");
                     setIsRecording(true);
                   } catch (error) {
-                    // Simplified error handling for UI cleanliness
-                    toast.error("Recording failed");
+                    console.error("Recording start failed:", error);
+                    toast.error(`Recording failed: ${error}`);
                   }
                 }
               }}
@@ -349,19 +349,29 @@ export const Sidebar = () => {
 
                   try {
                     // 1. Stop recording and get transcript
-                    const transcriptionResult =
-                      await invoke<string>("stop_recording");
+                    console.log("[Logia] Stopping recording...");
+                    let transcriptionResult: string;
+                    try {
+                      transcriptionResult = await invoke<string>("stop_recording");
+                      console.log("[Logia] stop_recording returned:", transcriptionResult);
+                    } catch (stopErr) {
+                      console.error("[Logia] stop_recording invoke failed:", stopErr);
+                      throw new Error(`Stop recording failed: ${stopErr}`);
+                    }
+
                     let transcriptText = "";
 
                     try {
                       const parsed = JSON.parse(transcriptionResult);
                       transcriptText = parsed.text || transcriptionResult;
+                      console.log("[Logia] Parsed transcript text:", transcriptText?.substring(0, 100));
                     } catch {
                       transcriptText = transcriptionResult;
+                      console.log("[Logia] Using raw transcript:", transcriptText?.substring(0, 100));
                     }
 
                     if (!transcriptText || transcriptText.trim() === "") {
-                      throw new Error("No transcript generated");
+                      throw new Error("No transcript generated - empty result");
                     }
 
                     // 2. Ensure we have a note
@@ -401,7 +411,8 @@ export const Sidebar = () => {
                     });
                   } catch (e) {
                     console.error("Audio capture process failed", e);
-                    toast.error("Recording process failed");
+                    const errorMsg = e instanceof Error ? e.message : String(e);
+                    toast.error(`Recording process failed: ${errorMsg}`);
                   } finally {
                     setIsProcessingRecording(false);
                   }
