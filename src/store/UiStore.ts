@@ -24,6 +24,8 @@ interface UiState {
   isKanbanOpen: boolean;
   isSupportOpen: boolean;
   isRecording: boolean;
+  isProcessingRecording: boolean;
+  recordingStartTime: number | null;
   isAiSidebarOpen: boolean;
   isSidebarFloating: boolean;
   expandedFolders: Set<string>;
@@ -41,6 +43,7 @@ interface UiState {
   setIsKanbanOpen: (isOpen: boolean) => void;
   setIsSupportOpen: (isOpen: boolean) => void;
   setIsRecording: (isRecording: boolean) => void;
+  setIsProcessingRecording: (isProcessing: boolean) => void;
   setIsAiSidebarOpen: (isOpen: boolean) => void;
   setIsSidebarFloating: (isFloating: boolean) => void;
   setExpandedFolders: (folders: Set<string>) => void;
@@ -96,6 +99,9 @@ const useUiStore = create<UiState>((set) => ({
   googleApiKey: '',
   editor: null,
 
+  isProcessingRecording: false,
+  recordingStartTime: null,
+
   // Actions for new states
   setDeleteConfirmId: (id) => set({ deleteConfirmId: id }),
   setDeleteConfirmFolderId: (id) => set({ deleteConfirmFolderId: id }),
@@ -106,7 +112,11 @@ const useUiStore = create<UiState>((set) => ({
   setIsSettingsOpen: (isOpen) => set({ isSettingsOpen: isOpen }),
   setIsKanbanOpen: (isOpen) => set({ isKanbanOpen: isOpen }),
   setIsSupportOpen: (isOpen) => set({ isSupportOpen: isOpen }),
-  setIsRecording: (isRecording) => set({ isRecording }),
+  setIsRecording: (isRecording) => set({
+    isRecording,
+    recordingStartTime: isRecording ? Date.now() : null
+  }),
+  setIsProcessingRecording: (isProcessing) => set({ isProcessingRecording: isProcessing }),
   setIsAiSidebarOpen: (isOpen) => set({ isAiSidebarOpen: isOpen }),
   setIsSidebarFloating: (isFloating) => set({ isSidebarFloating: isFloating }),
   setExpandedFolders: (expandedFolders) => set({ expandedFolders }),

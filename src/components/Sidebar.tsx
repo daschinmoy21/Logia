@@ -7,10 +7,7 @@ import {
   Search,
   Files,
   Sparkles,
-  Star,
   Trash2,
-  Download,
-  ShoppingBag,
   ChevronDown,
   ExternalLink,
   SettingsIcon,
@@ -60,7 +57,7 @@ export const Sidebar = () => {
   const contextMenu = useUiStore((state) => state.contextMenu);
   const isKanbanOpen = useUiStore((state) => state.isKanbanOpen);
   const isRecording = useUiStore((state) => state.isRecording);
-  const [isProcessing, setIsProcessing] = useState(false);
+  const isProcessingRecording = useUiStore((state) => state.isProcessingRecording);
 
   // Folder renaming state
   const [renamingFolderId, setRenamingFolderId] = useState<string | null>(null);
@@ -82,6 +79,7 @@ export const Sidebar = () => {
     setIsSettingsOpen,
     setIsSidebarFloating,
     setExpandedFolders,
+    setIsProcessingRecording,
   } = useUiStore.getState();
 
   useEffect(() => {
@@ -192,11 +190,10 @@ export const Sidebar = () => {
             onClick={() =>
               setIsSidebarFloating(!useUiStore.getState().isSidebarFloating)
             }
-            className={`p-1.5 rounded-md transition-colors ${
-              useUiStore.getState().isSidebarFloating
-                ? "text-blue-400 bg-blue-400/10"
-                : "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800"
-            }`}
+            className={`p-1.5 rounded-md transition-colors ${useUiStore.getState().isSidebarFloating
+              ? "text-blue-400 bg-blue-400/10"
+              : "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800"
+              }`}
             title={
               useUiStore.getState().isSidebarFloating
                 ? "Pin Sidebar"
@@ -366,7 +363,7 @@ export const Sidebar = () => {
 
         {/* Recording Status Animation (Slide Up/Down) */}
         <AnimatePresence>
-          {(isRecording || isProcessing) && (
+          {(isRecording || isProcessingRecording) && (
             <motion.div
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: "auto", opacity: 1 }}
@@ -376,9 +373,9 @@ export const Sidebar = () => {
             >
               <RecStatus
                 isRecording={isRecording}
-                isProcessing={isProcessing}
+                isProcessing={isProcessingRecording}
                 onStop={async () => {
-                  setIsProcessing(true);
+                  setIsProcessingRecording(true);
                   setIsRecording(false); // Stop the recording UI immediately
 
                   try {
@@ -408,14 +405,14 @@ export const Sidebar = () => {
                       } catch (e) {
                         console.error("Failed to create note", e);
                         toast.error("Could not create new note");
-                        setIsProcessing(false);
+                        setIsProcessingRecording(false);
                         return;
                       }
                     }
 
                     if (!noteToUpdate) {
                       toast.error("No active note found.");
-                      setIsProcessing(false);
+                      setIsProcessingRecording(false);
                       return;
                     }
 
@@ -437,7 +434,7 @@ export const Sidebar = () => {
                     console.error("Audio capture process failed", e);
                     toast.error("Recording process failed");
                   } finally {
-                    setIsProcessing(false);
+                    setIsProcessingRecording(false);
                   }
                 }}
               />

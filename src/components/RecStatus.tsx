@@ -4,7 +4,8 @@ import { SineWaveCanvas } from "./Wave";
 import { useState, useEffect } from "react";
 import { formatTime } from "../lib/utils";
 
-import Loader from "./Ai-loader";
+
+import useUiStore from "../store/UiStore";
 
 function RecStatus({
   isRecording,
@@ -15,19 +16,23 @@ function RecStatus({
   isProcessing: boolean;
   onStop: () => void;
 }) {
+  const recordingStartTime = useUiStore((state) => state.recordingStartTime);
   const [elapsedTime, setElapsedTime] = useState(0);
 
   useEffect(() => {
     let timer: NodeJS.Timeout;
-    if (isRecording) {
+    if (isRecording && recordingStartTime) {
+      // Update immediately
+      setElapsedTime(Math.floor((Date.now() - recordingStartTime) / 1000));
+
       timer = setInterval(() => {
-        setElapsedTime((prev) => prev + 1);
+        setElapsedTime(Math.floor((Date.now() - recordingStartTime) / 1000));
       }, 1000);
     } else {
       setElapsedTime(0);
     }
     return () => clearInterval(timer);
-  }, [isRecording]);
+  }, [isRecording, recordingStartTime]);
 
   if (isProcessing) {
     return (
