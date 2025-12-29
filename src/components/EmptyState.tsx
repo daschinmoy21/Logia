@@ -13,7 +13,7 @@ export function EmptyState() {
         <div className="text-zinc-100 text-xl font-medium mb-2">
           <ShimmeringText
             className="text-4xl font-semibold"
-            text="Welcome to Kortex"
+            text="Welcome to Logia"
             wave />
         </div>
         <div className="text-zinc-300 text-sm">
