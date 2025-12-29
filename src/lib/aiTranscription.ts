@@ -26,7 +26,7 @@ export const processTranscription = async ({
     googleApiKey,
     editor,
     updateCurrentNoteContent,
-    updateCurrentNoteTitle,
+    updateCurrentNoteTitle: _updateCurrentNoteTitle,
     saveCurrentNote,
     currentContent,
 }: ProcessTranscriptionParams) => {

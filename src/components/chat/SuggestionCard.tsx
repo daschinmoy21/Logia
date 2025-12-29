@@ -1,4 +1,4 @@
-import { Check, X, Plus, Minus, RefreshCw, Edit3, Code, ChevronDown, ChevronUp } from "lucide-react";
+import { Check, X, Plus, Minus, RefreshCw, Edit3, ChevronDown, ChevronUp } from "lucide-react";
 import useUiStore from "../../store/UiStore";
 import { handleAiAction } from "../../lib/editor-actions";
 import toast from "react-hot-toast";

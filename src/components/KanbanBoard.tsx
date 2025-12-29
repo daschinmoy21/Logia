@@ -15,7 +15,6 @@ import {
   Clock,
   CheckCircle,
   Layout,
-  Table as TableIcon,
   X,
   MoreHorizontal,
 } from "lucide-react";
@@ -104,10 +103,10 @@ export default function KanbanBoardContainer({
       const newData = kanbanData.map((task) =>
         task.id === editingTaskId
           ? {
-              ...task,
-              name: editingTaskName.trim(),
-              updated_at: new Date().toISOString(),
-            }
+            ...task,
+            name: editingTaskName.trim(),
+            updated_at: new Date().toISOString(),
+          }
           : task,
       );
       setKanbanData(newData);
@@ -186,11 +185,10 @@ export default function KanbanBoardContainer({
               <div className="flex items-center space-x-1">
                 <button
                   onClick={() => setActiveTab("kanban")}
-                  className={`flex items-center px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                    activeTab === "kanban"
+                  className={`flex items-center px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${activeTab === "kanban"
                       ? "bg-zinc-800 text-zinc-100"
                       : "text-zinc-500 hover:text-zinc-300"
-                  }`}
+                    }`}
                 >
                   <Layout size={16} className="mr-2" />
                   Kanban View
@@ -220,13 +218,12 @@ export default function KanbanBoardContainer({
                     <div className="flex items-center justify-between p-3 mb-2">
                       <div className="flex items-center gap-2">
                         <div
-                          className={`px-2 py-0.5 rounded text-xs font-medium flex items-center ${
-                            column.id === "todo"
+                          className={`px-2 py-0.5 rounded text-xs font-medium flex items-center ${column.id === "todo"
                               ? "bg-zinc-800 text-zinc-400"
                               : column.id === "in-progress"
                                 ? "bg-blue-900/30 text-blue-400"
                                 : "bg-green-900/30 text-green-400"
-                          }`}
+                            }`}
                         >
                           {column.id === "todo" && (
                             <ListTodo size={12} className="mr-1.5" />
@@ -415,13 +412,12 @@ export default function KanbanBoardContainer({
                                         </div>
 
                                         <div
-                                          className={`px-1.5 py-0.5 rounded text-[10px] font-medium border ${
-                                            task.column === "todo"
+                                          className={`px-1.5 py-0.5 rounded text-[10px] font-medium border ${task.column === "todo"
                                               ? "border-zinc-800 text-zinc-500"
                                               : task.column === "in-progress"
                                                 ? "border-blue-900/30 text-blue-500 bg-blue-900/10"
                                                 : "border-green-900/30 text-green-500 bg-green-900/10"
-                                          }`}
+                                            }`}
                                         >
                                           {task.column === "todo"
                                             ? "Todo"

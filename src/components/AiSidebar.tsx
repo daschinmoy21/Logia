@@ -1,5 +1,4 @@
 import { PromptInputBox } from "@/components/ui/ai-prompt-box";
-import { handleAiAction } from "@/lib/editor-actions";
 import { useNotesStore } from "@/store/notesStore";
 import { SuggestionCard } from "./chat/SuggestionCard";
 import useUiStore from "../store/UiStore";
@@ -11,7 +10,6 @@ import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
   User,
-  X,
   Sparkles,
   Calendar as CalendarIcon,
   Hash,
@@ -32,7 +30,7 @@ interface AiSidebarProps {
 
 type Tab = "chat" | "calendar" | "tags";
 
-const AiSidebar = ({ isOpen, onClose }: AiSidebarProps) => {
+const AiSidebar = ({ isOpen, onClose: _onClose }: AiSidebarProps) => {
   const { currentNote } = useNotesStore();
   const { googleApiKey } = useUiStore();
   const [activeTab, setActiveTab] = useState<Tab>("chat");
