@@ -25,7 +25,7 @@ pub struct TranscriptionError {
 
 // Helper to find the python executable inside a venv across platforms
 fn python_executable_in_venv(venv_path: &PathBuf) -> PathBuf {
-    if let Ok(path) = std::env::var("KORTEX_PYTHON_PATH") {
+    if let Ok(path) = std::env::var("LOGIA_PYTHON_PATH") {
         return PathBuf::from(path);
     }
     if cfg!(windows) {
@@ -57,8 +57,8 @@ pub fn transcribe(app_handle: &AppHandle, wav_path: &str) -> Result<String, Stri
         return Err(format!("Python executable not found at {:?}", python_path));
     }
 
-    // Check for KORTEX_TRANSCRIBE_SCRIPT env var first (set by Nix package)
-    let script_path = if let Ok(script) = std::env::var("KORTEX_TRANSCRIBE_SCRIPT") {
+    // Check for LOGIA_TRANSCRIBE_SCRIPT env var first (set by Nix package)
+    let script_path = if let Ok(script) = std::env::var("LOGIA_TRANSCRIBE_SCRIPT") {
         PathBuf::from(script)
     } else if cfg!(debug_assertions) {
         PathBuf::from("src/audio/transcription/transcribe.py")
