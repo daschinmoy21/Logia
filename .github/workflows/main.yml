@@ -1,4 +1,4 @@
-name: Kortex Release
+name: Logia Release
 
 on:
   push:
@@ -80,7 +80,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: "Kortex ${{ github.ref_name }}"
+          releaseName: "Logia ${{ github.ref_name }}"
           releaseBody: "See attached assets."
           releaseDraft: true
           prerelease: false
