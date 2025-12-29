@@ -1,5 +1,7 @@
 import { PromptInputBox } from "@/components/ui/ai-prompt-box";
+import { handleAiAction } from "@/lib/editor-actions";
 import { useNotesStore } from "@/store/notesStore";
+import { SuggestionCard } from "./chat/SuggestionCard";
 import useUiStore from "../store/UiStore";
 import { Resizable } from "re-resizable";
 import { streamText } from "ai";
@@ -35,9 +37,9 @@ const AiSidebar = ({ isOpen, onClose }: AiSidebarProps) => {
   const { googleApiKey } = useUiStore();
   const [activeTab, setActiveTab] = useState<Tab>("chat");
 
-  // Chat State
+  // Chat State - includes actionStatus for persistence
   const [messagesMap, setMessagesMap] = useState<
-    Record<string, { role: "user" | "assistant"; content: string }[]>
+    Record<string, { role: "user" | "assistant"; content: string; actionStatus?: "pending" | "approved" | "refused" }[]>
   >({});
   const [isLoading, setIsLoading] = useState(false);
   const [streamingMessage, setStreamingMessage] = useState<string>("");
@@ -48,6 +50,18 @@ const AiSidebar = ({ isOpen, onClose }: AiSidebarProps) => {
   const [currentDate, setCurrentDate] = useState(new Date());
 
   const messages = currentNote ? messagesMap[currentNote.id] || [] : [];
+
+  // Function to update action status for a message
+  const updateMessageStatus = (messageIndex: number, status: "pending" | "approved" | "refused") => {
+    if (!currentNote) return;
+    setMessagesMap((prev) => {
+      const noteMessages = [...(prev[currentNote.id] || [])];
+      if (noteMessages[messageIndex]) {
+        noteMessages[messageIndex] = { ...noteMessages[messageIndex], actionStatus: status };
+      }
+      return { ...prev, [currentNote.id]: noteMessages };
+    });
+  };
 
   useEffect(() => {
     if (scrollableContainerRef.current) {
@@ -89,8 +103,40 @@ const AiSidebar = ({ isOpen, onClose }: AiSidebarProps) => {
     setStreamingMessage("");
 
     try {
-      const systemPrompt =
-        "You are KAi, a helpful AI assistant in a note-taking app called Kortex.";
+      const systemPrompt = `You are KAi, a helpful AI assistant in a note-taking app called Kortex.
+
+CAPABILITIES:
+1. Chat: Answer questions normally.
+2. Edit: You can ADD, UPDATE, DELETE, or REPLACE content in the note.
+
+=== INSERT ACTIONS ===
+
+FOR CODE BLOCKS:
+{ "type": "editor_action", "action": "insertCode", "description": "Adding code example", "data": { "code": "your code here", "language": "rust" } }
+
+FOR HEADINGS:
+{ "type": "editor_action", "action": "insertHeading", "description": "Adding section", "data": { "text": "Heading Text", "level": 2 } }
+
+FOR PLAIN TEXT:
+{ "type": "editor_action", "action": "insertText", "description": "Adding paragraph", "data": { "text": "Your text here" } }
+
+=== EDIT ACTIONS ===
+
+TO UPDATE EXISTING CONTENT (find by text, then change):
+{ "type": "editor_action", "action": "update", "description": "Fixing typo in X", "data": { "searchText": "text to find", "newContent": "corrected text" } }
+
+TO DELETE CONTENT:
+{ "type": "editor_action", "action": "delete", "description": "Removing section", "data": { "searchText": "text in block to delete" } }
+
+TO REPLACE CONTENT:
+{ "type": "editor_action", "action": "replace", "description": "Replacing X with Y", "data": { "searchText": "old text", "newContent": "new replacement text" } }
+
+=== RULES ===
+- Only output JSON when user asks to edit/add/delete/change the note
+- Use "searchText" to find existing content (a unique phrase from that block)
+- For regular chat, just respond normally without JSON
+- Keep descriptions short and clear
+`;
       const noteContext = currentNote
         ? `\n\nContext:\n---\n${currentNote.content}\n---`
         : "";
@@ -116,15 +162,31 @@ const AiSidebar = ({ isOpen, onClose }: AiSidebarProps) => {
         [currentNote.id]: [...(prev[currentNote.id] || []), assistantMessage],
       }));
       setStreamingMessage("");
-    } catch (error) {
+    } catch (error: any) {
       console.error("AI error:", error);
+
+      // Parse error message for common issues
+      let errorMessage = "⚠️ An error occurred while processing your request.";
+      const errorStr = error?.message || error?.toString() || "";
+
+      if (errorStr.includes("401") || errorStr.includes("API key") || errorStr.includes("authentication")) {
+        errorMessage = "🔑 **API Key Error**\n\nYour API key may be invalid or expired. Please check your API key in Settings.";
+      } else if (errorStr.includes("429") || errorStr.includes("rate") || errorStr.includes("quota") || errorStr.includes("limit")) {
+        errorMessage = "⏳ **Rate Limited**\n\nYou've exceeded the API rate limit. Please wait a moment and try again, or check your quota at [Google AI Studio](https://aistudio.google.com/).";
+      } else if (errorStr.includes("403") || errorStr.includes("forbidden")) {
+        errorMessage = "🚫 **Access Denied**\n\nYour API key doesn't have permission for this model. Check your API key settings.";
+      } else if (errorStr.includes("network") || errorStr.includes("fetch") || errorStr.includes("connect")) {
+        errorMessage = "🌐 **Network Error**\n\nCouldn't connect to the AI service. Please check your internet connection.";
+      }
+
       setMessagesMap((prev) => ({
         ...prev,
         [currentNote.id]: [
           ...(prev[currentNote.id] || []),
-          { role: "assistant", content: "Error occurred." },
+          { role: "assistant", content: errorMessage },
         ],
       }));
+      setStreamingMessage("");
     } finally {
       setIsLoading(false);
     }
@@ -250,40 +312,149 @@ const AiSidebar = ({ isOpen, onClose }: AiSidebarProps) => {
                           </div>
                         </div>
                       ) : (
-                        messages.map((msg, index) => (
-                          <div
-                            key={index}
-                            className={`flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}
-                          >
+                        messages.map((msg, index) => {
+                          // Extract ALL action objects from the message
+                          let actionDataList: any[] = [];
+                          let textContent = msg.content;
+
+                          if (msg.role === "assistant") {
+                            // Find all JSON objects or arrays in the content
+                            const content = msg.content;
+                            let searchStart = 0;
+
+                            while (searchStart < content.length) {
+                              // Look for start of JSON (object or array)
+                              let startChar = '';
+                              let startIdx = -1;
+
+                              const objStart = content.indexOf("{", searchStart);
+                              const arrStart = content.indexOf("[", searchStart);
+
+                              if (objStart !== -1 && (arrStart === -1 || objStart < arrStart)) {
+                                startIdx = objStart;
+                                startChar = "{";
+                              } else if (arrStart !== -1) {
+                                startIdx = arrStart;
+                                startChar = "[";
+                              }
+
+                              if (startIdx === -1) break;
+
+                              const endChar = startChar === "{" ? "}" : "]";
+                              let depth = 0;
+                              let endIdx = -1;
+
+                              for (let i = startIdx; i < content.length; i++) {
+                                if (content[i] === startChar) depth++;
+                                else if (content[i] === endChar) {
+                                  depth--;
+                                  if (depth === 0) {
+                                    endIdx = i;
+                                    break;
+                                  }
+                                }
+                              }
+
+                              if (endIdx !== -1) {
+                                const jsonStr = content.substring(startIdx, endIdx + 1);
+                                try {
+                                  const parsed = JSON.parse(jsonStr);
+
+                                  // Handle array of actions
+                                  if (Array.isArray(parsed)) {
+                                    parsed.forEach((item: any) => {
+                                      if (item.type === "editor_action") {
+                                        actionDataList.push(item);
+                                      }
+                                    });
+                                    // Remove the array from text content
+                                    textContent = textContent.replace(jsonStr, "").trim();
+                                  }
+                                  // Handle single action object
+                                  else if (parsed.type === "editor_action") {
+                                    actionDataList.push(parsed);
+                                    // Remove from text content
+                                    textContent = textContent.replace(jsonStr, "").trim();
+                                  }
+                                } catch (e) {
+                                  // JSON parse failed, skip
+                                }
+                                searchStart = endIdx + 1;
+                              } else {
+                                break;
+                              }
+                            }
+
+                            // Clean up any leftover brackets or commas
+                            textContent = textContent.replace(/^\s*[\[\],\s]+\s*$/, "").trim();
+                          }
+
+                          return (
                             <div
-                              className={`flex-shrink-0 mt-1 size-7 rounded-sm flex items-center justify-center ${msg.role === "user" ? "bg-zinc-800" : "bg-transparent"}`}
+                              key={index}
+                              className={`flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}
                             >
-                              {msg.role === "user" ? (
-                                <User size={14} className="text-zinc-400" />
-                              ) : (
-                                <Sparkles size={16} className="text-blue-400" />
-                              )}
+                              <div
+                                className={`flex-shrink-0 mt-1 size-7 rounded-sm flex items-center justify-center ${msg.role === "user" ? "bg-zinc-800" : "bg-transparent"}`}
+                              >
+                                {msg.role === "user" ? (
+                                  <User size={14} className="text-zinc-400" />
+                                ) : (
+                                  <Sparkles size={16} className="text-blue-400" />
+                                )}
+                              </div>
+                              <div
+                                className={`flex-1 text-sm leading-relaxed ${msg.role === "user" ? "bg-zinc-800 text-zinc-100 px-3 py-2 rounded-lg" : "text-zinc-300"}`}
+                              >
+                                {textContent && (
+                                  <div className={actionDataList.length > 0 ? "mb-3" : ""}>
+                                    <Markdown remarkPlugins={[remarkGfm]}>
+                                      {textContent}
+                                    </Markdown>
+                                  </div>
+                                )}
+                                {actionDataList.length > 0 && (
+                                  <SuggestionCard
+                                    actionDataList={actionDataList}
+                                    status={msg.actionStatus || "pending"}
+                                    onStatusChange={(status) => updateMessageStatus(index, status)}
+                                  />
+                                )}
+                              </div>
                             </div>
-                            <div
-                              className={`flex-1 text-sm leading-relaxed ${msg.role === "user" ? "bg-zinc-800 text-zinc-100 px-3 py-2 rounded-lg" : "text-zinc-300"}`}
-                            >
-                              <Markdown remarkPlugins={[remarkGfm]}>
-                                {msg.content}
-                              </Markdown>
-                            </div>
-                          </div>
-                        ))
+                          );
+                        })
                       )}
 
-                      {isLoading && streamingMessage && (
+                      {isLoading && (
                         <div className="flex gap-3">
                           <div className="mt-1">
-                            <Sparkles size={16} className="text-blue-400" />
+                            <Sparkles
+                              size={16}
+                              className="text-blue-400 animate-pulse"
+                            />
                           </div>
                           <div className="flex-1 text-sm text-zinc-300">
-                            <Markdown remarkPlugins={[remarkGfm]}>
-                              {streamingMessage}
-                            </Markdown>
+                            {streamingMessage ? (
+                              // Check if streaming content looks like an action JSON
+                              streamingMessage.includes('"type": "editor_action"') ||
+                                streamingMessage.includes('"type":"editor_action"') ? (
+                                <div className="flex items-center gap-2">
+                                  <div className="size-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                                  <span className="text-zinc-400 italic">
+                                    Evaluating action...
+                                  </span>
+                                </div>
+                              ) : (
+                                <Markdown remarkPlugins={[remarkGfm]}>
+                                  {streamingMessage}
+                                </Markdown>
+                              )
+                            ) : (
+                              <span className="text-zinc-500 italic animate-pulse">
+                                Thinking...
+                              </span>
+                            )}
                           </div>
                         </div>
                       )}

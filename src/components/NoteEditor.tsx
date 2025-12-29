@@ -1,4 +1,5 @@
 import { BlockNoteView } from "@blocknote/mantine";
+import { useEffect } from "react";
 import {
   useEditorContext,
   FormattingToolbarWithAI,
@@ -20,8 +21,17 @@ import { Slash, Star, Upload } from "lucide-react";
 
 export function NoteEditor() {
   const { editor } = useEditorContext();
-  const { googleApiKey } = useUiStore();
+  const { googleApiKey, setEditor } = useUiStore();
   const { currentNote, folders } = useNotesStore();
+
+  useEffect(() => {
+    if (editor) {
+      setEditor(editor);
+    }
+    return () => {
+      setEditor(null);
+    };
+  }, [editor, setEditor]);
 
   if (!editor) {
     return (

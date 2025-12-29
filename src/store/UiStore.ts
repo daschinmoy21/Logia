@@ -32,6 +32,11 @@ interface UiState {
   googleApiKey: string;
   editor: any | null;
 
+  // AI Chat State (persists across sidebar toggles)
+  aiMessages: Array<{ role: "user" | "assistant"; content: string; actionStatus?: "pending" | "approved" | "refused" }>;
+  aiStreamingMessage: string;
+  aiIsLoading: boolean;
+
   // Actions for new states
   setDeleteConfirmId: (id: string | null) => void;
   setDeleteConfirmFolderId: (id: string | null) => void;
@@ -49,6 +54,14 @@ interface UiState {
   setExpandedFolders: (folders: Set<string>) => void;
   setGoogleApiKey: (key: string) => void;
   setEditor: (editor: any) => void;
+
+  // AI Chat Actions
+  addAiMessage: (message: { role: "user" | "assistant"; content: string }) => void;
+  updateLastAiMessage: (content: string) => void;
+  setAiMessageStatus: (index: number, status: "pending" | "approved" | "refused") => void;
+  setAiStreamingMessage: (msg: string) => void;
+  setAiIsLoading: (loading: boolean) => void;
+  clearAiChat: () => void;
 }
 
 const useUiStore = create<UiState>((set) => ({
@@ -99,6 +112,11 @@ const useUiStore = create<UiState>((set) => ({
   googleApiKey: '',
   editor: null,
 
+  // AI Chat State
+  aiMessages: [],
+  aiStreamingMessage: '',
+  aiIsLoading: false,
+
   isProcessingRecording: false,
   recordingStartTime: null,
 
@@ -122,6 +140,28 @@ const useUiStore = create<UiState>((set) => ({
   setExpandedFolders: (expandedFolders) => set({ expandedFolders }),
   setGoogleApiKey: (key) => set({ googleApiKey: key }),
   setEditor: (editor) => set({ editor }),
+
+  // AI Chat Actions
+  addAiMessage: (message) => set((state) => ({
+    aiMessages: [...state.aiMessages, { ...message, actionStatus: message.role === "assistant" ? "pending" : undefined }]
+  })),
+  updateLastAiMessage: (content) => set((state) => {
+    const msgs = [...state.aiMessages];
+    if (msgs.length > 0 && msgs[msgs.length - 1].role === "assistant") {
+      msgs[msgs.length - 1].content = content;
+    }
+    return { aiMessages: msgs };
+  }),
+  setAiMessageStatus: (index, status) => set((state) => {
+    const msgs = [...state.aiMessages];
+    if (msgs[index]) {
+      msgs[index].actionStatus = status;
+    }
+    return { aiMessages: msgs };
+  }),
+  setAiStreamingMessage: (msg) => set({ aiStreamingMessage: msg }),
+  setAiIsLoading: (loading) => set({ aiIsLoading: loading }),
+  clearAiChat: () => set({ aiMessages: [], aiStreamingMessage: '', aiIsLoading: false }),
 }));
 
 export default useUiStore;

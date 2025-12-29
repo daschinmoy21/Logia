@@ -170,7 +170,7 @@ export default function KanbanBoardContainer({
   if (!isOpen) return null;
 
   return (
-    <Dialog open={isOpen} onClose={onClose} className="relative z-[1000]">
+    <Dialog open={isOpen} onClose={onClose} className="relative z-[99999]">
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" />
       <div
         className="fixed inset-0 flex items-center justify-center p-4"

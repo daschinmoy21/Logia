@@ -12,7 +12,6 @@ import {
   ExternalLink,
   SettingsIcon,
   Layout,
-  PanelLeft,
 } from "lucide-react";
 import {
   Description,
@@ -57,7 +56,9 @@ export const Sidebar = () => {
   const contextMenu = useUiStore((state) => state.contextMenu);
   const isKanbanOpen = useUiStore((state) => state.isKanbanOpen);
   const isRecording = useUiStore((state) => state.isRecording);
-  const isProcessingRecording = useUiStore((state) => state.isProcessingRecording);
+  const isProcessingRecording = useUiStore(
+    (state) => state.isProcessingRecording,
+  );
 
   // Folder renaming state
   const [renamingFolderId, setRenamingFolderId] = useState<string | null>(null);
@@ -77,7 +78,6 @@ export const Sidebar = () => {
     setIsKanbanOpen,
     setIsRecording,
     setIsSettingsOpen,
-    setIsSidebarFloating,
     setExpandedFolders,
     setIsProcessingRecording,
   } = useUiStore.getState();
@@ -180,37 +180,13 @@ export const Sidebar = () => {
             "w-0.5 bg-zinc-900 hover:bg-blue-500/50 transition-colors delay-150",
         }}
       >
-        {/* === Header: Toggle & Mode === */}
-        <div className="px-4 py-1 flex items-center border border-blue-300/20 justify-between">
-          <div className="flex items-center gap-2 text-zinc-400 text-xs font-medium">
-            Username
-          </div>
-
-          <button
-            onClick={() =>
-              setIsSidebarFloating(!useUiStore.getState().isSidebarFloating)
-            }
-            className={`p-1.5 rounded-md transition-colors ${useUiStore.getState().isSidebarFloating
-              ? "text-blue-400 bg-blue-400/10"
-              : "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800"
-              }`}
-            title={
-              useUiStore.getState().isSidebarFloating
-                ? "Pin Sidebar"
-                : "Float Sidebar"
-            }
-          >
-            <PanelLeft size={18} />
-          </button>
-        </div>
-
         {/* === Scrollable Content Area === */}
-        <div className="flex flex-col flex-1 overflow-hidden px-3 gap-4">
+        <div className="flex flex-col flex-1 overflow-hidden px-3 py-2 gap-4">
           {/* 1. Primary Navigation */}
           <div className="space-y-0.5">
             <button
               onClick={openCommandPalette}
-              className="w-full flex items-center gap-3 px-2 py-1.5 text-sm font-medium hover:bg-zinc-900 text-zinc-400 hover:text-zinc-200 rounded-md transition-colors group"
+              className="w-full border border-blue-200/40 flex items-center gap-3 px-2 py-1.5 mb-2 text-sm font-medium hover:bg-zinc-900 text-zinc-400 hover:text-zinc-200 rounded-md transition-colors group"
             >
               <Search size={16} />
               <span>Search</span>
@@ -224,13 +200,6 @@ export const Sidebar = () => {
             >
               <ListTodo size={16} />
               <span>To-do List</span>
-            </button>
-            <button
-              onClick={() => handleCreateNote("canvas")}
-              className="w-full flex items-center gap-3 px-2 py-1.5 text-sm font-medium hover:bg-zinc-900 text-zinc-400 hover:text-zinc-200 rounded-md transition-colors"
-            >
-              <Layout size={16} />
-              <span>New Canvas</span>
             </button>
             <button
               disabled={!currentNote || currentNote.note_type === "canvas"}
