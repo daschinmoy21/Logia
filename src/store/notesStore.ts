@@ -10,13 +10,14 @@ interface NotesState {
   saveTimeout: NodeJS.Timeout | null;
   loadNotes: () => Promise<void>;
   loadFolders: () => Promise<void>;
-  selectNote: (note: Note) => void;
+  selectNote: (note: Note | null) => void;
   createNote: (noteType?: 'text' | 'canvas', folderId?: string) => Promise<Note>;
   createFolder: (name: string, parentId?: string) => Promise<Folder>;
   updateNote: (id: string, updates: Partial<Note>) => Promise<void>;
   updateFolder: (id: string, updates: Partial<Folder>) => Promise<void>;
   deleteNote: (id: string) => Promise<void>;
   deleteFolder: (id: string) => Promise<void>;
+  toggleStar: (id: string) => Promise<void>;
   updateCurrentNoteContent: (content: string) => void;
   updateCurrentNoteTitle: (title: string) => void;
   saveCurrentNote: () => Promise<void>;
@@ -203,6 +204,24 @@ export const useNotesStore = create<NotesState>()(
         }));
       } catch (error) {
         console.error('Failed to delete folder:', error);
+        throw error;
+      }
+    },
+
+    toggleStar: async (id) => {
+      try {
+        const newStarred = await invoke<boolean>('toggle_star_note', { noteId: id });
+
+        set((state) => ({
+          notes: state.notes.map((note) =>
+            note.id === id ? { ...note, starred: newStarred } : note
+          ),
+          currentNote: state.currentNote?.id === id
+            ? { ...state.currentNote, starred: newStarred }
+            : state.currentNote,
+        }));
+      } catch (error) {
+        console.error('Failed to toggle star:', error);
         throw error;
       }
     },

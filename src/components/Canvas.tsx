@@ -1,5 +1,5 @@
 import { useCallback, useRef } from 'react';
-import { Tldraw } from 'tldraw';
+import { Tldraw, setUserPreferences } from 'tldraw';
 import 'tldraw/tldraw.css';
 import { useNotesStore } from '../store/notesStore';
 
@@ -9,7 +9,9 @@ function Canvas() {
 
   const handleMount = useCallback((editor: any) => {
     console.log('Tldraw editor mounted');
-    
+
+    // Set dark mode
+    setUserPreferences({ id: 'logia-user', colorScheme: 'dark' });
     // Load initial data from backend if available
     if (currentNote?.content) {
       try {
@@ -40,7 +42,7 @@ function Canvas() {
     );
 
     return unsubscribe;
-  }, [currentNote?.id]); 
+  }, [currentNote?.id]);
 
   if (!currentNote) return null;
 

@@ -30,6 +30,9 @@ interface UiState {
   isSidebarFloating: boolean;
   expandedFolders: Set<string>;
   googleApiKey: string;
+  googleDriveConnected: boolean;
+  isSyncing: boolean; // [NEW]
+  lastSyncedAt: Date | null; // [NEW]
   editor: any | null;
 
   // AI Chat State (persists across sidebar toggles)
@@ -53,6 +56,9 @@ interface UiState {
   setIsSidebarFloating: (isFloating: boolean) => void;
   setExpandedFolders: (folders: Set<string>) => void;
   setGoogleApiKey: (key: string) => void;
+  setGoogleDriveConnected: (connected: boolean) => void;
+  setIsSyncing: (isSyncing: boolean) => void; // [NEW]
+  setLastSyncedAt: (date: Date | null) => void; // [NEW]
   setEditor: (editor: any) => void;
 
   // AI Chat Actions
@@ -110,6 +116,9 @@ const useUiStore = create<UiState>((set) => ({
   expandedFolders: new Set(),
   deleteConfirmFolderId: null,
   googleApiKey: '',
+  googleDriveConnected: false,
+  isSyncing: false, // [NEW]
+  lastSyncedAt: null, // [NEW]
   editor: null,
 
   // AI Chat State
@@ -139,6 +148,9 @@ const useUiStore = create<UiState>((set) => ({
   setIsSidebarFloating: (isFloating) => set({ isSidebarFloating: isFloating }),
   setExpandedFolders: (expandedFolders) => set({ expandedFolders }),
   setGoogleApiKey: (key) => set({ googleApiKey: key }),
+  setGoogleDriveConnected: (connected) => set({ googleDriveConnected: connected }),
+  setIsSyncing: (isSyncing) => set({ isSyncing }), // [NEW]
+  setLastSyncedAt: (date) => set({ lastSyncedAt: date }), // [NEW]
   setEditor: (editor) => set({ editor }),
 
   // AI Chat Actions

@@ -9,9 +9,13 @@ import {
   Sparkles,
   Trash2,
   ChevronDown,
-  ExternalLink,
   SettingsIcon,
   Layout,
+  Home,
+  Cloud,
+  RotateCw,
+  Github,
+  Star,
 } from "lucide-react";
 import {
   Description,
@@ -28,9 +32,19 @@ import { AnimatedFileTree } from "./AnimatedFileTree";
 import toast from "react-hot-toast";
 import { processTranscription } from "../lib/aiTranscription";
 
+// Type for trash items from backend
+interface TrashItem {
+  id: string;
+  title: string;  // Title from note or name from folder
+  original_type: string;  // "note" or "folder"
+  filename: string;
+  deleted_at: string;
+}
+
 export const Sidebar = () => {
   // Subscribing to state changes individually
   const currentNote = useNotesStore((state) => state.currentNote);
+  const notes = useNotesStore((state) => state.notes);
 
   // Getting actions (they don't cause re-renders)
   const {
@@ -43,8 +57,12 @@ export const Sidebar = () => {
     updateNote,
     updateFolder,
     deleteFolder,
+    toggleStar,
     updateCurrentNoteContent,
   } = useNotesStore.getState();
+
+  // Get starred notes
+  const starredNotes = notes.filter(note => note.starred);
 
   // Subscribing to UI state changes individually
   const deleteConfirmId = useUiStore((state) => state.deleteConfirmId);
@@ -59,12 +77,19 @@ export const Sidebar = () => {
   const isProcessingRecording = useUiStore(
     (state) => state.isProcessingRecording,
   );
+  const googleDriveConnected = useUiStore((state) => state.googleDriveConnected);
+  const isSyncing = useUiStore((state) => state.isSyncing);
 
   // Folder renaming state
   const [renamingFolderId, setRenamingFolderId] = useState<string | null>(null);
   const [folderRenameValue, setFolderRenameValue] = useState("");
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const expandedFolders = useUiStore((state) => state.expandedFolders);
+
+  // Trash dialog state
+  const [isTrashOpen, setIsTrashOpen] = useState(false);
+  const [trashItems, setTrashItems] = useState<TrashItem[]>([]);
+  const [isLoadingTrash, setIsLoadingTrash] = useState(false);
 
   // Getting UI actions
   const {
@@ -166,6 +191,53 @@ export const Sidebar = () => {
     setSelectedFolderId(folderId);
   };
 
+  // Fetch trash items
+  const loadTrashItems = async () => {
+    setIsLoadingTrash(true);
+    try {
+      const items = await invoke<TrashItem[]>('get_trash_items');
+      setTrashItems(items);
+    } catch (error) {
+      console.error('Failed to load trash:', error);
+      toast.error('Failed to load trash items');
+    } finally {
+      setIsLoadingTrash(false);
+    }
+  };
+
+  // Restore item from trash
+  const handleRestore = async (item: TrashItem) => {
+    try {
+      await invoke('restore_from_trash', { itemId: item.id, itemType: item.original_type });
+      toast.success(`${item.original_type === 'note' ? 'Note' : 'Folder'} restored!`);
+      // Refresh both trash list and notes/folders
+      await loadTrashItems();
+      loadNotes();
+      loadFolders();
+    } catch (error) {
+      console.error('Failed to restore:', error);
+      toast.error('Failed to restore item');
+    }
+  };
+
+  // Empty all trash
+  const handleEmptyTrash = async () => {
+    try {
+      const count = await invoke<number>('empty_trash');
+      toast.success(`Permanently deleted ${count} items`);
+      setTrashItems([]);
+    } catch (error) {
+      console.error('Failed to empty trash:', error);
+      toast.error('Failed to empty trash');
+    }
+  };
+
+  // Open trash dialog and load items
+  const openTrash = () => {
+    setIsTrashOpen(true);
+    loadTrashItems();
+  };
+
   return (
     <>
       <Resizable
@@ -193,6 +265,16 @@ export const Sidebar = () => {
               <kbd className="ml-auto pointer-events-none hidden h-5 select-none items-center gap-1 rounded border border-zinc-800 bg-zinc-900 px-1.5 font-mono text-[10px] text-zinc-500 opacity-0 group-hover:opacity-100 font-medium transition-opacity sm:flex">
                 <span className="text-xs">⌘</span>P
               </kbd>
+            </button>
+            <button
+              onClick={() => {
+                selectNote(null);
+                setSelectedFolderId(null);
+              }}
+              className="w-full flex items-center gap-3 px-2 py-1.5 mb-2 text-sm font-medium hover:bg-zinc-900 text-zinc-400 hover:text-zinc-200 rounded-md transition-colors"
+            >
+              <Home size={16} />
+              <span>Home</span>
             </button>
             <button
               onClick={() => setIsKanbanOpen(true)}
@@ -238,6 +320,31 @@ export const Sidebar = () => {
               <span>Settings</span>
             </button>
           </div>
+
+          {/* Favorites Section (only show if there are starred notes) */}
+          {starredNotes.length > 0 && (
+            <div className="space-y-1">
+              <div className="flex items-center gap-1 px-2 text-xs font-semibold text-yellow-500/80">
+                <Star size={12} className="fill-yellow-500" />
+                <span>Favorites</span>
+              </div>
+              <div className="max-h-32 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent space-y-0.5 px-1">
+                {starredNotes.map((note) => (
+                  <button
+                    key={note.id}
+                    onClick={() => selectNote(note)}
+                    className={`w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded-md transition-colors text-left ${currentNote?.id === note.id
+                      ? 'bg-zinc-800 text-zinc-200'
+                      : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'
+                      }`}
+                  >
+                    <Star size={12} className="text-yellow-500 fill-yellow-500 flex-shrink-0" />
+                    <span className="truncate">{note.title || 'Untitled'}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="flex flex-col flex-1 min-h-0 space-y-1">
             <div className="flex items-center justify-between px-2 text-xs font-semibold text-zinc-500 group cursor-pointer hover:text-zinc-400 transition-colors mb-1">
@@ -314,18 +421,59 @@ export const Sidebar = () => {
             </div>
           </div>
 
-          {/* 4. Bottom Section / Others */}
-          <div className="pt-2 border-t border-zinc-900/50 space-y-1 flex-shrink-0">
+          {/* Sync Status (Visible only if connected) */}
+          {googleDriveConnected && (
+            <div className="px-3 py-2.5 mx-2 mb-2 rounded-lg bg-gradient-to-r from-zinc-800/50 to-emerald-900/20 border border-zinc-800/50">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  {isSyncing ? (
+                    <>
+                      <RotateCw className="w-3.5 h-3.5 animate-spin text-zinc-400" />
+                      <span className="text-xs font-medium bg-gradient-to-r from-zinc-400 to-zinc-600 bg-clip-text text-transparent">Syncing...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Cloud className="w-3.5 h-3.5 text-emerald-500" />
+                      <span className="text-xs font-medium bg-gradient-to-r from-emerald-400 to-emerald-600 bg-clip-text text-transparent">Synced</span>
+                    </>
+                  )}
+                </div>
+                {!isSyncing && (
+                  <span className="text-[10px] text-zinc-500">
+                    {useUiStore.getState().lastSyncedAt
+                      ? new Date(useUiStore.getState().lastSyncedAt!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                      : ''}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Footer */}
+          <div className="p-4 border-t border-zinc-900/50 space-y-1 flex-shrink-0">
             <div className="px-2 text-xs font-semibold text-zinc-600 mb-2">
               Others
             </div>
-            <button className="w-full flex items-center gap-3 px-2 py-1.5 text-sm font-medium hover:bg-zinc-900 text-zinc-500 hover:text-zinc-300 rounded-md transition-colors">
+            <button
+              onClick={openTrash}
+              className="w-full flex items-center gap-3 px-2 py-1.5 text-sm font-medium hover:bg-zinc-900 text-zinc-500 hover:text-zinc-300 rounded-md transition-colors"
+            >
               <Trash2 size={16} />
               <span>Trash</span>
             </button>
-            <button className="w-full flex items-center gap-3 px-2 py-1.5 text-sm font-medium hover:bg-zinc-900 text-zinc-500 hover:text-zinc-300 rounded-md transition-colors">
-              <ExternalLink size={16} />
-              <span>Learn More</span>
+            <button
+              onClick={async () => {
+                try {
+                  const { openUrl } = await import('@tauri-apps/plugin-opener');
+                  await openUrl('https://github.com/daschinmoy21/Logia');
+                } catch (e) {
+                  console.error('Failed to open URL:', e);
+                }
+              }}
+              className="w-full flex items-center gap-3 px-2 py-1.5 text-sm font-medium hover:bg-zinc-900 text-zinc-500 hover:text-zinc-300 rounded-md transition-colors"
+            >
+              <Github size={16} />
+              <span>Star on GitHub</span>
             </button>
           </div>
         </div>
@@ -439,7 +587,7 @@ export const Sidebar = () => {
               Delete Note
             </DialogTitle>
             <Description className="text-zinc-400 text-sm mb-6">
-              Irreversible action.
+              This will move the note to Trash. You can restore it later.
             </Description>
             <div className="flex gap-3 justify-end">
               <button
@@ -452,7 +600,7 @@ export const Sidebar = () => {
                 onClick={confirmDelete}
                 className="px-4 py-2 text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg"
               >
-                Delete
+                Move to Trash
               </button>
             </div>
           </DialogPanel>
@@ -475,7 +623,7 @@ export const Sidebar = () => {
               Delete Folder
             </DialogTitle>
             <Description className="text-zinc-400 text-sm mb-6">
-              Irreversible action.
+              This will move the folder to Trash. You can restore it later.
             </Description>
             <div className="flex gap-3 justify-end">
               <button
@@ -488,7 +636,90 @@ export const Sidebar = () => {
                 onClick={confirmDeleteFolder}
                 className="px-4 py-2 text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg"
               >
-                Delete
+                Move to Trash
+              </button>
+            </div>
+          </DialogPanel>
+        </div>
+      </Dialog>
+
+      {/* Trash Dialog */}
+      <Dialog
+        open={isTrashOpen}
+        onClose={() => setIsTrashOpen(false)}
+        className="relative z-[1000]"
+      >
+        <div
+          className="fixed inset-0 bg-black/30 backdrop-blur-sm"
+          onClick={() => setIsTrashOpen(false)}
+        />
+        <div className="fixed inset-0 flex items-center justify-center p-4">
+          <DialogPanel className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 max-w-md w-full max-h-[70vh] flex flex-col">
+            <DialogTitle className="text-white font-medium mb-1 flex items-center gap-2">
+              <Trash2 size={18} />
+              Trash
+            </DialogTitle>
+            <Description className="text-zinc-500 text-sm mb-4">
+              Items are permanently deleted after 14 days.
+            </Description>
+
+            {/* Trash items list */}
+            <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-transparent space-y-2 min-h-[100px] max-h-[300px]">
+              {isLoadingTrash ? (
+                <div className="flex items-center justify-center py-8">
+                  <RotateCw className="w-5 h-5 animate-spin text-zinc-500" />
+                </div>
+              ) : trashItems.length === 0 ? (
+                <div className="text-center py-8 text-zinc-500 text-sm">
+                  Trash is empty
+                </div>
+              ) : (
+                trashItems.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-center justify-between p-3 bg-zinc-800/50 rounded-lg hover:bg-zinc-800 transition-colors"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs px-1.5 py-0.5 rounded ${item.original_type === 'note'
+                          ? 'bg-blue-900/50 text-blue-400'
+                          : 'bg-amber-900/50 text-amber-400'
+                          }`}>
+                          {item.original_type}
+                        </span>
+                        <span className="text-sm text-zinc-300 truncate">
+                          {item.title}
+                        </span>
+                      </div>
+                      <div className="text-xs text-zinc-500 mt-1">
+                        Deleted {new Date(item.deleted_at).toLocaleDateString()}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleRestore(item)}
+                      className="ml-2 px-3 py-1.5 text-xs bg-zinc-700 hover:bg-zinc-600 text-zinc-200 rounded-md transition-colors"
+                    >
+                      Restore
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Footer actions */}
+            <div className="flex gap-3 justify-between mt-4 pt-4 border-t border-zinc-800">
+              <button
+                onClick={handleEmptyTrash}
+                disabled={trashItems.length === 0}
+                className="px-4 py-2 text-sm text-red-400 hover:text-red-300 hover:bg-zinc-800 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                Empty Trash
+              </button>
+              <button
+                onClick={() => setIsTrashOpen(false)}
+                className="px-4 py-2 text-sm text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors"
+              >
+                Close
               </button>
             </div>
           </DialogPanel>
@@ -507,6 +738,16 @@ export const Sidebar = () => {
           >
             {contextMenu.note && (
               <>
+                <button
+                  onClick={() => {
+                    toggleStar(contextMenu!.note!.id);
+                    setContextMenu(null);
+                  }}
+                  className="w-full text-left px-3 py-1.5 text-xs text-yellow-400 hover:bg-zinc-800 hover:text-yellow-300 transition-colors flex items-center gap-2"
+                >
+                  <Star size={12} className={contextMenu.note.starred ? "fill-yellow-400" : ""} />
+                  {contextMenu.note.starred ? 'Unstar' : 'Star'}
+                </button>
                 <button
                   onClick={() => {
                     startRenaming(

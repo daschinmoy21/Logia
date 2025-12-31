@@ -10,7 +10,6 @@ in
       xdg-utils
       cargo-tauri
       bun
-      bunx
       nodejs
       wrapGAppsHook4 # Fixes portal/settings access by wrapping the binary
       ffmpeg
@@ -20,6 +19,7 @@ in
           faster-whisper
         ]))
       uv
+      gcc
     ];
 
     buildInputs = with pkgs; [

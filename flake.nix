@@ -42,6 +42,7 @@
           ffmpeg
           pulseaudio
           cargo-tauri
+          gcc
         ];
 
       in {

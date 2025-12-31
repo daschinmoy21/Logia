@@ -12,6 +12,7 @@ use aes_gcm::aead::{Aead, KeyInit};
 use base64::{Engine as _, engine::general_purpose};
 
 mod audio;
+mod google_drive;
 
 // Hide console windows on Windows when spawning subprocesses
 #[cfg(windows)]
@@ -92,10 +93,21 @@ pub struct Note {
     note_type: String,
     #[serde(default)]
     folder_id: Option<String>,
+    #[serde(default)]
+    starred: bool,
 }
 
 fn default_note_type() -> String {
     "text".to_string()
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct TrashItem {
+    pub id: String,
+    pub title: String,  // Title from note or name from folder
+    pub original_type: String,  // "note" or "folder"
+    pub filename: String,
+    pub deleted_at: String,
 }
 
 fn resolve_logia_dir(app_handle: &tauri::AppHandle, subdir: &str) -> Result<PathBuf, String> {
@@ -154,6 +166,11 @@ fn get_kanban_directory(app_handle: &tauri::AppHandle) -> Result<PathBuf, String
         .map_err(|_| "Could not find document directory (checked XDG and Home fallback)".to_string())
 }
 
+fn get_trash_directory(app_handle: &tauri::AppHandle) -> Result<PathBuf, String> {
+    resolve_logia_dir(app_handle, "trash")
+        .map_err(|_| "Could not find document directory (checked XDG and Home fallback)".to_string())
+}
+
 #[tauri::command]
 async fn get_notes_path(app_handle: tauri::AppHandle) -> Result<String, String> {
     let notes_dir = get_notes_directory(&app_handle)?;
@@ -179,6 +196,7 @@ async fn create_note(
         updated_at: now,
         note_type,
         folder_id,
+        starred: false,
     };
 
     let file_path = notes_dir.join(format!("{}.json", note_id));
@@ -232,10 +250,44 @@ async fn save_note(note: Note, app_handle: tauri::AppHandle) -> Result<(), Strin
 }
 
 #[tauri::command]
-async fn delete_note(note_id: String, app_handle: tauri::AppHandle) -> Result<(), String> {
+async fn toggle_star_note(note_id: String, app_handle: tauri::AppHandle) -> Result<bool, String> {
     let notes_dir = get_notes_directory(&app_handle)?;
     let file_path = notes_dir.join(format!("{}.json", note_id));
-    fs::remove_file(&file_path).map_err(|e| format!("Failed to delete note file: {}", e))?;
+    
+    // Read the note
+    let content = fs::read_to_string(&file_path)
+        .map_err(|e| format!("Failed to read note: {}", e))?;
+    let mut note: Note = serde_json::from_str(&content)
+        .map_err(|e| format!("Failed to parse note: {}", e))?;
+    
+    // Toggle starred status
+    note.starred = !note.starred;
+    note.updated_at = chrono::Utc::now().to_rfc3339();
+    
+    // Save the note
+    let note_json = serde_json::to_string_pretty(&note)
+        .map_err(|e| format!("Failed to serialize note: {}", e))?;
+    fs::write(&file_path, note_json)
+        .map_err(|e| format!("Failed to write note: {}", e))?;
+    
+    Ok(note.starred)
+}
+
+#[tauri::command]
+async fn delete_note(note_id: String, app_handle: tauri::AppHandle) -> Result<(), String> {
+    let notes_dir = get_notes_directory(&app_handle)?;
+    let trash_dir = get_trash_directory(&app_handle)?;
+    let source_path = notes_dir.join(format!("{}.json", note_id));
+    let dest_path = trash_dir.join(format!("note_{}.json", note_id));
+    
+    // Move to trash instead of deleting
+    // Use copy + remove as fallback if rename fails (cross-filesystem)
+    if let Err(_) = fs::rename(&source_path, &dest_path) {
+        fs::copy(&source_path, &dest_path)
+            .map_err(|e| format!("Failed to copy note to trash: {}", e))?;
+        fs::remove_file(&source_path)
+            .map_err(|e| format!("Failed to remove original note: {}", e))?;
+    }
     Ok(())
 }
 
@@ -312,8 +364,17 @@ async fn update_folder(folder: Folder, app_handle: tauri::AppHandle) -> Result<(
 #[tauri::command]
 async fn delete_folder(folder_id: String, app_handle: tauri::AppHandle) -> Result<(), String> {
     let folders_dir = get_folders_directory(&app_handle)?;
-    let file_path = folders_dir.join(format!("{}.json", folder_id));
-    fs::remove_file(&file_path).map_err(|e| format!("Failed to delete folder file: {}", e))?;
+    let trash_dir = get_trash_directory(&app_handle)?;
+    let source_path = folders_dir.join(format!("{}.json", folder_id));
+    let dest_path = trash_dir.join(format!("folder_{}.json", folder_id));
+    
+    // Move to trash instead of deleting
+    if let Err(_) = fs::rename(&source_path, &dest_path) {
+        fs::copy(&source_path, &dest_path)
+            .map_err(|e| format!("Failed to copy folder to trash: {}", e))?;
+        fs::remove_file(&source_path)
+            .map_err(|e| format!("Failed to remove original folder: {}", e))?;
+    }
     Ok(())
 }
 
@@ -342,6 +403,127 @@ async fn save_kanban_data(tasks: Vec<KanbanTask>, app_handle: tauri::AppHandle) 
         .map_err(|e| format!("Failed to serialize kanban data: {}", e))?;
 
     fs::write(&file_path, data_json).map_err(|e| format!("Failed to write kanban data: {}", e))?;
+
+    Ok(())
+}
+
+// --- Trash Management Commands ---
+
+#[tauri::command]
+async fn get_trash_items(app_handle: tauri::AppHandle) -> Result<Vec<TrashItem>, String> {
+    let trash_dir = get_trash_directory(&app_handle)?;
+    let mut items = Vec::new();
+
+    if let Ok(entries) = fs::read_dir(&trash_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) == Some("json") {
+                let filename = path.file_name()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("")
+                    .to_string();
+                
+                // Parse the prefix to determine type
+                let (original_type, id) = if filename.starts_with("note_") {
+                    ("note".to_string(), filename.trim_start_matches("note_").trim_end_matches(".json").to_string())
+                } else if filename.starts_with("folder_") {
+                    ("folder".to_string(), filename.trim_start_matches("folder_").trim_end_matches(".json").to_string())
+                } else {
+                    continue; // Unknown format, skip
+                };
+
+                // Get file modification time as deleted_at
+                let deleted_at = if let Ok(metadata) = fs::metadata(&path) {
+                    if let Ok(modified) = metadata.modified() {
+                        chrono::DateTime::<chrono::Utc>::from(modified).to_rfc3339()
+                    } else {
+                        chrono::Utc::now().to_rfc3339()
+                    }
+                } else {
+                    chrono::Utc::now().to_rfc3339()
+                };
+
+                // Read the JSON content to extract title/name
+                let title = if let Ok(content) = fs::read_to_string(&path) {
+                    if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+                        // For notes, get "title"; for folders, get "name"
+                        json.get("title")
+                            .or_else(|| json.get("name"))
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("Untitled")
+                            .to_string()
+                    } else {
+                        "Untitled".to_string()
+                    }
+                } else {
+                    "Untitled".to_string()
+                };
+
+                items.push(TrashItem {
+                    id,
+                    title,
+                    original_type,
+                    filename,
+                    deleted_at,
+                });
+            }
+        }
+    }
+
+    // Sort by deleted_at descending (newest first)
+    items.sort_by(|a, b| b.deleted_at.cmp(&a.deleted_at));
+    Ok(items)
+}
+
+#[tauri::command]
+async fn empty_trash(app_handle: tauri::AppHandle) -> Result<usize, String> {
+    let trash_dir = get_trash_directory(&app_handle)?;
+    let mut count = 0;
+
+    if let Ok(entries) = fs::read_dir(&trash_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_file() {
+                if fs::remove_file(&path).is_ok() {
+                    count += 1;
+                }
+            }
+        }
+    }
+
+    Ok(count)
+}
+
+#[tauri::command]
+async fn restore_from_trash(item_id: String, item_type: String, app_handle: tauri::AppHandle) -> Result<(), String> {
+    let trash_dir = get_trash_directory(&app_handle)?;
+    
+    let (trash_filename, dest_dir) = match item_type.as_str() {
+        "note" => (
+            format!("note_{}.json", item_id),
+            get_notes_directory(&app_handle)?
+        ),
+        "folder" => (
+            format!("folder_{}.json", item_id),
+            get_folders_directory(&app_handle)?
+        ),
+        _ => return Err("Invalid item type".to_string()),
+    };
+
+    let source_path = trash_dir.join(&trash_filename);
+    let dest_path = dest_dir.join(format!("{}.json", item_id));
+
+    if !source_path.exists() {
+        return Err("Item not found in trash".to_string());
+    }
+
+    // Move back from trash
+    if let Err(_) = fs::rename(&source_path, &dest_path) {
+        fs::copy(&source_path, &dest_path)
+            .map_err(|e| format!("Failed to restore item: {}", e))?;
+        fs::remove_file(&source_path)
+            .map_err(|e| format!("Failed to remove from trash: {}", e))?;
+    }
 
     Ok(())
 }
@@ -1221,13 +1403,16 @@ pub fn run() {
     dotenvy::dotenv().ok();
 
     tauri::Builder::default()
+        .manage(google_drive::GoogleDriveState::new())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             get_notes_path,
             create_note,
             get_all_notes,
             save_note,
+            toggle_star_note,
             delete_note,
             create_folder,
             get_all_folders,
@@ -1235,6 +1420,9 @@ pub fn run() {
             delete_folder,
             get_kanban_data,
             save_kanban_data,
+            get_trash_items,
+            empty_trash,
+            restore_from_trash,
             get_google_api_key,
             save_google_api_key,
             remove_google_api_key,
@@ -1245,7 +1433,15 @@ pub fn run() {
             stop_recording,
             transcribe_audio,
             prereflight_check,
-            read_install_log
+            read_install_log,
+            google_drive::connect_google_drive,
+            google_drive::get_google_drive_status,
+            google_drive::sync_notes_to_google_drive,
+            google_drive::sync_all_to_google_drive,
+            google_drive::cleanup_old_trash,
+            google_drive::check_sync_status,
+            google_drive::force_sync_from_cloud,
+            google_drive::force_sync_to_cloud
         ])
         .plugin(tauri_plugin_opener::init())
         .run(tauri::generate_context!())

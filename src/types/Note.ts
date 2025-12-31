@@ -14,4 +14,5 @@ export interface Note {
   updated_at: string;
   note_type?: 'text' | 'canvas';
   folder_id?: string;
+  starred?: boolean;
 }
