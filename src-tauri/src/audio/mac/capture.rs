@@ -3,7 +3,7 @@ use std::io::{Write, Read, Seek, SeekFrom};
 use std::sync::{Arc, Mutex, OnceLock};
 use tauri::{AppHandle, Manager};
 
-// Note: These imports assume screencapturekit 1.4.2+ API structure.
+// Note: These imports use screencapturekit 1.4.2 API structure.
 #[cfg(target_os = "macos")]
 use screencapturekit::prelude::*;
 
@@ -129,9 +129,9 @@ fn start_capture_inner(app_handle: &AppHandle) -> Result<(), String> {
     let display = displays.into_iter().next().ok_or("No display found")?;
     
     // Filter: Include display, exclude nothing
-    let filter = SCContentFilter::create()
-        .with_display(&display)
-        .with_excluding_windows(&[])
+    let filter = SCContentFilter::builder()
+        .display(&display)
+        .exclude_windows(&[])
         .build();
     
     // Config: Audio capture with minimal video (we only care about audio)
