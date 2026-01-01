@@ -80,6 +80,30 @@ nix profile install github:daschinmoy21/Logia
    ];
    ```
 
+#### Google Drive Sync (Optional)
+
+To enable Google Drive sync, you need to provide your own Google OAuth credentials. The Logia package accepts `googleClientId` and `googleClientSecret` parameters:
+
+1. Get OAuth credentials from [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
+
+2. Create secrets files (store these securely, outside your git repo):
+   ```bash
+   sudo mkdir -p /etc/logia-secrets
+   echo "YOUR_CLIENT_ID" | sudo tee /etc/logia-secrets/google-client-id
+   echo "YOUR_CLIENT_SECRET" | sudo tee /etc/logia-secrets/google-client-secret
+   ```
+
+3. Update your NixOS config to pass credentials:
+   ```nix
+   # In your flake.nix specialArgs or where you define packages:
+   logia = inputs.logia.packages.${system}.logia {
+     googleClientId = builtins.readFile /etc/logia-secrets/google-client-id;
+     googleClientSecret = builtins.readFile /etc/logia-secrets/google-client-secret;
+   };
+   ```
+
+> **Note**: The `default` package builds without credentials (Google Drive sync disabled). Use the `logia { ... }` function to pass your own credentials.
+
 **Development shell:**
 ```bash
 nix develop  # Enters a shell with all dependencies

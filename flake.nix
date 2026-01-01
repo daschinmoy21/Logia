@@ -47,7 +47,8 @@
 
       in {
         packages = {
-          default = pkgs.rustPlatform.buildRustPackage rec {
+          # Function to build logia with Google OAuth credentials
+          logia = { googleClientId ? "", googleClientSecret ? "" }: pkgs.rustPlatform.buildRustPackage rec {
             pname = "logia";
             version = "0.8.11";
 
@@ -66,6 +67,8 @@
 
             # Environment variables for the build
             OPENSSL_NO_VENDOR = 1;
+            GOOGLE_CLIENT_ID = googleClientId;
+            GOOGLE_CLIENT_SECRET = googleClientSecret;
 
             # Override the default build phase to use cargo-tauri properly
             buildPhase = ''
@@ -73,6 +76,10 @@
               
               echo "Frontend dist contents:"
               ls -la dist/
+              
+              # Export Google OAuth credentials for build.rs
+              export GOOGLE_CLIENT_ID="${googleClientId}"
+              export GOOGLE_CLIENT_SECRET="${googleClientSecret}"
               
               cd src-tauri
               
@@ -143,6 +150,10 @@
               mainProgram = "logia";
             };
           };
+          
+          # Default package - uses empty credentials (override when building)
+          # Usage: nix build .#logia --override-input ... or pass credentials via specialArgs
+          default = self.packages.${system}.logia {};
         };
 
         # Development shell (still uses bun for live development)
