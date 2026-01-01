@@ -80,7 +80,22 @@ impl InstalledFlowDelegate for BrowserUserHandler {
             }
             // Try to open the URL
             println!("Opening browser to: {}", url);
-            let open_res = std::process::Command::new("xdg-open").arg(url).spawn();
+            
+            #[cfg(target_os = "windows")]
+            let open_res = std::process::Command::new("cmd")
+                .args(&["/C", "start", "", url])
+                .spawn();
+            
+            #[cfg(target_os = "linux")]
+            let open_res = std::process::Command::new("xdg-open")
+                .arg(url)
+                .spawn();
+            
+            #[cfg(target_os = "macos")]
+            let open_res = std::process::Command::new("open")
+                .arg(url)
+                .spawn();
+            
             if let Err(e) = open_res {
                 println!("Failed to open browser: {}. Please open the URL manually.", e);
             }
