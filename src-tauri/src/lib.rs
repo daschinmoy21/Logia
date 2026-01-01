@@ -818,7 +818,7 @@ async fn ensure_transcription_dependencies(app_handle: &tauri::AppHandle) -> Res
         
         // Create venv using uv with system Python
         let mut cmd_uv_venv = Command::new("uv");
-        cmd_uv_venv.args(&["venv", &nix_venv_path.to_string_lossy(), "--python", &system_python_path]);
+        cmd_uv_venv.args(&["venv", &nix_venv_path.to_string_lossy(), "--python", &system_python_path, "--clear"]);
         hide_console(&mut cmd_uv_venv);
         
         if let Ok(status) = cmd_uv_venv.status() {
