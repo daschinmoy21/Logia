@@ -9,11 +9,22 @@
   outputs = { self, nixpkgs, flake-utils }:
     flake-utils.lib.eachDefaultSystem (system:
       let
-        pkgs = import nixpkgs { inherit system; };
+        # Apply overlay to fix ctranslate2 build (missing cstdint header)
+        pkgs = import nixpkgs { 
+          inherit system; 
+          overlays = [
+            (final: prev: {
+              ctranslate2 = prev.ctranslate2.overrideAttrs (oldAttrs: {
+                env = (oldAttrs.env or {}) // {
+                  CXXFLAGS = (oldAttrs.env.CXXFLAGS or "") + " -include cstdint";
+                };
+              });
+            })
+          ];
+        };
 
         # Python environment with faster-whisper for transcription
-        # Using Python 3.11 as ctranslate2 has build issues with newer Python versions
-        pythonEnv = pkgs.python311.withPackages (ps: with ps; [
+        pythonEnv = pkgs.python312.withPackages (ps: with ps; [
           faster-whisper
         ]);
 
