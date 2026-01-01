@@ -23,9 +23,17 @@ pub struct TranscriptionError {
     pub error: String,
 }
 
-// Helper to find the python executable - checks venv first, then LOGIA_PYTHON_PATH (Nix)
+// Helper to find the python executable - checks LOGIA_PYTHON_PATH first (Nix), then venv
 fn get_python_executable(venv_path: &PathBuf) -> (PathBuf, bool) {
-    // First check if venv exists and has Python (may have been created for Nix)
+    // First check for LOGIA_PYTHON_PATH (set by Nix package - has faster-whisper bundled)
+    if let Ok(path) = std::env::var("LOGIA_PYTHON_PATH") {
+        let p = PathBuf::from(&path);
+        if p.exists() {
+            return (p, true); // true = using system python (Nix)
+        }
+    }
+    
+    // Fallback: check if venv exists and has Python
     let venv_python = if cfg!(windows) {
         venv_path.join("Scripts").join("python.exe")
     } else {
@@ -34,14 +42,6 @@ fn get_python_executable(venv_path: &PathBuf) -> (PathBuf, bool) {
     
     if venv_python.exists() {
         return (venv_python, false); // Use venv python
-    }
-    
-    // Fallback: check for LOGIA_PYTHON_PATH (set by Nix package)
-    if let Ok(path) = std::env::var("LOGIA_PYTHON_PATH") {
-        let p = PathBuf::from(&path);
-        if p.exists() {
-            return (p, true); // true = using system python
-        }
     }
     
     // Otherwise return expected venv path (may not exist yet)
