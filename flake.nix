@@ -132,9 +132,9 @@
 
             postFixup = ''
               wrapProgram $out/bin/logia \
-                --set LOGIA_PYTHON_PATH "${pythonEnv}/bin/python" \
+                --set LOGIA_PYTHON_PATH "${pythonEnv}/bin/python3" \
                 --set LOGIA_TRANSCRIBE_SCRIPT "$out/share/logia/transcription/transcribe.py" \
-                --prefix PATH : "${pkgs.lib.makeBinPath [ pkgs.ffmpeg pkgs.pulseaudio ]}" \
+                --prefix PATH : "${pkgs.lib.makeBinPath [ pkgs.ffmpeg pkgs.pulseaudio pkgs.uv ]}" \
                 --prefix XDG_DATA_DIRS : "${pkgs.gsettings-desktop-schemas}/share/gsettings-schemas/${pkgs.gsettings-desktop-schemas.name}" \
                 --prefix XDG_DATA_DIRS : "${pkgs.gtk3}/share/gsettings-schemas/${pkgs.gtk3.name}" \
                 --set GIO_MODULE_DIR "${pkgs.glib-networking}/lib/gio/modules/"
