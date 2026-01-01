@@ -23,38 +23,52 @@ pub struct TranscriptionError {
     pub error: String,
 }
 
-// Helper to find the python executable inside a venv across platforms
-fn python_executable_in_venv(venv_path: &PathBuf) -> PathBuf {
-    if let Ok(path) = std::env::var("LOGIA_PYTHON_PATH") {
-        return PathBuf::from(path);
+// Helper to find the python executable - checks venv first, then LOGIA_PYTHON_PATH (Nix)
+fn get_python_executable(venv_path: &PathBuf) -> (PathBuf, bool) {
+    // First check if venv exists and has Python (may have been created for Nix)
+    let venv_python = if cfg!(windows) {
+        venv_path.join("Scripts").join("python.exe")
+    } else {
+        venv_path.join("bin").join("python")
+    };
+    
+    if venv_python.exists() {
+        return (venv_python, false); // Use venv python
     }
-    if cfg!(windows) {
+    
+    // Fallback: check for LOGIA_PYTHON_PATH (set by Nix package)
+    if let Ok(path) = std::env::var("LOGIA_PYTHON_PATH") {
+        let p = PathBuf::from(&path);
+        if p.exists() {
+            return (p, true); // true = using system python
+        }
+    }
+    
+    // Otherwise return expected venv path (may not exist yet)
+    let python_path = if cfg!(windows) {
         let candidates = [
             venv_path.join("Scripts").join("python.exe"),
             venv_path.join("Scripts").join("python"),
             venv_path.join("Scripts").join("python3.exe"),
             venv_path.join("Scripts").join("python3"),
         ];
-        for p in candidates.iter() {
-            if p.exists() {
-                return p.clone();
-            }
-        }
-        // Default fallback
-        venv_path.join("Scripts").join("python.exe")
+        candidates.iter().find(|p| p.exists()).cloned()
+            .unwrap_or_else(|| venv_path.join("Scripts").join("python.exe"))
     } else {
-        let p = venv_path.join("bin").join("python");
-        p
-    }
+        venv_path.join("bin").join("python")
+    };
+    
+    (python_path, false)
 }
 
 pub fn transcribe(app_handle: &AppHandle, wav_path: &str) -> Result<String, String> {
     let app_data_dir = app_handle.path().app_data_dir().unwrap();
     let venv_path = app_data_dir.join("transcription_venv");
-    let python_path = python_executable_in_venv(&venv_path);
+    let (python_path, is_system_python) = get_python_executable(&venv_path);
 
-    if !python_path.exists() {
-        return Err(format!("Python executable not found at {:?}", python_path));
+    // Only check venv python existence - system python from LOGIA_PYTHON_PATH is already validated
+    if !is_system_python && !python_path.exists() {
+        return Err(format!("Python executable not found at {:?}. Please run the transcription setup first.", python_path));
     }
 
     // Check for LOGIA_TRANSCRIBE_SCRIPT env var first (set by Nix package)

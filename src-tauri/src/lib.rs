@@ -789,12 +789,61 @@ async fn ensure_transcription_dependencies(app_handle: &tauri::AppHandle) -> Res
 
     append_to_log(&log_path, &format!("[{}] Starting dependency check/install", chrono::Utc::now().to_rfc3339()));
 
-    // Check if we are using system python override
-    if let Ok(_) = std::env::var("LOGIA_PYTHON_PATH") {
-        println!("Using LOGIA_PYTHON_PATH from environment, skipping venv creation");
-        append_to_log(&log_path, "LOGIA_PYTHON_PATH set, skipping venv creation/check");
-        // Return a placeholder since python_executable_in_venv will ignore it anyway
-        return Ok(app_data_dir.join("system_python_override"));
+    // Check if we are using system python override (e.g. NixOS)
+    if let Ok(system_python_path) = std::env::var("LOGIA_PYTHON_PATH") {
+        println!("Using LOGIA_PYTHON_PATH from environment: {}", system_python_path);
+        append_to_log(&log_path, &format!("LOGIA_PYTHON_PATH set: {}", system_python_path));
+        
+        let python_path = std::path::PathBuf::from(&system_python_path);
+        
+        // Check if faster_whisper is already available
+        let mut cmd_check = Command::new(&python_path);
+        cmd_check.args(&["-c", "import faster_whisper"]);
+        hide_console(&mut cmd_check);
+        let check_result = cmd_check.output();
+        
+        if let Ok(output) = check_result {
+            if output.status.success() {
+                println!("faster_whisper already available in system Python");
+                append_to_log(&log_path, "faster_whisper already available in system Python");
+                return Ok(app_data_dir.join("system_python_override"));
+            }
+        }
+        
+        // faster_whisper not installed - try to install it using uv to a local venv
+        println!("faster_whisper not found in system Python, installing to local venv...");
+        append_to_log(&log_path, "faster_whisper not found, creating local venv for Nix...");
+        
+        let nix_venv_path = app_data_dir.join("transcription_venv");
+        
+        // Create venv using uv with system Python
+        let mut cmd_uv_venv = Command::new("uv");
+        cmd_uv_venv.args(&["venv", &nix_venv_path.to_string_lossy(), "--python", &system_python_path]);
+        hide_console(&mut cmd_uv_venv);
+        
+        if let Ok(status) = cmd_uv_venv.status() {
+            if status.success() {
+                println!("Created venv for Nix using uv");
+                append_to_log(&log_path, "Created venv for Nix using uv");
+                
+                // Install faster-whisper
+                let mut cmd_install = Command::new("uv");
+                cmd_install.args(&["pip", "install", "faster-whisper", "--python", &nix_venv_path.to_string_lossy()]);
+                hide_console(&mut cmd_install);
+                
+                if let Ok(install_status) = cmd_install.status() {
+                    if install_status.success() {
+                        println!("Successfully installed faster-whisper for Nix");
+                        append_to_log(&log_path, "Successfully installed faster-whisper for Nix");
+                        // Return venv path so transcription uses the venv python
+                        return Ok(nix_venv_path);
+                    }
+                }
+            }
+        }
+        
+        append_to_log(&log_path, "Failed to set up faster-whisper for Nix system Python");
+        return Err("Failed to install faster-whisper for Nix. Run: uv pip install faster-whisper".to_string());
     }
 
     let venv_path = app_data_dir.join("transcription_venv");
