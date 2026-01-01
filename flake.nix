@@ -12,7 +12,8 @@
         pkgs = import nixpkgs { inherit system; };
 
         # Python environment with faster-whisper for transcription
-        pythonEnv = pkgs.python3.withPackages (ps: with ps; [
+        # Using Python 3.12 as ctranslate2 has build issues with Python 3.13
+        pythonEnv = pkgs.python312.withPackages (ps: with ps; [
           faster-whisper
         ]);
 
