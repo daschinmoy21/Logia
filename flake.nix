@@ -11,9 +11,11 @@
       let
         pkgs = import nixpkgs { inherit system; };
 
-        # Python for transcription - faster-whisper installed at runtime via uv/pip
-        # (ctranslate2 has build issues in nixpkgs)
-        pythonEnv = pkgs.python312;
+        # Python environment with faster-whisper for transcription
+        # Using Python 3.11 as ctranslate2 has build issues with newer Python versions
+        pythonEnv = pkgs.python311.withPackages (ps: with ps; [
+          faster-whisper
+        ]);
 
         # Runtime libraries needed by WebKitGTK and Tauri
         runtimeLibs = with pkgs; [
@@ -132,7 +134,7 @@
 
             postFixup = ''
               wrapProgram $out/bin/logia \
-                --set LOGIA_PYTHON_PATH "${pythonEnv}/bin/python3" \
+                --set LOGIA_PYTHON_PATH "${pythonEnv}/bin/python" \
                 --set LOGIA_TRANSCRIBE_SCRIPT "$out/share/logia/transcription/transcribe.py" \
                 --prefix PATH : "${pkgs.lib.makeBinPath [ pkgs.ffmpeg pkgs.pulseaudio pkgs.uv ]}" \
                 --prefix XDG_DATA_DIRS : "${pkgs.gsettings-desktop-schemas}/share/gsettings-schemas/${pkgs.gsettings-desktop-schemas.name}" \
