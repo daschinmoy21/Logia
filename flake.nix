@@ -151,8 +151,8 @@
             };
           };
           
-          # Default package - uses empty credentials (override when building)
-          # Usage: nix build .#logia --override-input ... or pass credentials via specialArgs
+          # Default package - uses empty credentials (Google Drive sync disabled)
+          # To enable Google Drive, use: logia { googleClientId = builtins.readFile /home/USER/.config/logia-secrets/google-client-id; ... }
           default = self.packages.${system}.logia {};
         };
 

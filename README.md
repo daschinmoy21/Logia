@@ -88,17 +88,17 @@ To enable Google Drive sync, you need to provide your own Google OAuth credentia
 
 2. Create secrets files (store these securely, outside your git repo):
    ```bash
-   sudo mkdir -p /etc/logia-secrets
-   echo "YOUR_CLIENT_ID" | sudo tee /etc/logia-secrets/google-client-id
-   echo "YOUR_CLIENT_SECRET" | sudo tee /etc/logia-secrets/google-client-secret
+   mkdir -p ~/.config/logia-secrets
+   echo "YOUR_CLIENT_ID" > ~/.config/logia-secrets/google-client-id
+   echo "YOUR_CLIENT_SECRET" > ~/.config/logia-secrets/google-client-secret
    ```
 
 3. Update your NixOS config to pass credentials:
    ```nix
    # In your flake.nix specialArgs or where you define packages:
    logia = inputs.logia.packages.${system}.logia {
-     googleClientId = builtins.readFile /etc/logia-secrets/google-client-id;
-     googleClientSecret = builtins.readFile /etc/logia-secrets/google-client-secret;
+     googleClientId = builtins.readFile /home/YOUR_USERNAME/.config/logia-secrets/google-client-id;
+     googleClientSecret = builtins.readFile /home/YOUR_USERNAME/.config/logia-secrets/google-client-secret;
    };
    ```
 
