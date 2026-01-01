@@ -11,11 +11,9 @@
       let
         pkgs = import nixpkgs { inherit system; };
 
-        # Python environment with faster-whisper for transcription
-        # Using Python 3.12 as ctranslate2 has build issues with Python 3.13
-        pythonEnv = pkgs.python312.withPackages (ps: with ps; [
-          faster-whisper
-        ]);
+        # Python for transcription - faster-whisper installed at runtime via uv/pip
+        # (ctranslate2 has build issues in nixpkgs)
+        pythonEnv = pkgs.python312;
 
         # Runtime libraries needed by WebKitGTK and Tauri
         runtimeLibs = with pkgs; [
