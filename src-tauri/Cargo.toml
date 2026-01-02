@@ -34,7 +34,7 @@ tauri-plugin-shell = "2"
 aes-gcm = "0.10"
 base64 = "0.22"
 google-drive3 = "5.0"
-yup-oauth2 = "8.1"
+yup-oauth2 = "11"
 hyper = { version = "0.14", features = ["full"] }
 hyper-rustls = "0.24"
 mime = "0.3"
