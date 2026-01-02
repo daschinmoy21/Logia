@@ -1,4 +1,4 @@
-use google_drive3::{DriveHub, oauth2::{InstalledFlowAuthenticator, InstalledFlowReturnMethod, authenticator_delegate::InstalledFlowDelegate}, hyper, hyper_rustls, api::{File as DriveFile, *}};
+use google_drive3::{DriveHub, oauth2::{InstalledFlowAuthenticator, InstalledFlowReturnMethod}, hyper, hyper_rustls, api::{File as DriveFile, *}};
 use google_drive3::api::Scope; // Correct Import for Scope
 use std::pin::Pin;
 use std::future::Future;
@@ -65,77 +65,12 @@ fn resolve_notes_path(app_handle: &tauri::AppHandle) -> Result<PathBuf, String> 
     }
 }
 
-// Custom Delegate to force browser open on Linux/NixOS
-struct BrowserUserHandler;
-
-impl InstalledFlowDelegate for BrowserUserHandler {
-    fn present_user_url<'a>(
-        &'a self,
-        url: &'a str,
-        need_code: bool,
-    ) -> Pin<Box<dyn Future<Output = Result<String, String>> + Send + 'a>> {
-        Box::pin(async move {
-            if need_code {
-                println!("Please enter the code from the browser:");
-            }
-            // Try to open the URL
-            println!("Opening browser to: {}", url);
-            
-            // Manual Patch: Ensure response_type=code is present
-            let url_string = if !url.contains("response_type=") {
-                format!("{}&response_type=code", url)
-            } else {
-                url.to_string()
-            };
-            let url = &url_string;
-            println!("Patched URL: {}", url);
-            
-            #[cfg(target_os = "windows")]
-            let open_res = std::process::Command::new("explorer")
-                .arg(url)
-                .spawn();
-            
-            #[cfg(target_os = "linux")]
-            let open_res = std::process::Command::new("xdg-open")
-                .arg(url)
-                .spawn();
-            
-            #[cfg(target_os = "macos")]
-            let open_res = std::process::Command::new("open")
-                .arg(url)
-                .spawn();
-            
-            if let Err(e) = open_res {
-                println!("Failed to open browser: {}. Please open the URL manually.", e);
-            }
-            
-            // If we don't need a code (HTTP redirect), we return empty string?
-            // Default implementation waits for code on stdin if need_code is true.
-            // If need_code is false, we just need to have shown the URL.
-            
-            if need_code {
-                 // We don't handle manual code entry well here without blocking stdin reading which might be hard in async.
-                 // But typically need_code is false for HTTPRedirect.
-                 // If true, we fall back to printing.
-                 let mut input = String::new();
-                 std::io::stdin().read_line(&mut input).map_err(|e| e.to_string())?;
-                 return Ok(input.trim().to_string());
-            }
-            
-            Ok(String::new())
-        })
-    }
-}
-
 pub async fn create_drive_hub() -> Result<DriveHub<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>, String> {
-    // CRITICAL: Use a new token cache file to force re-auth with correct scope
-    // If you have issues, delete: ~/.local/share/logia/google_token_full.json
     let token_path = dirs::data_local_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))
         .join("logia")
-        .join("google_token_full.json"); // New cache file for full scope
-    
-    // Create parent directory if needed
+        .join("google_token.json");
+
     if let Some(parent) = token_path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
@@ -144,35 +79,24 @@ pub async fn create_drive_hub() -> Result<DriveHub<hyper_rustls::HttpsConnector<
     let secret = google_drive3::oauth2::ApplicationSecret {
         client_id: GOOGLE_CLIENT_ID.to_string(),
         client_secret: GOOGLE_CLIENT_SECRET.to_string(),
-        token_uri: "https://oauth2.googleapis.com/token".to_string(),
         auth_uri: "https://accounts.google.com/o/oauth2/auth".to_string(),
-        redirect_uris: vec!["http://localhost".to_string(), "urn:ietf:wg:oauth:2.0:oob".to_string()],
+        token_uri: "https://oauth2.googleapis.com/token".to_string(),
+        redirect_uris: vec!["http://localhost:8080".to_string()],
         ..Default::default()
     };
 
-    // CRITICAL: Use https://www.googleapis.com/auth/drive (FULL scope)
-    // The drive.file scope only sees files created by THIS app instance.
-    // Any scope change makes previously created folders INVISIBLE.
-    // This MUST be full drive scope for reliable folder detection.
-    
     let auth = InstalledFlowAuthenticator::builder(
         secret,
         InstalledFlowReturnMethod::HTTPRedirect,
     )
     .persist_tokens_to_disk(token_path)
-    .flow_delegate(Box::new(BrowserUserHandler))
     .build()
     .await
     .map_err(|e| format!("Failed to create authenticator: {}", e))?;
 
-    // DO NOT call auth.token() here - it causes double OAuth flow!
-    // The DriveHub will request token with correct scope when needed.
-    // We configure the scope in the API calls via .add_scope() method.
-
     let client = hyper::Client::builder().build(
         hyper_rustls::HttpsConnectorBuilder::new()
             .with_native_roots()
-            .map_err(|e| format!("Native roots error: {}", e))?
             .https_or_http()
             .enable_http1()
             .build()
