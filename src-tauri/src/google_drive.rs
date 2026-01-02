@@ -1,5 +1,5 @@
-use google_drive3::{DriveHub, oauth2::{InstalledFlowAuthenticator, InstalledFlowReturnMethod, authenticator_delegate::InstalledFlowDelegate}, hyper, hyper_rustls, api::{File as DriveFile, *}};
-use google_drive3::api::Scope; // Correct Import for Scope
+use google_drive3::{DriveHub, hyper, hyper_rustls, api::{File as DriveFile, *}};
+use yup_oauth2::{InstalledFlowAuthenticator, InstalledFlowReturnMethod, authenticator_delegate::InstalledFlowDelegate, ApplicationSecret};
 use std::pin::Pin;
 use std::future::Future;
 use std::sync::Arc;
@@ -132,7 +132,7 @@ pub async fn create_drive_hub() -> Result<DriveHub<hyper_rustls::HttpsConnector<
     }
     println!("[DEBUG] Token cache path: {:?}", token_path);
 
-    let secret = google_drive3::oauth2::ApplicationSecret {
+    let secret = ApplicationSecret {
         client_id: GOOGLE_CLIENT_ID.to_string(),
         client_secret: GOOGLE_CLIENT_SECRET.to_string(),
         token_uri: "https://oauth2.googleapis.com/token".to_string(),
