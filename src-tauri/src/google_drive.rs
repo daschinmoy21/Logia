@@ -97,6 +97,7 @@ pub async fn create_drive_hub() -> Result<DriveHub<hyper_rustls::HttpsConnector<
     let client = hyper::Client::builder().build(
         hyper_rustls::HttpsConnectorBuilder::new()
             .with_native_roots()
+            .map_err(|e| format!("Native roots error: {}", e))?
             .https_or_http()
             .enable_http1()
             .build()
