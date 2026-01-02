@@ -118,6 +118,14 @@ pub struct DriveFileDiff {
 #[tauri::command]
 pub async fn connect_google_drive(state: State<'_, GoogleDriveState>) -> Result<AuthStatus, String> {
     let hub = create_drive_hub().await?;
+    // Manually open the browser for OAuth since the library's automatic opening doesn't work on Windows
+    let auth_url = format!(
+        "https://accounts.google.com/o/oauth2/auth?client_id={}&redirect_uri=http://localhost:8080&scope=https://www.googleapis.com/auth/drive&response_type=code&access_type=offline",
+        GOOGLE_CLIENT_ID
+    );
+    if let Err(e) = open::that(&auth_url) {
+        println!("Failed to open browser: {}", e);
+    }
     // CRITICAL: Add full scope to ensure we request https://www.googleapis.com/auth/drive
     // This triggers the OAuth flow with the correct scope on first run
     let _ = hub.files().list()
@@ -126,7 +134,7 @@ pub async fn connect_google_drive(state: State<'_, GoogleDriveState>) -> Result<
         .doit()
         .await
         .map_err(|e| e.to_string())?;
-    
+
     *state.hub.lock().await = Some(hub);
 
     Ok(AuthStatus { is_authenticated: true, user_email: None })
