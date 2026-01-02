@@ -4,6 +4,23 @@ import { invoke } from '@tauri-apps/api/core';
 import useUiStore from '../store/UiStore';
 import { X, Cloud, CloudOff, RefreshCw, Check, Loader2, AlertTriangle, Download, Upload } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { SyncConflictDialog } from './SyncConflictDialog';
+
+// Type for sync plan from backend
+interface SyncAction {
+  path: string;
+  status: string;
+  local_modified: string | null;
+  cloud_modified: string | null;
+}
+
+interface SyncPlan {
+  uploads: SyncAction[];
+  downloads: SyncAction[];
+  conflicts: SyncAction[];
+  deletions_local: SyncAction[];
+  deletions_cloud: SyncAction[];
+}
 
 export const Settings = () => {
   const {
@@ -25,6 +42,8 @@ export const Settings = () => {
   const [installStatus, setInstallStatus] = useState<'idle' | 'installing' | 'installed' | 'error'>('idle');
   const [installLog, setInstallLog] = useState<string>('');
   const [syncConflict, setSyncConflict] = useState<{ local: number; remote: number } | null>(null);
+  const [syncPlan, setSyncPlan] = useState<SyncPlan | null>(null);
+  const [showSyncDialog, setShowSyncDialog] = useState(false);
 
   useEffect(() => {
     if (isSettingsOpen) {
@@ -152,292 +171,338 @@ export const Settings = () => {
   }, [isInstallingDeps]);
 
   return (
-    <Dialog
-      open={isSettingsOpen}
-      onClose={() => setIsSettingsOpen(false)}
-      className="relative z-[1000]"
-    >
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" aria-hidden="true" />
+    <>
+      <Dialog
+        open={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        className="relative z-[1000]"
+      >
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" aria-hidden="true" />
 
-      <div className="fixed inset-0 flex items-center justify-center p-4">
-        <DialogPanel className="w-full max-w-md rounded-xl bg-zinc-900 border border-zinc-800 p-6 shadow-xl">
-          <div className="flex items-center justify-between mb-6">
-            <DialogTitle className="text-lg font-medium text-white">Settings</DialogTitle>
-            <button
-              onClick={() => setIsSettingsOpen(false)}
-              className="text-zinc-400 hover:text-white transition-colors"
-            >
-              <X size={20} />
-            </button>
-          </div>
-
-          <div className="space-y-6">
-            <div>
-              <h3 className="text-sm font-medium text-zinc-300 mb-2">General</h3>
-              <div className="space-y-4">
-                <div>
-                  <label htmlFor="apiKey" className="block text-xs text-zinc-400 mb-1.5">
-                    Gemini API Key
-                  </label>
-                  <Description className="text-xs text-zinc-500 mb-2">
-                    Required for AI features. The key is stored locally on your device.
-                  </Description>
-                  <input
-                    id="apiKey"
-                    type="password"
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
-                    placeholder="Enter your API key"
-                    className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 transition-colors"
-                  />
-                </div>
-              </div>
+        <div className="fixed inset-0 flex items-center justify-center p-4">
+          <DialogPanel className="w-full max-w-md rounded-xl bg-zinc-900 border border-zinc-800 p-6 shadow-xl">
+            <div className="flex items-center justify-between mb-6">
+              <DialogTitle className="text-lg font-medium text-white">Settings</DialogTitle>
+              <button
+                onClick={() => setIsSettingsOpen(false)}
+                className="text-zinc-400 hover:text-white transition-colors"
+              >
+                <X size={20} />
+              </button>
             </div>
 
-            <div>
-              <h3 className="text-sm font-medium text-zinc-300 mb-2">Transcription</h3>
-              <div className="space-y-4">
-                <div>
-                  <Description className="text-xs text-zinc-500 mb-2">
-                    Install Python dependencies required for audio transcription. This will download faster-whisper and other required packages.
-                  </Description>
-                  <div className="flex items-center gap-3">
-                    <div className="flex-1">
-                      <button
-                        onClick={handleInstallTranscriptionDeps}
-                        disabled={isInstallingDeps}
-                        className={`
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-sm font-medium text-zinc-300 mb-2">General</h3>
+                <div className="space-y-4">
+                  <div>
+                    <label htmlFor="apiKey" className="block text-xs text-zinc-400 mb-1.5">
+                      Gemini API Key
+                    </label>
+                    <Description className="text-xs text-zinc-500 mb-2">
+                      Required for AI features. The key is stored locally on your device.
+                    </Description>
+                    <input
+                      id="apiKey"
+                      type="password"
+                      value={apiKey}
+                      onChange={(e) => setApiKey(e.target.value)}
+                      placeholder="Enter your API key"
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 transition-colors"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <h3 className="text-sm font-medium text-zinc-300 mb-2">Transcription</h3>
+                <div className="space-y-4">
+                  <div>
+                    <Description className="text-xs text-zinc-500 mb-2">
+                      Install Python dependencies required for audio transcription. This will download faster-whisper and other required packages.
+                    </Description>
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1">
+                        <button
+                          onClick={handleInstallTranscriptionDeps}
+                          disabled={isInstallingDeps}
+                          className={`
                          px-4 py-2 rounded-lg text-sm font-medium transition-all
                          ${installStatus === 'installed'
-                            ? 'bg-green-600 text-white hover:bg-green-700'
-                            : installStatus === 'error'
-                              ? 'bg-red-600 text-white hover:bg-red-700'
-                              : 'bg-zinc-100 text-zinc-900 hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed'}
+                              ? 'bg-green-600 text-white hover:bg-green-700'
+                              : installStatus === 'error'
+                                ? 'bg-red-600 text-white hover:bg-red-700'
+                                : 'bg-zinc-100 text-zinc-900 hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed'}
                        `}
-                      >
-                        {isInstallingDeps ? 'Installing...' :
-                          installStatus === 'installed' ? 'Installed ✓' :
-                            installStatus === 'error' ? 'Error' : 'Install Dependencies'}
-                      </button>
+                        >
+                          {isInstallingDeps ? 'Installing...' :
+                            installStatus === 'installed' ? 'Installed ✓' :
+                              installStatus === 'error' ? 'Error' : 'Install Dependencies'}
+                        </button>
+                      </div>
+                      <div className="w-48 text-xs text-zinc-400">
+                        {isInstallingDeps ? 'Downloading / installing...' : ''}
+                      </div>
                     </div>
-                    <div className="w-48 text-xs text-zinc-400">
-                      {isInstallingDeps ? 'Downloading / installing...' : ''}
+                    <div className="mt-3">
+                      <pre className="max-h-40 overflow-auto text-xs bg-zinc-900 border border-zinc-800 p-2 rounded text-zinc-300">{installLog}</pre>
                     </div>
-                  </div>
-                  <div className="mt-3">
-                    <pre className="max-h-40 overflow-auto text-xs bg-zinc-900 border border-zinc-800 p-2 rounded text-zinc-300">{installLog}</pre>
                   </div>
                 </div>
               </div>
-            </div>
 
-            {/* Google Drive Sync Section */}
-            <div className="bg-gradient-to-br from-zinc-800/50 to-zinc-900/50 rounded-xl p-4 border border-zinc-700/50">
-              <div className="flex items-center gap-3 mb-4">
-                <div className={`p-2 rounded-lg ${googleDriveConnected ? 'bg-green-500/20' : 'bg-zinc-700/50'}`}>
-                  {googleDriveConnected ? (
-                    <Cloud className="w-5 h-5 text-green-400" />
-                  ) : (
-                    <CloudOff className="w-5 h-5 text-zinc-400" />
-                  )}
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-zinc-200">Google Drive Sync</h3>
-                  <p className="text-xs text-zinc-500">
-                    {googleDriveConnected ? 'Your notes are backed up to the cloud' : 'Connect to backup your notes'}
-                  </p>
-                </div>
-              </div>
-
-              {!googleDriveConnected ? (
-                <button
-                  onClick={async () => {
-                    setIsConnectingDrive(true);
-                    const toastId = toast.loading('Check your browser tabs to login...');
-                    try {
-                      await invoke('connect_google_drive');
-                      setGoogleDriveConnected(true);
-                      toast.success('Connected to Google Drive!', { id: toastId });
-                      // Check for conflicts after connecting
-                      await checkForConflicts();
-                    } catch (e) {
-                      console.error(e);
-                      toast.error(`Connection failed: ${e}`, { id: toastId });
-                    } finally {
-                      setIsConnectingDrive(false);
-                    }
-                  }}
-                  disabled={isConnectingDrive}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-all"
-                >
-                  {isConnectingDrive ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Connecting...
-                    </>
-                  ) : (
-                    <>
-                      <Cloud className="w-4 h-4" />
-                      Connect Google Drive
-                    </>
-                  )}
-                </button>
-              ) : (
-                <div className="space-y-3">
-                  {/* Status Bar */}
-                  <div className="flex items-center justify-between px-3 py-2 bg-zinc-800/50 rounded-lg">
-                    <div className="flex items-center gap-2">
-                      <Check className="w-4 h-4 text-green-400" />
-                      <span className="text-xs text-zinc-300">Connected</span>
-                    </div>
-                    <span className="text-xs text-zinc-500">
-                      {lastSyncedAt ? `Last sync: ${lastSyncedAt.toLocaleTimeString()}` : 'Not synced yet'}
-                    </span>
+              {/* Google Drive Sync Section */}
+              <div className="bg-gradient-to-br from-zinc-800/50 to-zinc-900/50 rounded-xl p-4 border border-zinc-700/50">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className={`p-2 rounded-lg ${googleDriveConnected ? 'bg-green-500/20' : 'bg-zinc-700/50'}`}>
+                    {googleDriveConnected ? (
+                      <Cloud className="w-5 h-5 text-green-400" />
+                    ) : (
+                      <CloudOff className="w-5 h-5 text-zinc-400" />
+                    )}
                   </div>
+                  <div>
+                    <h3 className="text-sm font-semibold text-zinc-200">Google Drive Sync</h3>
+                    <p className="text-xs text-zinc-500">
+                      {googleDriveConnected ? 'Your notes are backed up to the cloud' : 'Connect to backup your notes'}
+                    </p>
+                  </div>
+                </div>
 
-                  {/* Conflict Resolution */}
-                  {syncConflict && (
-                    <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
-                      <div className="flex items-center gap-2 mb-2">
-                        <AlertTriangle className="w-4 h-4 text-amber-400" />
-                        <span className="text-xs font-medium text-amber-400">Sync Conflict Detected</span>
-                      </div>
-                      <p className="text-xs text-zinc-400 mb-3">
-                        Local: {syncConflict.local} notes • Cloud: {syncConflict.remote} notes
-                      </p>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={async () => {
-                            try {
-                              setIsSyncing(true);
-                              const msg = await invoke<string>('force_sync_from_cloud');
-                              toast.success(msg);
-                              setSyncConflict(null);
-                              setLastSyncedAt(new Date());
-                            } catch (e) {
-                              toast.error(`Failed: ${e}`);
-                            } finally {
-                              setIsSyncing(false);
-                            }
-                          }}
-                          disabled={isSyncing}
-                          className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
-                        >
-                          <Download className="w-3 h-3" />
-                          Use Cloud
-                        </button>
-                        <button
-                          onClick={async () => {
-                            try {
-                              setIsSyncing(true);
-                              const msg = await invoke<string>('force_sync_to_cloud');
-                              toast.success(msg);
-                              setSyncConflict(null);
-                              setLastSyncedAt(new Date());
-                            } catch (e) {
-                              toast.error(`Failed: ${e}`);
-                            } finally {
-                              setIsSyncing(false);
-                            }
-                          }}
-                          disabled={isSyncing}
-                          className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-zinc-600 text-white hover:bg-zinc-500 disabled:opacity-50"
-                        >
-                          <Upload className="w-3 h-3" />
-                          Use Local
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Sync Button with Progress Bar */}
+                {!googleDriveConnected ? (
                   <button
                     onClick={async () => {
-                      setIsSyncing(true);
+                      setIsConnectingDrive(true);
+                      const toastId = toast.loading('Check your browser tabs to login...');
                       try {
-                        const msg = await invoke<string>('sync_notes_to_google_drive');
-                        toast.success(msg);
-                        setLastSyncedAt(new Date());
+                        await invoke('connect_google_drive');
+                        setGoogleDriveConnected(true);
+                        toast.success('Connected to Google Drive!', { id: toastId });
+                        // Check for conflicts after connecting
+                        await checkForConflicts();
                       } catch (e) {
                         console.error(e);
-                        toast.error(`Sync failed: ${e}`);
+                        toast.error(`Connection failed: ${e}`, { id: toastId });
                       } finally {
-                        setIsSyncing(false);
+                        setIsConnectingDrive(false);
                       }
                     }}
-                    disabled={isSyncing}
-                    className="relative w-full overflow-hidden rounded-lg text-sm font-medium bg-zinc-700 text-zinc-200 hover:bg-zinc-600 disabled:cursor-not-allowed transition-all"
+                    disabled={isConnectingDrive}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-all"
                   >
-                    {/* Animated Progress Bar (visible when syncing) */}
-                    {isSyncing && (
-                      <div className="absolute inset-0 bg-gradient-to-r from-zinc-600/30 via-zinc-500/40 to-zinc-600/30 animate-pulse" />
+                    {isConnectingDrive ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Connecting...
+                      </>
+                    ) : (
+                      <>
+                        <Cloud className="w-4 h-4" />
+                        Connect Google Drive
+                      </>
                     )}
-                    {isSyncing && (
-                      <div
-                        className="absolute bottom-0 left-0 h-1 bg-gradient-to-r from-blue-500 to-cyan-400"
-                        style={{
-                          animation: 'progress 2s ease-in-out infinite',
-                        }}
-                      />
+                  </button>
+                ) : (
+                  <div className="space-y-3">
+                    {/* Status Bar */}
+                    <div className="flex items-center justify-between px-3 py-2 bg-zinc-800/50 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <Check className="w-4 h-4 text-green-400" />
+                        <span className="text-xs text-zinc-300">Connected</span>
+                      </div>
+                      <span className="text-xs text-zinc-500">
+                        {lastSyncedAt ? `Last sync: ${lastSyncedAt.toLocaleTimeString()}` : 'Not synced yet'}
+                      </span>
+                    </div>
+
+                    {/* Conflict Resolution */}
+                    {syncConflict && (
+                      <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
+                        <div className="flex items-center gap-2 mb-2">
+                          <AlertTriangle className="w-4 h-4 text-amber-400" />
+                          <span className="text-xs font-medium text-amber-400">Sync Conflict Detected</span>
+                        </div>
+                        <p className="text-xs text-zinc-400 mb-3">
+                          Local: {syncConflict.local} notes • Cloud: {syncConflict.remote} notes
+                        </p>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={async () => {
+                              try {
+                                setIsSyncing(true);
+                                const msg = await invoke<string>('force_sync_from_cloud');
+                                toast.success(msg);
+                                setSyncConflict(null);
+                                setLastSyncedAt(new Date());
+                              } catch (e) {
+                                toast.error(`Failed: ${e}`);
+                              } finally {
+                                setIsSyncing(false);
+                              }
+                            }}
+                            disabled={isSyncing}
+                            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+                          >
+                            <Download className="w-3 h-3" />
+                            Use Cloud
+                          </button>
+                          <button
+                            onClick={async () => {
+                              try {
+                                setIsSyncing(true);
+                                const msg = await invoke<string>('force_sync_to_cloud');
+                                toast.success(msg);
+                                setSyncConflict(null);
+                                setLastSyncedAt(new Date());
+                              } catch (e) {
+                                toast.error(`Failed: ${e}`);
+                              } finally {
+                                setIsSyncing(false);
+                              }
+                            }}
+                            disabled={isSyncing}
+                            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-zinc-600 text-white hover:bg-zinc-500 disabled:opacity-50"
+                          >
+                            <Upload className="w-3 h-3" />
+                            Use Local
+                          </button>
+                        </div>
+                      </div>
                     )}
-                    <style>{`
+
+                    {/* Sync Button with Progress Bar */}
+                    <button
+                      onClick={async () => {
+                        setIsSyncing(true);
+                        try {
+                          // Get the sync plan to check for conflicts
+                          const plan = await invoke<SyncPlan>('get_sync_plan');
+                          setSyncPlan(plan);
+
+                          // If there are conflicts or any pending changes, show dialog
+                          const hasChanges = plan.uploads.length > 0 ||
+                            plan.downloads.length > 0 ||
+                            plan.conflicts.length > 0 ||
+                            plan.deletions_local.length > 0 ||
+                            plan.deletions_cloud.length > 0;
+
+                          if (hasChanges) {
+                            setShowSyncDialog(true);
+                          } else {
+                            toast.success('Everything is already in sync!');
+                          }
+                        } catch (e) {
+                          console.error(e);
+                          toast.error(`Failed to check sync status: ${e}`);
+                        } finally {
+                          setIsSyncing(false);
+                        }
+                      }}
+                      disabled={isSyncing}
+                      className="relative w-full overflow-hidden rounded-lg text-sm font-medium bg-zinc-700 text-zinc-200 hover:bg-zinc-600 disabled:cursor-not-allowed transition-all"
+                    >
+                      {/* Animated Progress Bar (visible when syncing) */}
+                      {isSyncing && (
+                        <div className="absolute inset-0 bg-gradient-to-r from-zinc-600/30 via-zinc-500/40 to-zinc-600/30 animate-pulse" />
+                      )}
+                      {isSyncing && (
+                        <div
+                          className="absolute bottom-0 left-0 h-1 bg-gradient-to-r from-blue-500 to-cyan-400"
+                          style={{
+                            animation: 'progress 2s ease-in-out infinite',
+                          }}
+                        />
+                      )}
+                      <style>{`
                       @keyframes progress {
                         0% { width: 0%; }
                         50% { width: 80%; }
                         100% { width: 100%; }
                       }
                     `}</style>
-                    <div className="relative flex items-center justify-center gap-2 px-4 py-2.5">
-                      {isSyncing ? (
-                        <>
-                          <RefreshCw className="w-4 h-4 animate-spin" />
-                          <span>Syncing...</span>
-                        </>
-                      ) : (
-                        <>
-                          <RefreshCw className="w-4 h-4" />
-                          <span>Sync Now</span>
-                        </>
-                      )}
-                    </div>
-                  </button>
-                </div>
-              )}
-            </div>
+                      <div className="relative flex items-center justify-center gap-2 px-4 py-2.5">
+                        {isSyncing ? (
+                          <>
+                            <RefreshCw className="w-4 h-4 animate-spin" />
+                            <span>Syncing...</span>
+                          </>
+                        ) : (
+                          <>
+                            <RefreshCw className="w-4 h-4" />
+                            <span>Sync Now</span>
+                          </>
+                        )}
+                      </div>
+                    </button>
 
-            <div className="flex justify-end pt-4 border-t border-zinc-800">
-              {apiKey && (
-                <button
-                  onClick={handleRemoveApiKey}
-                  disabled={isLoading}
-                  className={`
+                    {/* Disconnect Button */}
+                    <button
+                      onClick={async () => {
+                        try {
+                          await invoke('disconnect_google_drive');
+                          setGoogleDriveConnected(false);
+                          setLastSyncedAt(null);
+                          setSyncConflict(null);
+                          toast.success('Disconnected from Google Drive');
+                        } catch (e) {
+                          console.error(e);
+                          toast.error(`Failed to disconnect: ${e}`);
+                        }
+                      }}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-medium text-zinc-400 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                    >
+                      <CloudOff className="w-3 h-3" />
+                      Disconnect Account
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex justify-end pt-4 border-t border-zinc-800">
+                {apiKey && (
+                  <button
+                    onClick={handleRemoveApiKey}
+                    disabled={isLoading}
+                    className={`
                     mr-2 px-4 py-2 rounded-lg text-sm font-medium transition-all
                     bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed
                   `}
-                >
-                  Remove API Key
-                </button>
-              )}
-              <button
-                onClick={handleSave}
-                disabled={isLoading || !apiKey}
-                className={`
+                  >
+                    Remove API Key
+                  </button>
+                )}
+                <button
+                  onClick={handleSave}
+                  disabled={isLoading || !apiKey}
+                  className={`
                   px-4 py-2 rounded-lg text-sm font-medium transition-all
                   ${status === 'saved'
-                    ? 'bg-green-600 text-white hover:bg-green-700'
-                    : status === 'error'
-                      ? 'bg-red-600 text-white hover:bg-red-700'
-                      : 'bg-zinc-100 text-zinc-900 hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed'}
+                      ? 'bg-green-600 text-white hover:bg-green-700'
+                      : status === 'error'
+                        ? 'bg-red-600 text-white hover:bg-red-700'
+                        : 'bg-zinc-100 text-zinc-900 hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed'}
                 `}
-              >
-                {status === 'saving' ? 'Saving...' :
-                  status === 'saved' ? 'Saved!' :
-                    status === 'error' ? 'Error' : 'Save Changes'}
-              </button>
+                >
+                  {status === 'saving' ? 'Saving...' :
+                    status === 'saved' ? 'Saved!' :
+                      status === 'error' ? 'Error' : 'Save Changes'}
+                </button>
+              </div>
             </div>
-          </div>
-        </DialogPanel>
-      </div>
-    </Dialog>
+          </DialogPanel>
+        </div>
+      </Dialog>
+
+      {/* Sync Conflict Dialog */}
+      <SyncConflictDialog
+        isOpen={showSyncDialog}
+        onClose={() => setShowSyncDialog(false)}
+        syncPlan={syncPlan}
+        onSyncComplete={() => {
+          setLastSyncedAt(new Date());
+          setSyncPlan(null);
+        }}
+      />
+    </>
   );
 };

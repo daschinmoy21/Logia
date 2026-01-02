@@ -41,6 +41,10 @@ mime = "0.3"
 # Ensure tokio is available with full features for async tasks
 tokio = { version = "1", features = ["full"] }
 dirs = "5"
+open = "3"
+sha2 = "0.10"
+rand = "0.8"
+fs2 = "0.4"
 
 
 [target.'cfg(target_os = "macos")'.dependencies]

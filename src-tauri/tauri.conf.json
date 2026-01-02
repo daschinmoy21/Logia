@@ -14,14 +14,15 @@
       {
         "title": "",
         "titleBarStyle": "Visible",
-        "width": 1080,
+        "width": 1200,
+        "height": 800,
         "decorations": true,
         "theme": "Dark",
         "dragDropEnabled": true
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://generativelanguage.googleapis.com https://accounts.google.com https://oauth2.googleapis.com https://www.googleapis.com https://*.googleusercontent.com; font-src 'self' data:"
     }
   },
   "bundle": {

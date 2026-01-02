@@ -16,7 +16,11 @@ const GOOGLE_CLIENT_ID: &str = env!("GOOGLE_CLIENT_ID");
 const GOOGLE_CLIENT_SECRET: &str = env!("GOOGLE_CLIENT_SECRET");
 
 pub struct GoogleDriveState {
-    pub hub: Arc<Mutex<Option<DriveHub<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>>>>,
+    // Using Arc<Mutex<Option<Arc<DriveHub>>>> allows us to:
+    // 1. Lock briefly to get/set the hub
+    // 2. Clone the Arc<DriveHub> to use during long operations
+    // 3. Release the mutex while the operation runs
+    pub hub: Arc<Mutex<Option<Arc<DriveHub<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>>>>>,
 }
 
 impl GoogleDriveState {
@@ -24,6 +28,22 @@ impl GoogleDriveState {
         Self {
             hub: Arc::new(Mutex::new(None)),
         }
+    }
+    
+    /// Get a cloned Arc to the hub, releasing the lock immediately.
+    /// This allows concurrent read operations without blocking.
+    pub async fn get_hub(&self) -> Option<Arc<DriveHub<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>>> {
+        self.hub.lock().await.clone()
+    }
+    
+    /// Set the hub (takes ownership wrapped in Arc)
+    pub async fn set_hub(&self, hub: DriveHub<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>) {
+        *self.hub.lock().await = Some(Arc::new(hub));
+    }
+    
+    /// Clear the hub
+    pub async fn clear_hub(&self) {
+        *self.hub.lock().await = None;
     }
 }
 
@@ -38,6 +58,21 @@ pub struct SyncStatus {
     pub local_count: usize,
     pub remote_count: usize,
     pub has_conflict: bool, // true if local and remote have different files
+}
+
+/// Detailed sync result for frontend to know what happened
+#[derive(Serialize, Clone)]
+pub struct SyncResult {
+    pub notes_uploaded: usize,
+    pub notes_downloaded: usize,
+    pub folders_uploaded: usize,
+    pub folders_downloaded: usize,
+    pub kanban_uploaded: usize,
+    pub kanban_downloaded: usize,
+    pub trash_uploaded: usize,
+    pub trash_downloaded: usize,
+    pub needs_reload: bool,  // true if any files were downloaded
+    pub message: String,
 }
 
 // Helper to resolve notes directory (duplicated from lib.rs for decoupling)
@@ -65,6 +100,42 @@ fn resolve_notes_path(app_handle: &tauri::AppHandle) -> Result<PathBuf, String> 
     }
 }
 
+// Custom Delegate to force browser open on Linux/NixOS and Windows reliably
+// Also patches URL to use 127.0.0.1 instead of localhost to avoid IPv6 issues
+struct BrowserUserHandler;
+
+impl google_drive3::oauth2::authenticator_delegate::InstalledFlowDelegate for BrowserUserHandler {
+    fn present_user_url<'a>(
+        &'a self,
+        url: &'a str,
+        need_code: bool,
+    ) -> Pin<Box<dyn Future<Output = Result<String, String>> + Send + 'a>> {
+        Box::pin(async move {
+            if need_code {
+                println!("Please enter the code from the browser:");
+            }
+            
+            // Force IPv4 loopback to avoid Windows IPv6 resolution issues (localhost resolving to ::1)
+            let url = url.replace("localhost", "127.0.0.1");
+            println!("Opening browser to: {}", url);
+            
+            // Use the `open` crate which properly handles URL escaping on all platforms
+            // (explorer.exe on Windows doesn't handle & in URLs correctly)
+            if let Err(e) = open::that(&url) {
+                println!("Failed to open browser: {}. Please open the URL manually.", e);
+            }
+            
+            if need_code {
+                 let mut input = String::new();
+                 std::io::stdin().read_line(&mut input).map_err(|e| e.to_string())?;
+                 return Ok(input.trim().to_string());
+            }
+            
+            Ok(String::new())
+        })
+    }
+}
+
 pub async fn create_drive_hub() -> Result<DriveHub<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>, String> {
     let token_path = dirs::data_local_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))
@@ -81,7 +152,7 @@ pub async fn create_drive_hub() -> Result<DriveHub<hyper_rustls::HttpsConnector<
         client_secret: GOOGLE_CLIENT_SECRET.to_string(),
         auth_uri: "https://accounts.google.com/o/oauth2/auth".to_string(),
         token_uri: "https://oauth2.googleapis.com/token".to_string(),
-        redirect_uris: vec!["http://localhost:8080".to_string()],
+        redirect_uris: vec!["http://127.0.0.1".to_string(), "http://localhost".to_string()], 
         ..Default::default()
     };
 
@@ -90,6 +161,7 @@ pub async fn create_drive_hub() -> Result<DriveHub<hyper_rustls::HttpsConnector<
         InstalledFlowReturnMethod::HTTPRedirect,
     )
     .persist_tokens_to_disk(token_path)
+    .flow_delegate(Box::new(BrowserUserHandler))
     .build()
     .await
     .map_err(|e| format!("Failed to create authenticator: {}", e))?;
@@ -117,17 +189,14 @@ pub struct DriveFileDiff {
 
 #[tauri::command]
 pub async fn connect_google_drive(state: State<'_, GoogleDriveState>) -> Result<AuthStatus, String> {
+    // create_drive_hub handles the OAuth flow entirely:
+    // - Uses InstalledFlowReturnMethod::HTTPRedirect which starts a local HTTP server
+    // - BrowserUserHandler delegate opens the browser with the correct auth URL
+    // - The library handles the callback automatically
     let hub = create_drive_hub().await?;
-    // Manually open the browser for OAuth since the library's automatic opening doesn't work on Windows
-    let auth_url = format!(
-        "https://accounts.google.com/o/oauth2/auth?client_id={}&redirect_uri=http://localhost:8080&scope=https://www.googleapis.com/auth/drive&response_type=code&access_type=offline",
-        GOOGLE_CLIENT_ID
-    );
-    if let Err(e) = open::that(&auth_url) {
-        println!("Failed to open browser: {}", e);
-    }
-    // CRITICAL: Add full scope to ensure we request https://www.googleapis.com/auth/drive
-    // This triggers the OAuth flow with the correct scope on first run
+    
+    // Trigger the OAuth flow by making a simple API call
+    // This forces authentication if not already authenticated
     let _ = hub.files().list()
         .page_size(1)
         .add_scope(Scope::Full)  // Explicitly request full Drive access
@@ -135,17 +204,46 @@ pub async fn connect_google_drive(state: State<'_, GoogleDriveState>) -> Result<
         .await
         .map_err(|e| e.to_string())?;
 
-    *state.hub.lock().await = Some(hub);
+    state.set_hub(hub).await;
 
     Ok(AuthStatus { is_authenticated: true, user_email: None })
 }
 
 #[tauri::command]
 pub async fn get_google_drive_status(state: State<'_, GoogleDriveState>) -> Result<AuthStatus, String> {
-    let hub_opt = state.hub.lock().await;
-    let is_auth = hub_opt.is_some();
+    let is_auth = state.get_hub().await.is_some();
     // We could try to get email here if connected
     Ok(AuthStatus { is_authenticated: is_auth, user_email: None })
+}
+
+#[tauri::command]
+pub async fn disconnect_google_drive(state: State<'_, GoogleDriveState>) -> Result<(), String> {
+    // Clear the hub state
+    state.clear_hub().await;
+    
+    // Delete the token file to fully sign out
+    let token_path = dirs::data_local_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join("logia")
+        .join("google_token.json");
+    
+    if token_path.exists() {
+        fs::remove_file(&token_path)
+            .map_err(|e| format!("Failed to remove token file: {}", e))?;
+    }
+    
+    // Also clear the drive config (cached folder IDs)
+    let config_path = dirs::data_local_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join("logia")
+        .join("drive_config.json");
+    
+    if config_path.exists() {
+        let _ = fs::remove_file(&config_path); // Best effort
+    }
+    
+    println!("[Google Drive] Disconnected and cleared token");
+    Ok(())
 }
 
 // --- Sync Helpers ---
@@ -425,12 +523,10 @@ async fn get_all_sync_folders(hub: &DriveHub<hyper_rustls::HttpsConnector<hyper:
 
 #[tauri::command]
 pub async fn sync_notes_to_google_drive(app_handle: tauri::AppHandle, state: State<'_, GoogleDriveState>) -> Result<String, String> {
-    let hub_opt = state.hub.lock().await;
-    let hub = hub_opt.as_ref().ok_or("Not connected")?; // Note: This holds the lock for the whole sync? Ideally verify connection then release lock, but DriveHub is not Clone easily without the Arc. 
-    // Actually DriveHub uses Arc internally for client/auth so it is cheap to clone? No, DriveHub does not implement Clone. 
-    // We'll keep the lock or we need to handle this better. Since sync is single-threaded per user request, holding the lock is fine for now but blocks other drive ops.
+    // Get a cloned Arc to the hub - releases the lock immediately
+    let hub = state.get_hub().await.ok_or("Not connected")?;
     
-    let logia_folder_id = get_target_sync_folder(hub).await?;
+    let logia_folder_id = get_target_sync_folder(&hub).await?;
 
     // 1. List Remote Files
     let q = format!("'{}' in parents and trashed = false", logia_folder_id);
@@ -473,17 +569,17 @@ pub async fn sync_notes_to_google_drive(app_handle: tauri::AppHandle, state: Sta
                  if local_modified.signed_duration_since(remote_modified).num_seconds() > 2 {
                      // Local is newer -> Upload
                      println!("Uploading newer local: {}", name);
-                     upload_file(hub, &path, &name, &logia_folder_id, Some(&remote_file.id.as_ref().unwrap())).await?;
+                     upload_file(&hub, &path, &name, &logia_folder_id, Some(&remote_file.id.as_ref().unwrap())).await?;
                  } else if remote_modified.signed_duration_since(local_modified).num_seconds() > 2 {
                      // Remote is newer -> Download
                      println!("Downloading newer remote: {}", name);
-                     download_file(hub, &remote_file.id.as_ref().unwrap(), &path).await?;
+                     download_file(&hub, &remote_file.id.as_ref().unwrap(), &path).await?;
                  }
                  // Else: synced
              } else {
                  // Not in remote -> Upload (New)
                  println!("Uploading new file: {}", name);
-                 upload_file(hub, &path, &name, &logia_folder_id, None).await?;
+                 upload_file(&hub, &path, &name, &logia_folder_id, None).await?;
              }
         }
     }
@@ -494,7 +590,7 @@ pub async fn sync_notes_to_google_drive(app_handle: tauri::AppHandle, state: Sta
             // Missing locally
             println!("Downloading missing local: {}", name);
             let target_path = notes_dir.join(&name);
-            download_file(hub, &remote_file.id.unwrap(), &target_path).await?;
+            download_file(&hub, &remote_file.id.unwrap(), &target_path).await?;
         }
     }
 
@@ -503,10 +599,9 @@ pub async fn sync_notes_to_google_drive(app_handle: tauri::AppHandle, state: Sta
 
 #[tauri::command]
 pub async fn check_sync_status(app_handle: tauri::AppHandle, state: State<'_, GoogleDriveState>) -> Result<SyncStatus, String> {
-    let hub_opt = state.hub.lock().await;
-    let hub = hub_opt.as_ref().ok_or("Not connected")?;
+    let hub = state.get_hub().await.ok_or("Not connected")?;
     
-    let logia_folder_id = get_target_sync_folder(hub).await?;
+    let logia_folder_id = get_target_sync_folder(&hub).await?;
 
     // Count remote files
     let q = format!("'{}' in parents and trashed = false", logia_folder_id);
@@ -531,10 +626,9 @@ pub async fn check_sync_status(app_handle: tauri::AppHandle, state: State<'_, Go
 
 #[tauri::command]
 pub async fn force_sync_from_cloud(app_handle: tauri::AppHandle, state: State<'_, GoogleDriveState>) -> Result<String, String> {
-    let hub_opt = state.hub.lock().await;
-    let hub = hub_opt.as_ref().ok_or("Not connected")?;
+    let hub = state.get_hub().await.ok_or("Not connected")?;
     
-    let logia_folder_id = get_target_sync_folder(hub).await?;
+    let logia_folder_id = get_target_sync_folder(&hub).await?;
     let notes_dir = resolve_notes_path(&app_handle)?;
 
     // List remote files
@@ -547,7 +641,7 @@ pub async fn force_sync_from_cloud(app_handle: tauri::AppHandle, state: State<'_
     for file in remote_files {
         if let (Some(id), Some(name)) = (file.id, file.name) {
             let target_path = notes_dir.join(&name);
-            download_file(hub, &id, &target_path).await?;
+            download_file(&hub, &id, &target_path).await?;
         }
     }
 
@@ -556,10 +650,9 @@ pub async fn force_sync_from_cloud(app_handle: tauri::AppHandle, state: State<'_
 
 #[tauri::command]
 pub async fn force_sync_to_cloud(app_handle: tauri::AppHandle, state: State<'_, GoogleDriveState>) -> Result<String, String> {
-    let hub_opt = state.hub.lock().await;
-    let hub = hub_opt.as_ref().ok_or("Not connected")?;
+    let hub = state.get_hub().await.ok_or("Not connected")?;
     
-    let logia_folder_id = get_target_sync_folder(hub).await?;
+    let logia_folder_id = get_target_sync_folder(&hub).await?;
     let notes_dir = resolve_notes_path(&app_handle)?;
 
     // Delete all remote files in the Logia folder first
@@ -581,7 +674,7 @@ pub async fn force_sync_to_cloud(app_handle: tauri::AppHandle, state: State<'_, 
         let path = entry.path();
         if path.extension().and_then(|s| s.to_str()) == Some("json") {
             let name = entry.file_name().to_string_lossy().to_string();
-            upload_file(hub, &path, &name, &logia_folder_id, None).await?;
+            upload_file(&hub, &path, &name, &logia_folder_id, None).await?;
             count += 1;
         }
     }
@@ -680,8 +773,15 @@ async fn sync_directory(
                         upload_file(hub, &path, &name, remote_folder_id, remote_file.id.as_deref()).await?;
                         uploaded += 1;
                     } else if remote_modified.signed_duration_since(local_modified).num_seconds() > 2 {
-                        // Remote is newer -> Download
+                        // Remote is newer -> Download (backup local first for safety)
+                        // Create a backup copy with .backup suffix before overwriting
+                        let backup_path = path.with_extension("json.backup");
+                        if path.exists() {
+                            let _ = fs::copy(&path, &backup_path); // Best effort backup
+                        }
                         download_file(hub, remote_file.id.as_ref().unwrap(), &path).await?;
+                        // Remove backup if download succeeded
+                        let _ = fs::remove_file(&backup_path);
                         downloaded += 1;
                     }
                 } else {
@@ -707,15 +807,14 @@ async fn sync_directory(
 
 /// Syncs all directories: notes, folders, kanban (as single file), and trash
 #[tauri::command]
-pub async fn sync_all_to_google_drive(app_handle: tauri::AppHandle, state: State<'_, GoogleDriveState>) -> Result<String, String> {
-    let hub_opt = state.hub.lock().await;
-    let hub = hub_opt.as_ref().ok_or("Not connected")?;
+pub async fn sync_all_to_google_drive(app_handle: tauri::AppHandle, state: State<'_, GoogleDriveState>) -> Result<SyncResult, String> {
+    let hub = state.get_hub().await.ok_or("Not connected")?;
     
-    let (_root_id, notes_id, folders_id, kanban_id, trash_id) = get_all_sync_folders(hub).await?;
+    let (_root_id, notes_id, folders_id, kanban_id, trash_id) = get_all_sync_folders(&hub).await?;
 
     // Sync notes/
     let notes_dir = resolve_notes_path(&app_handle)?;
-    let (notes_up, notes_down) = sync_directory(hub, &notes_dir, &notes_id).await?;
+    let (notes_up, notes_down) = sync_directory(&hub, &notes_dir, &notes_id).await?;
     println!("[Sync] Notes: {} uploaded, {} downloaded", notes_up, notes_down);
 
     // Sync folders/
@@ -724,7 +823,7 @@ pub async fn sync_all_to_google_drive(app_handle: tauri::AppHandle, state: State
     if !folders_dir.exists() {
         let _ = fs::create_dir_all(&folders_dir);
     }
-    let (folders_up, folders_down) = sync_directory(hub, &folders_dir, &folders_id).await?;
+    let (folders_up, folders_down) = sync_directory(&hub, &folders_dir, &folders_id).await?;
     println!("[Sync] Folders: {} uploaded, {} downloaded", folders_up, folders_down);
 
     // Sync kanban/ (special: single data.json file)
@@ -733,7 +832,7 @@ pub async fn sync_all_to_google_drive(app_handle: tauri::AppHandle, state: State
     if !kanban_dir.exists() {
         let _ = fs::create_dir_all(&kanban_dir);
     }
-    let (kanban_up, kanban_down) = sync_directory(hub, &kanban_dir, &kanban_id).await?;
+    let (kanban_up, kanban_down) = sync_directory(&hub, &kanban_dir, &kanban_id).await?;
     println!("[Sync] Kanban: {} uploaded, {} downloaded", kanban_up, kanban_down);
 
     // Sync trash/
@@ -742,23 +841,34 @@ pub async fn sync_all_to_google_drive(app_handle: tauri::AppHandle, state: State
     if !trash_dir.exists() {
         let _ = fs::create_dir_all(&trash_dir);
     }
-    let (trash_up, trash_down) = sync_directory(hub, &trash_dir, &trash_id).await?;
+    let (trash_up, trash_down) = sync_directory(&hub, &trash_dir, &trash_id).await?;
     println!("[Sync] Trash: {} uploaded, {} downloaded", trash_up, trash_down);
 
     let total_up = notes_up + folders_up + kanban_up + trash_up;
     let total_down = notes_down + folders_down + kanban_down + trash_down;
+    let needs_reload = notes_down > 0 || folders_down > 0 || kanban_down > 0;
     
-    Ok(format!("Sync complete: {} uploaded, {} downloaded", total_up, total_down))
+    Ok(SyncResult {
+        notes_uploaded: notes_up,
+        notes_downloaded: notes_down,
+        folders_uploaded: folders_up,
+        folders_downloaded: folders_down,
+        kanban_uploaded: kanban_up,
+        kanban_downloaded: kanban_down,
+        trash_uploaded: trash_up,
+        trash_downloaded: trash_down,
+        needs_reload,
+        message: format!("Sync complete: {} uploaded, {} downloaded", total_up, total_down),
+    })
 }
 
 /// Cleans up trash items older than 14 days
 #[tauri::command]
 pub async fn cleanup_old_trash(app_handle: tauri::AppHandle, state: State<'_, GoogleDriveState>) -> Result<usize, String> {
-    let hub_opt = state.hub.lock().await;
-    let hub = hub_opt.as_ref().ok_or("Not connected")?;
+    let hub = state.get_hub().await.ok_or("Not connected")?;
     
-    let root_id = get_or_create_logia_root(hub).await?;
-    let trash_id = get_or_create_subfolder(hub, &root_id, "trash", "trash").await?;
+    let root_id = get_or_create_logia_root(&hub).await?;
+    let trash_id = get_or_create_subfolder(&hub, &root_id, "trash", "trash").await?;
     
     // List all files in trash folder with their modified times
     let q = format!("'{}' in parents and trashed = false", trash_id);
@@ -815,3 +925,366 @@ pub async fn cleanup_old_trash(app_handle: tauri::AppHandle, state: State<'_, Go
 
     Ok(deleted_count)
 }
+
+// ============================================================================
+// MANIFEST-BASED SYNC SYSTEM
+// ============================================================================
+
+use crate::sync_manifest::{
+    SyncManifest, FileState, FileStatus, SyncPlan, SyncAction,
+    load_local_manifest, save_local_manifest, scan_local_files,
+    detect_local_changes, build_sync_plan, compute_file_hash,
+};
+
+/// Download the manifest from cloud (if it exists)
+async fn download_cloud_manifest(
+    hub: &DriveHub<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>,
+    root_id: &str,
+) -> Result<Option<SyncManifest>, String> {
+    // Search for sync_manifest.json in root folder
+    let q = format!("name = 'sync_manifest.json' and '{}' in parents and trashed = false", root_id);
+    let (_, file_list) = hub.files().list()
+        .q(&q)
+        .param("fields", "files(id, name)")
+        .add_scope(Scope::Full)
+        .doit()
+        .await
+        .map_err(|e| format!("Failed to search for manifest: {}", e))?;
+    
+    if let Some(files) = file_list.files {
+        if let Some(file) = files.first() {
+            if let Some(id) = &file.id {
+                // Download the manifest
+                let response = hub.files().get(id)
+                    .param("alt", "media")
+                    .add_scope(Scope::Full)
+                    .doit()
+                    .await
+                    .map_err(|e| format!("Failed to download manifest: {}", e))?;
+                
+                let bytes = hyper::body::to_bytes(response.0.into_body())
+                    .await
+                    .map_err(|e| format!("Failed to read manifest body: {}", e))?;
+                
+                let manifest: SyncManifest = serde_json::from_slice(&bytes)
+                    .map_err(|e| format!("Failed to parse cloud manifest: {}", e))?;
+                
+                return Ok(Some(manifest));
+            }
+        }
+    }
+    
+    Ok(None)
+}
+
+/// Upload the manifest to cloud
+async fn upload_cloud_manifest(
+    hub: &DriveHub<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>,
+    root_id: &str,
+    manifest: &SyncManifest,
+) -> Result<(), String> {
+    let content = serde_json::to_string_pretty(manifest)
+        .map_err(|e| format!("Failed to serialize manifest: {}", e))?;
+    
+    // Check if manifest already exists
+    let q = format!("name = 'sync_manifest.json' and '{}' in parents and trashed = false", root_id);
+    let (_, file_list) = hub.files().list()
+        .q(&q)
+        .param("fields", "files(id)")
+        .add_scope(Scope::Full)
+        .doit()
+        .await
+        .map_err(|e| format!("Failed to check for existing manifest: {}", e))?;
+    
+    let existing_id = file_list.files.and_then(|f| f.first().and_then(|f| f.id.clone()));
+    
+    if let Some(id) = existing_id {
+        // Update existing
+        hub.files().update(DriveFile::default(), &id)
+            .add_scope(Scope::Full)
+            .upload(std::io::Cursor::new(content), "application/json".parse().unwrap())
+            .await
+            .map_err(|e| format!("Failed to update manifest: {}", e))?;
+    } else {
+        // Create new
+        let drive_file = DriveFile {
+            name: Some("sync_manifest.json".to_string()),
+            parents: Some(vec![root_id.to_string()]),
+            ..Default::default()
+        };
+        hub.files().create(drive_file)
+            .add_scope(Scope::Full)
+            .upload(std::io::Cursor::new(content), "application/json".parse().unwrap())
+            .await
+            .map_err(|e| format!("Failed to create manifest: {}", e))?;
+    }
+    
+    Ok(())
+}
+
+/// Update manifest with cloud file states
+async fn update_manifest_from_cloud(
+    hub: &DriveHub<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>,
+    manifest: &mut SyncManifest,
+    folder_id: &str,
+    subdir: &str,
+) -> Result<(), String> {
+    let q = format!("'{}' in parents and trashed = false", folder_id);
+    let (_, file_list) = hub.files().list()
+        .q(&q)
+        .param("fields", "files(id, name, modifiedTime, md5Checksum)")
+        .add_scope(Scope::Full)
+        .doit()
+        .await
+        .map_err(|e| format!("Failed to list cloud files: {}", e))?;
+    
+    let cloud_files = file_list.files.unwrap_or_default();
+    
+    // Track which files exist in cloud
+    let mut cloud_paths = std::collections::HashSet::new();
+    
+    for file in cloud_files {
+        if let Some(name) = &file.name {
+            let path = format!("{}/{}", subdir, name);
+            cloud_paths.insert(path.clone());
+            
+            let cloud_modified = file.modified_time;
+            let cloud_id = file.id.clone();
+            
+            if let Some(state) = manifest.files.get_mut(&path) {
+                // File exists in manifest
+                state.cloud_modified = cloud_modified;
+                state.cloud_file_id = cloud_id;
+                
+                // Check if cloud changed since last sync
+                if state.status == FileStatus::Synced {
+                    // Compare modification times
+                    if let (Some(cm), Some(lm)) = (&cloud_modified, &state.local_modified) {
+                        if cm.signed_duration_since(*lm).num_seconds() > 2 {
+                            state.status = FileStatus::CloudModified;
+                        }
+                    }
+                } else if state.status == FileStatus::LocalModified {
+                    // Both changed - conflict
+                    if let (Some(cm), Some(prev_cm)) = (&cloud_modified, &state.cloud_modified) {
+                        if cm != prev_cm {
+                            state.status = FileStatus::Conflict;
+                        }
+                    }
+                }
+            } else {
+                // New file in cloud
+                manifest.files.insert(path, FileState {
+                    local_hash: None,
+                    cloud_hash: None,
+                    local_modified: None,
+                    cloud_modified,
+                    status: FileStatus::NewCloud,
+                    cloud_file_id: cloud_id,
+                });
+            }
+        }
+    }
+    
+    // Check for files deleted from cloud
+    for (path, state) in manifest.files.iter_mut() {
+        if path.starts_with(&format!("{}/", subdir)) && !cloud_paths.contains(path) {
+            if state.cloud_file_id.is_some() && state.local_hash.is_some() {
+                state.status = FileStatus::DeletedCloud;
+                state.cloud_file_id = None;
+                state.cloud_modified = None;
+            }
+        }
+    }
+    
+    Ok(())
+}
+
+/// Get the sync plan (pending changes and conflicts)
+#[tauri::command]
+pub async fn get_sync_plan(
+    app_handle: tauri::AppHandle,
+    state: State<'_, GoogleDriveState>,
+) -> Result<SyncPlan, String> {
+    let hub = state.get_hub().await.ok_or("Not connected to Google Drive")?;
+    
+    // Get folder IDs
+    let (root_id, notes_id, folders_id, kanban_id, trash_id) = get_all_sync_folders(&hub).await?;
+    
+    // Load local manifest
+    let mut manifest = load_local_manifest(&app_handle)?;
+    
+    // Scan local files
+    let local_files = scan_local_files(&app_handle)?;
+    
+    // Update manifest with local changes
+    manifest = detect_local_changes(&manifest, &local_files);
+    
+    // Update manifest with cloud state
+    update_manifest_from_cloud(&hub, &mut manifest, &notes_id, "notes").await?;
+    update_manifest_from_cloud(&hub, &mut manifest, &folders_id, "folders").await?;
+    update_manifest_from_cloud(&hub, &mut manifest, &kanban_id, "kanban").await?;
+    update_manifest_from_cloud(&hub, &mut manifest, &trash_id, "trash").await?;
+    
+    // Save updated manifest
+    save_local_manifest(&app_handle, &manifest)?;
+    
+    // Build and return the sync plan
+    Ok(build_sync_plan(&manifest))
+}
+
+/// Conflict resolution choice from the user
+#[derive(Debug, Clone, Deserialize)]
+pub struct ConflictResolution {
+    pub path: String,
+    pub choice: String,  // "local" | "cloud" | "keep_both"
+}
+
+/// Execute sync with user's conflict resolutions
+#[tauri::command]
+pub async fn execute_sync_with_resolutions(
+    app_handle: tauri::AppHandle,
+    state: State<'_, GoogleDriveState>,
+    resolutions: Vec<ConflictResolution>,
+) -> Result<SyncResult, String> {
+    let hub = state.get_hub().await.ok_or("Not connected to Google Drive")?;
+    
+    // Get folder IDs
+    let (root_id, notes_id, folders_id, kanban_id, trash_id) = get_all_sync_folders(&hub).await?;
+    
+    // Load manifest and build plan
+    let mut manifest = load_local_manifest(&app_handle)?;
+    let local_files = scan_local_files(&app_handle)?;
+    manifest = detect_local_changes(&manifest, &local_files);
+    
+    update_manifest_from_cloud(&hub, &mut manifest, &notes_id, "notes").await?;
+    update_manifest_from_cloud(&hub, &mut manifest, &folders_id, "folders").await?;
+    update_manifest_from_cloud(&hub, &mut manifest, &kanban_id, "kanban").await?;
+    update_manifest_from_cloud(&hub, &mut manifest, &trash_id, "trash").await?;
+    
+    // Apply conflict resolutions
+    let resolution_map: std::collections::HashMap<_, _> = resolutions
+        .iter()
+        .map(|r| (r.path.clone(), r.choice.clone()))
+        .collect();
+    
+    for (path, state) in manifest.files.iter_mut() {
+        if state.status == FileStatus::Conflict {
+            if let Some(choice) = resolution_map.get(path) {
+                match choice.as_str() {
+                    "local" => state.status = FileStatus::LocalModified,
+                    "cloud" => state.status = FileStatus::CloudModified,
+                    "keep_both" => {
+                        // Mark as local modified (will upload with different name)
+                        // The actual rename happens during execution
+                        state.status = FileStatus::LocalModified;
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+    
+    // Execute the sync
+    let mut notes_up = 0;
+    let mut notes_down = 0;
+    let mut folders_up = 0;
+    let mut folders_down = 0;
+    let mut kanban_up = 0;
+    let mut kanban_down = 0;
+    let mut trash_up = 0;
+    let mut trash_down = 0;
+    
+    let logia_dir = app_handle.path().resolve("Logia", BaseDirectory::Document)
+        .map_err(|_| "Could not resolve Logia directory")?;
+    
+    for (path, file_state) in manifest.files.iter_mut() {
+        let local_path = logia_dir.join(path);
+        let (folder_id, counters) = if path.starts_with("notes/") {
+            (&notes_id, (&mut notes_up, &mut notes_down))
+        } else if path.starts_with("folders/") {
+            (&folders_id, (&mut folders_up, &mut folders_down))
+        } else if path.starts_with("kanban/") {
+            (&kanban_id, (&mut kanban_up, &mut kanban_down))
+        } else if path.starts_with("trash/") {
+            (&trash_id, (&mut trash_up, &mut trash_down))
+        } else {
+            continue;
+        };
+        
+        let filename = path.split('/').last().unwrap_or(path);
+        
+        match file_state.status {
+            FileStatus::LocalModified | FileStatus::NewLocal => {
+                // Upload to cloud
+                if local_path.exists() {
+                    upload_file(&hub, &local_path, filename, folder_id, file_state.cloud_file_id.as_deref()).await?;;
+                    file_state.cloud_hash = file_state.local_hash.clone();
+                    file_state.cloud_modified = Some(Utc::now());
+                    file_state.status = FileStatus::Synced;
+                    *counters.0 += 1;
+                }
+            }
+            FileStatus::CloudModified | FileStatus::NewCloud => {
+                // Download from cloud
+                if let Some(cloud_id) = &file_state.cloud_file_id {
+                    // Create parent dir if needed
+                    if let Some(parent) = local_path.parent() {
+                        let _ = fs::create_dir_all(parent);
+                    }
+                    download_file(&hub, cloud_id, &local_path).await?;;
+                    file_state.local_hash = file_state.cloud_hash.clone();
+                    file_state.local_modified = file_state.cloud_modified;
+                    file_state.status = FileStatus::Synced;
+                    *counters.1 += 1;
+                }
+            }
+            FileStatus::DeletedLocal => {
+                // Delete from cloud (move to trash conceptually)
+                if let Some(cloud_id) = &file_state.cloud_file_id {
+                    let _ = hub.files().delete(cloud_id).add_scope(Scope::Full).doit().await;
+                    file_state.cloud_file_id = None;
+                    file_state.cloud_hash = None;
+                    file_state.cloud_modified = None;
+                }
+            }
+            FileStatus::DeletedCloud => {
+                // Delete locally (move to trash)
+                if local_path.exists() {
+                    let trash_dest = logia_dir.join("trash").join(filename);
+                    let _ = fs::rename(&local_path, &trash_dest);
+                    file_state.local_hash = None;
+                    file_state.local_modified = None;
+                }
+            }
+            FileStatus::Synced | FileStatus::Conflict => {
+                // Nothing to do (conflicts should have been resolved)
+            }
+        }
+    }
+    
+    // Update timestamps
+    manifest.last_sync = Some(Utc::now());
+    
+    // Save manifest locally and to cloud
+    save_local_manifest(&app_handle, &manifest)?;
+    upload_cloud_manifest(&hub, &root_id, &manifest).await?;;
+    
+    let total_up = notes_up + folders_up + kanban_up + trash_up;
+    let total_down = notes_down + folders_down + kanban_down + trash_down;
+    let needs_reload = notes_down > 0 || folders_down > 0 || kanban_down > 0;
+    
+    Ok(SyncResult {
+        notes_uploaded: notes_up,
+        notes_downloaded: notes_down,
+        folders_uploaded: folders_up,
+        folders_downloaded: folders_down,
+        kanban_uploaded: kanban_up,
+        kanban_downloaded: kanban_down,
+        trash_uploaded: trash_up,
+        trash_downloaded: trash_down,
+        needs_reload,
+        message: format!("Sync complete: {} uploaded, {} downloaded", total_up, total_down),
+    })
+}
+

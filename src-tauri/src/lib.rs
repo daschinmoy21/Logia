@@ -10,9 +10,44 @@ use keyring::Entry;
 use aes_gcm::{Aes256Gcm, Key, Nonce};
 use aes_gcm::aead::{Aead, KeyInit};
 use base64::{Engine as _, engine::general_purpose};
+use rand::Rng;
+use fs2::FileExt;
 
 mod audio;
 mod google_drive;
+mod sync_manifest;
+
+/// Atomically write content to a file using a temporary file and rename.
+/// This prevents data loss during concurrent writes and is safe across filesystem operations.
+fn atomic_write_file(path: &std::path::Path, content: &str) -> Result<(), String> {
+    let temp_path = path.with_extension("json.tmp");
+    
+    // Write to temp file first
+    let temp_file = std::fs::File::create(&temp_path)
+        .map_err(|e| format!("Failed to create temp file: {}", e))?;
+    
+    // Get exclusive lock on temp file
+    temp_file.lock_exclusive()
+        .map_err(|e| format!("Failed to lock file: {}", e))?;
+    
+    // Write content
+    std::io::Write::write_all(&mut &temp_file, content.as_bytes())
+        .map_err(|e| format!("Failed to write to temp file: {}", e))?;
+    
+    // Sync to disk
+    temp_file.sync_all()
+        .map_err(|e| format!("Failed to sync file: {}", e))?;
+    
+    // Unlock (happens automatically when file is dropped, but explicit is clearer)
+    temp_file.unlock()
+        .map_err(|e| format!("Failed to unlock file: {}", e))?;
+    
+    // Atomically rename temp to target (atomic on most filesystems)
+    std::fs::rename(&temp_path, path)
+        .map_err(|e| format!("Failed to rename temp file: {}", e))?;
+    
+    Ok(())
+}
 
 // Hide console windows on Windows when spawning subprocesses
 #[cfg(windows)]
@@ -26,31 +61,105 @@ fn hide_console(cmd: &mut std::process::Command) {
     }
 }
 
-// Encryption key derived from app name (in production, this should be more secure)
-fn get_encryption_key() -> &'static [u8; 32] {
-    b"logia-app-encryption-key--32byte"
+// Keyring service for the encryption master key
+const KEYRING_SERVICE_MASTER: &str = "Logia";
+const KEYRING_USERNAME_MASTER: &str = "encryption_master_key";
+
+/// Get or create the per-installation encryption key.
+/// The key is stored in the OS keyring for security. If keyring is unavailable,
+/// we generate a key and store it in a local file (less secure, but functional).
+fn get_or_create_encryption_key(app_handle: &tauri::AppHandle) -> Result<[u8; 32], String> {
+    // Try to get from keyring first
+    if let Ok(entry) = Entry::new(KEYRING_SERVICE_MASTER, KEYRING_USERNAME_MASTER) {
+        if let Ok(key_b64) = entry.get_password() {
+            if let Ok(key_bytes) = general_purpose::STANDARD.decode(&key_b64) {
+                if key_bytes.len() == 32 {
+                    let mut key = [0u8; 32];
+                    key.copy_from_slice(&key_bytes);
+                    return Ok(key);
+                }
+            }
+        }
+    }
+
+    // Key not in keyring - check file fallback
+    let config_dir = get_config_directory(app_handle)?;
+    let key_file = config_dir.join(".encryption_key");
+    
+    if key_file.exists() {
+        if let Ok(content) = fs::read_to_string(&key_file) {
+            if let Ok(key_bytes) = general_purpose::STANDARD.decode(content.trim()) {
+                if key_bytes.len() == 32 {
+                    let mut key = [0u8; 32];
+                    key.copy_from_slice(&key_bytes);
+                    // Try to migrate to keyring
+                    let key_b64 = general_purpose::STANDARD.encode(&key);
+                    if let Ok(entry) = Entry::new(KEYRING_SERVICE_MASTER, KEYRING_USERNAME_MASTER) {
+                        let _ = entry.set_password(&key_b64);
+                    }
+                    return Ok(key);
+                }
+            }
+        }
+    }
+
+    // Generate new key
+    let mut key = [0u8; 32];
+    rand::thread_rng().fill(&mut key);
+    let key_b64 = general_purpose::STANDARD.encode(&key);
+    
+    // Try to store in keyring
+    if let Ok(entry) = Entry::new(KEYRING_SERVICE_MASTER, KEYRING_USERNAME_MASTER) {
+        if entry.set_password(&key_b64).is_ok() {
+            return Ok(key);
+        }
+    }
+    
+    // Fallback: store in file
+    if let Err(e) = fs::write(&key_file, &key_b64) {
+        return Err(format!("Failed to store encryption key: {}", e));
+    }
+    
+    Ok(key)
 }
 
-fn encrypt_api_key(key: &str) -> Result<String, String> {
-    let cipher_key = Key::<Aes256Gcm>::from_slice(get_encryption_key());
+fn encrypt_api_key(app_handle: &tauri::AppHandle, plaintext: &str) -> Result<String, String> {
+    let key_bytes = get_or_create_encryption_key(app_handle)?;
+    let cipher_key = Key::<Aes256Gcm>::from_slice(&key_bytes);
     let cipher = Aes256Gcm::new(cipher_key);
-    let nonce = Nonce::from_slice(b"unique nonce"); // In production, use random nonce
+    
+    // Generate random 12-byte nonce
+    let mut nonce_bytes = [0u8; 12];
+    rand::thread_rng().fill(&mut nonce_bytes);
+    let nonce = Nonce::from_slice(&nonce_bytes);
 
-    let ciphertext = cipher.encrypt(nonce, key.as_bytes())
+    let ciphertext = cipher.encrypt(nonce, plaintext.as_bytes())
         .map_err(|e| format!("Encryption failed: {}", e))?;
 
-    Ok(general_purpose::STANDARD.encode(ciphertext))
+    // Prepend nonce to ciphertext (nonce doesn't need to be secret)
+    let mut combined = nonce_bytes.to_vec();
+    combined.extend(ciphertext);
+    
+    Ok(general_purpose::STANDARD.encode(combined))
 }
 
-fn decrypt_api_key(encrypted: &str) -> Result<String, String> {
-    let cipher_key = Key::<Aes256Gcm>::from_slice(get_encryption_key());
+fn decrypt_api_key(app_handle: &tauri::AppHandle, encrypted: &str) -> Result<String, String> {
+    let key_bytes = get_or_create_encryption_key(app_handle)?;
+    let cipher_key = Key::<Aes256Gcm>::from_slice(&key_bytes);
     let cipher = Aes256Gcm::new(cipher_key);
-    let nonce = Nonce::from_slice(b"unique nonce");
 
-    let ciphertext = general_purpose::STANDARD.decode(encrypted)
+    let combined = general_purpose::STANDARD.decode(encrypted)
         .map_err(|e| format!("Base64 decode failed: {}", e))?;
+    
+    if combined.len() < 12 {
+        return Err("Invalid encrypted data: too short".to_string());
+    }
+    
+    // Extract nonce (first 12 bytes) and ciphertext (rest)
+    let (nonce_bytes, ciphertext) = combined.split_at(12);
+    let nonce = Nonce::from_slice(nonce_bytes);
 
-    let plaintext = cipher.decrypt(nonce, ciphertext.as_ref())
+    let plaintext = cipher.decrypt(nonce, ciphertext)
         .map_err(|e| format!("Decryption failed: {}", e))?;
 
     String::from_utf8(plaintext)
@@ -203,7 +312,7 @@ async fn create_note(
     let note_json = serde_json::to_string_pretty(&note)
         .map_err(|e| format!("Failed to serialize note: {}", e))?;
 
-    fs::write(&file_path, note_json).map_err(|e| format!("Failed to write note file: {}", e))?;
+    atomic_write_file(&file_path, &note_json)?;;
 
     Ok(note)
 }
@@ -244,7 +353,7 @@ async fn save_note(note: Note, app_handle: tauri::AppHandle) -> Result<(), Strin
     let note_json = serde_json::to_string_pretty(&updated_note)
         .map_err(|e| format!("Failed to serialize note: {}", e))?;
 
-    fs::write(&file_path, note_json).map_err(|e| format!("Failed to write note file: {}", e))?;
+    atomic_write_file(&file_path, &note_json)?;;
 
     Ok(())
 }
@@ -267,8 +376,7 @@ async fn toggle_star_note(note_id: String, app_handle: tauri::AppHandle) -> Resu
     // Save the note
     let note_json = serde_json::to_string_pretty(&note)
         .map_err(|e| format!("Failed to serialize note: {}", e))?;
-    fs::write(&file_path, note_json)
-        .map_err(|e| format!("Failed to write note: {}", e))?;
+    atomic_write_file(&file_path, &note_json)?;;
     
     Ok(note.starred)
 }
@@ -313,8 +421,7 @@ async fn create_folder(
     let folder_json = serde_json::to_string_pretty(&folder)
         .map_err(|e| format!("Failed to serialize folder: {}", e))?;
 
-    fs::write(&file_path, folder_json)
-        .map_err(|e| format!("Failed to write folder file: {}", e))?;
+    atomic_write_file(&file_path, &folder_json)?;;
 
     Ok(folder)
 }
@@ -355,8 +462,7 @@ async fn update_folder(folder: Folder, app_handle: tauri::AppHandle) -> Result<(
     let folder_json = serde_json::to_string_pretty(&updated_folder)
         .map_err(|e| format!("Failed to serialize folder: {}", e))?;
 
-    fs::write(&file_path, folder_json)
-        .map_err(|e| format!("Failed to write folder file: {}", e))?;
+    atomic_write_file(&file_path, &folder_json)?;;
 
     Ok(())
 }
@@ -579,7 +685,7 @@ async fn get_google_api_key(app_handle: tauri::AppHandle) -> Result<String, Stri
 
         // Check for encrypted key
         if let Some(encrypted_key) = config.get("encrypted_google_api_key").and_then(|v| v.as_str()) {
-            let key = decrypt_api_key(encrypted_key)?;
+            let key = decrypt_api_key(&app_handle, encrypted_key)?;
             // Try to migrate into keyring for future
             let _ = try_set_keyring(KEYRING_SERVICE, KEYRING_USERNAME, &key);
             return Ok(key);
@@ -594,7 +700,7 @@ async fn get_google_api_key(app_handle: tauri::AppHandle) -> Result<String, Stri
                 if let Some(obj) = updated_config.as_object_mut() {
                     obj.remove("google_api_key");
                     // also attempt to store encrypted form
-                    if let Ok(encrypted) = encrypt_api_key(plain_key) {
+                    if let Ok(encrypted) = encrypt_api_key(&app_handle, plain_key) {
                         obj.insert("encrypted_google_api_key".to_string(), serde_json::Value::String(encrypted));
                     }
                 }
@@ -614,7 +720,7 @@ async fn save_google_api_key(key: String, app_handle: tauri::AppHandle) -> Resul
     // First attempt to save to keyring (preferred)
     if try_set_keyring(KEYRING_SERVICE, KEYRING_USERNAME, &key) {
         // Also persist an encrypted copy to config.json as a fallback for dev/reload scenarios
-        let encrypted_key = encrypt_api_key(&key)?;
+        let encrypted_key = encrypt_api_key(&app_handle, &key)?;
         let config_dir = get_config_directory(&app_handle)?;
         let config_file = config_dir.join("config.json");
 
@@ -645,7 +751,7 @@ async fn save_google_api_key(key: String, app_handle: tauri::AppHandle) -> Resul
     }
 
     // Fallback to encrypted config.json
-    let encrypted_key = encrypt_api_key(&key)?;
+    let encrypted_key = encrypt_api_key(&app_handle, &key)?;
 
     let config_dir = get_config_directory(&app_handle)?;
     let config_file = config_dir.join("config.json");
@@ -1490,7 +1596,10 @@ pub fn run() {
             google_drive::cleanup_old_trash,
             google_drive::check_sync_status,
             google_drive::force_sync_from_cloud,
-            google_drive::force_sync_to_cloud
+            google_drive::force_sync_to_cloud,
+            google_drive::get_sync_plan,
+            google_drive::execute_sync_with_resolutions,
+            google_drive::disconnect_google_drive
         ])
         .plugin(tauri_plugin_opener::init())
         .run(tauri::generate_context!())

@@ -136,7 +136,6 @@ export function NoteEditor() {
             </style>
           </head>
           <body>
-            <h1>${title}</h1>
             ${html}
           </body>
         </html>
