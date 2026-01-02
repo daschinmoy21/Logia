@@ -92,7 +92,7 @@ impl InstalledFlowDelegate for BrowserUserHandler {
             
             #[cfg(target_os = "windows")]
             let open_res = std::process::Command::new("cmd")
-                .args(&["/C", "start", "", url])
+                .args(&["/C", &format!("start \"\" \"{}\"", url)])
                 .spawn();
             
             #[cfg(target_os = "linux")]
