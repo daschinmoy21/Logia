@@ -91,8 +91,8 @@ impl InstalledFlowDelegate for BrowserUserHandler {
             println!("Patched URL: {}", url);
             
             #[cfg(target_os = "windows")]
-            let open_res = std::process::Command::new("cmd")
-                .args(&["/C", &format!("start \"\" \"{}\"", url)])
+            let open_res = std::process::Command::new("explorer")
+                .arg(url)
                 .spawn();
             
             #[cfg(target_os = "linux")]
