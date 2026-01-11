@@ -118,12 +118,17 @@
   * {
     @apply border-border outline-ring/50;
   }
-  html, body, #root {
+
+  html,
+  body,
+  #root {
     @apply h-full w-full bg-zinc-950 overflow-hidden;
-    background-color: #09090b; /* Fallback/Enforce zinc-950 */
+    background-color: #09090b;
+    /* Fallback/Enforce zinc-950 */
     margin: 0;
     padding: 0;
   }
+
   body {
     @apply bg-background text-foreground;
   }
@@ -151,4 +156,46 @@
 
 ::-webkit-scrollbar-corner {
   background: hsl(var(--muted));
+}
+
+/* =============================================================================
+   BlockNote / Mantine / Radix Dropdown Z-Index Fix
+   Ensures that toolbar dropdowns (like the paragraph type selector) appear
+   above all other UI elements, including modals and sidebars.
+   ============================================================================= */
+
+/* Mantine Popover and Menu dropdowns */
+.mantine-Menu-dropdown,
+.mantine-Popover-dropdown,
+.mantine-Menu-itemsWrapper {
+  z-index: 99999 !important;
+  /* position: relative;  <-- REMOVED: This was causing the dropdown to flow inline horizontally! */
+}
+
+/* BlockNote specific menus */
+.bn-menu,
+.bn-formatting-toolbar,
+.bn-side-menu,
+.bn-slash-menu,
+[data-bn-menu],
+[data-blocknote-menu],
+.bn-suggestion-menu {
+  z-index: 99999 !important;
+}
+
+/* Radix UI Popper (used by Mantine internally) */
+[data-radix-popper-content-wrapper] {
+  z-index: 99999 !important;
+}
+
+/* Ensure the formatting toolbar itself is visible */
+.bn-formatting-toolbar-controller,
+.bn-formatting-toolbar {
+  z-index: 99998 !important;
+}
+
+/* Generic role="menu" for any framework */
+[role="menu"],
+[role="listbox"] {
+  z-index: 99999 !important;
 }

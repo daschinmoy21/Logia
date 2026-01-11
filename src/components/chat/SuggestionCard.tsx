@@ -1,4 +1,4 @@
-import { Check, X, Plus, Minus, RefreshCw, Edit3, ChevronDown, ChevronUp } from "lucide-react";
+import { Check, X, Plus, Minus, RefreshCw, Edit3, ChevronDown, ChevronUp, Table, List } from "lucide-react";
 import useUiStore from "../../store/UiStore";
 import { handleAiAction } from "../../lib/editor-actions";
 import toast from "react-hot-toast";
@@ -18,6 +18,10 @@ const getActionMeta = (action: string) => {
         case "insertText":
         case "insertParagraph":
             return { icon: Plus, label: "Add", color: "green", textClass: "text-green-400" };
+        case "insertTable":
+            return { icon: Table, label: "Add Table", color: "green", textClass: "text-green-400" };
+        case "insertList":
+            return { icon: List, label: "Add List", color: "green", textClass: "text-green-400" };
         case "delete":
             return { icon: Minus, label: "Delete", color: "red", textClass: "text-red-400" };
         case "update":
@@ -57,6 +61,10 @@ export function SuggestionCard({ actionDataList, status, onStatusChange }: Sugge
             const actionData = actionDataList[i];
             try {
                 await handleAiAction(editor, actionData);
+                // Add a small delay to ensure the editor has processed the change
+                // and to avoid race conditions with overlapping block searches
+                await new Promise((resolve) => setTimeout(resolve, 300));
+
                 successCount++;
                 setProcessedCount(i + 1);
             } catch (e: any) {

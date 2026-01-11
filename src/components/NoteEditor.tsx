@@ -23,8 +23,8 @@ import { writeTextFile } from "@tauri-apps/plugin-fs";
 import toast from "react-hot-toast";
 
 export function NoteEditor() {
-  const { editor } = useEditorContext();
-  const { googleApiKey, setEditor } = useUiStore();
+  const { editor, hasAI } = useEditorContext();
+  const { setEditor } = useUiStore();
   const currentNote = useNotesStore((state) => state.currentNote);
   const folders = useNotesStore((state) => state.folders);
   const { toggleStar } = useNotesStore.getState();
@@ -279,7 +279,7 @@ export function NoteEditor() {
           data-theming-css-variables-demo
         >
           {/* AI Menu - Only show if API key is present */}
-          {googleApiKey && <AIMenuController />}
+          {hasAI && <AIMenuController />}
 
           {/* Custom Formatting Toolbar */}
           <FormattingToolbarWithAI />

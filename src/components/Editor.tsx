@@ -6,6 +6,7 @@ import { NoteEditor } from "./NoteEditor";
 import { EditorProvider } from "./EditorProvider";
 import { EmptyState } from "./EmptyState";
 import './styles.css';
+import useUiStore from '../store/UiStore';
 
 // Lazy load Canvas to prevent huge bundle load on startup
 const Canvas = lazy(() => import("./Canvas"));
@@ -16,6 +17,7 @@ function Editor() {
     updateCurrentNoteContent,
     updateCurrentNoteTitle,
   } = useNotesStore();
+  const { googleApiKey } = useUiStore();
 
   // Show empty state when no note is selected
   if (!currentNote) {
@@ -37,8 +39,14 @@ function Editor() {
     );
   }
 
+  // Key based on API key + note ID ensures the editor remounts when:
+  // 1. The user switches notes
+  // 2. The user adds/removes/changes the API key (toggling AI features)
+  const editorKey = `${currentNote.id}-${googleApiKey ? 'ai' : 'no-ai'}`;
+
   return (
     <EditorProvider
+      key={editorKey}
       currentNote={currentNote}
       updateCurrentNoteContent={updateCurrentNoteContent}
       updateCurrentNoteTitle={updateCurrentNoteTitle}

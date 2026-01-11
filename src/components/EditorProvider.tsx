@@ -14,7 +14,13 @@ import {
   FormattingToolbarController,
   SuggestionMenuController,
   getDefaultReactSlashMenuItems,
-  getFormattingToolbarItems,
+  BlockTypeSelect,
+  BasicTextStyleButton,
+  TextAlignButton,
+  ColorStyleButton,
+  NestBlockButton,
+  UnnestBlockButton,
+  CreateLinkButton,
 } from "@blocknote/react";
 import { Note } from "../types/Note";
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
@@ -23,6 +29,7 @@ import useUiStore from '../store/UiStore';
 
 type EditorContextType = {
   editor: any | null;
+  hasAI: boolean;
   updateCurrentNoteTitle: (title: string) => void;
 };
 
@@ -80,6 +87,8 @@ export function EditorProvider({
     }
     return null;
   }, [googleApiKey]);
+
+  const hasAI = Boolean(model);
 
   // Create editor only when model is available
   const editor = useCreateBlockNote({
@@ -189,21 +198,36 @@ export function EditorProvider({
   }, [editor, currentNote, updateCurrentNoteContent]);
 
   return (
-    <EditorContext.Provider value={{ editor, updateCurrentNoteTitle }}>
+    <EditorContext.Provider value={{ editor, updateCurrentNoteTitle, hasAI }}>
       {children}
     </EditorContext.Provider>
   );
 }
 
-// Formatting toolbar with the `AIToolbarButton` added
+// Formatting toolbar with all standard buttons explicitly defined
 export function FormattingToolbarWithAI() {
   return (
     <FormattingToolbarController
       formattingToolbar={() => (
         <FormattingToolbar>
-          {...getFormattingToolbarItems()}
-          {/* Add the AI button */}
-          {/* <AIToolbarButton /> */}
+          <BlockTypeSelect key={"blockTypeSelect"} />
+
+          <BasicTextStyleButton basicTextStyle={"bold"} key={"boldStyleButton"} />
+          <BasicTextStyleButton basicTextStyle={"italic"} key={"italicStyleButton"} />
+          <BasicTextStyleButton basicTextStyle={"underline"} key={"underlineStyleButton"} />
+          <BasicTextStyleButton basicTextStyle={"strike"} key={"strikeStyleButton"} />
+          <BasicTextStyleButton basicTextStyle={"code"} key={"codeStyleButton"} />
+
+          <TextAlignButton textAlignment={"left"} key={"textAlignLeftButton"} />
+          <TextAlignButton textAlignment={"center"} key={"textAlignCenterButton"} />
+          <TextAlignButton textAlignment={"right"} key={"textAlignRightButton"} />
+
+          <ColorStyleButton key={"colorStyleButton"} />
+
+          <NestBlockButton key={"nestBlockButton"} />
+          <UnnestBlockButton key={"unnestBlockButton"} />
+
+          <CreateLinkButton key={"createLinkButton"} />
         </FormattingToolbar>
       )}
     />

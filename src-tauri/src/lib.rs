@@ -110,9 +110,7 @@ fn get_or_create_encryption_key(app_handle: &tauri::AppHandle) -> Result<[u8; 32
     
     // Try to store in keyring
     if let Ok(entry) = Entry::new(KEYRING_SERVICE_MASTER, KEYRING_USERNAME_MASTER) {
-        if entry.set_password(&key_b64).is_ok() {
-            return Ok(key);
-        }
+        let _ = entry.set_password(&key_b64);
     }
     
     // Fallback: store in file

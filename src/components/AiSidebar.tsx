@@ -112,11 +112,17 @@ CAPABILITIES:
 FOR CODE BLOCKS:
 { "type": "editor_action", "action": "insertCode", "description": "Adding code example", "data": { "code": "your code here", "language": "rust" } }
 
-FOR HEADINGS:
+FOR HEADINGS (plain text only, no tables/lists inside):
 { "type": "editor_action", "action": "insertHeading", "description": "Adding section", "data": { "text": "Heading Text", "level": 2 } }
 
 FOR PLAIN TEXT:
 { "type": "editor_action", "action": "insertText", "description": "Adding paragraph", "data": { "text": "Your text here" } }
+
+FOR TABLES:
+{ "type": "editor_action", "action": "insertTable", "description": "Adding table", "data": { "headers": ["Column 1", "Column 2"], "rows": [["value1", "value2"], ["value3", "value4"]] } }
+
+FOR LISTS:
+{ "type": "editor_action", "action": "insertList", "description": "Adding list", "data": { "items": ["Item 1", "Item 2", "Item 3"], "ordered": false } }
 
 === EDIT ACTIONS ===
 
@@ -134,6 +140,9 @@ TO REPLACE CONTENT:
 - Use "searchText" to find existing content (a unique phrase from that block)
 - For regular chat, just respond normally without JSON
 - Keep descriptions short and clear
+- IMPORTANT: Headings can ONLY contain plain text - never put tables or lists inside headings
+- For tables, use insertTable action NOT insertHeading or insertText
+- Each action should be a separate JSON object
 `;
       const noteContext = currentNote
         ? `\n\nContext:\n---\n${currentNote.content}\n---`
