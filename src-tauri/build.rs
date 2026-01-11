@@ -16,7 +16,7 @@ fn main() {
     // Set deployment target to ensure proper symbol linking
     #[cfg(target_os = "macos")]
     {
-        println!("cargo:rustc-env=MACOSX_DEPLOYMENT_TARGET=14.0");
+        println!("cargo:rustc-env=MACOSX_DEPLOYMENT_TARGET=12.3");
     }
     tauri_build::build()
 }

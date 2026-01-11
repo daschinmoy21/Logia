@@ -1516,18 +1516,9 @@ async fn prereflight_check(app_handle: tauri::AppHandle) -> Result<serde_json::V
 
     // MacOS helper check
     if cfg!(target_os = "macos") {
-         let mac_bin_path = match app_handle.path().resolve("src/audio/mac/SystemAudioDump", BaseDirectory::Resource) {
-             Ok(p) => Some(p),
-             _ => None
-         };
-         let mac_helper_present = mac_bin_path.as_ref().map(|p| p.exists()).unwrap_or(false);
-         // We reuse the same key 'windows_helper_present' or create a new one?
-         // The frontend checks 'windows_helper_present' specifically.
-         // Let's use a generic name or platform specific.
-         // But to reuse existing frontend logic for now without changing frontend too much:
-         // Ideally we shouldn't send 'windows_helper_present' on mac.
-         // We can send 'mac_helper_present'.
-         map.insert("mac_helper_present".to_string(), serde_json::Value::Bool(mac_helper_present));
+         // ScreenCaptureKit is used natively, so helper functionality is always "present"
+         // (assuming OS requirements are met, which is handled by min version checks)
+         map.insert("mac_helper_present".to_string(), serde_json::Value::Bool(true));
     }
 
     // Simple network check to pypi.org (used by pip installs)

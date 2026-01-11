@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
     <key>LSMinimumSystemVersion</key>
-    <string>14.0</string>
+    <string>12.3</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>This app needs microphone access to record audio for transcription.</string>
     <key>NSScreenCaptureUsageDescription</key>
