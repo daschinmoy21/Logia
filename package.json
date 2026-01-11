@@ -2,6 +2,7 @@
   "name": "logia",
   "private": true,
   "version": "0.9.4",
+  "license": "AGPL-3.0-only",
   "type": "module",
   "scripts": {
     "dev": "vite",
