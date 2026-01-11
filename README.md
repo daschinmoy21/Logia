@@ -1,4 +1,7 @@
-# Logia
+<div align="center">
+  <img src="public/logo.png" alt="Logia Logo" width="120" />
+  <h1>Logia</h1>
+</div>
 
 > A powerful, AI-enhanced notes application built with Tauri and React, designed for technical content creators and knowledge workers.
 
