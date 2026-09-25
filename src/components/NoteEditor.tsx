@@ -21,6 +21,7 @@ import { Slash, Star, Download, FileText, FileType } from "lucide-react";
 import { save } from "@tauri-apps/plugin-dialog";
 import { writeTextFile } from "@tauri-apps/plugin-fs";
 import toast from "react-hot-toast";
+import { useVimEditor } from "../hooks/useVimEditor";
 
 export function NoteEditor() {
   const { editor, hasAI } = useEditorContext();
@@ -28,6 +29,8 @@ export function NoteEditor() {
   const currentNote = useNotesStore((state) => state.currentNote);
   const folders = useNotesStore((state) => state.folders);
   const { toggleStar } = useNotesStore.getState();
+
+  useVimEditor(editor);
 
   const [showExportMenu, setShowExportMenu] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement>(null);

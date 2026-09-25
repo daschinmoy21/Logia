@@ -1,6 +1,7 @@
 const devLog = (...args: unknown[]) => { if (import.meta.env.DEV) console.log(...args); };
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { Resizable } from "re-resizable";
 import {
@@ -34,6 +35,7 @@ import { AnimatedFileTree } from "./AnimatedFileTree";
 import toast from "react-hot-toast";
 import { processTranscription } from "../lib/aiTranscription";
 import { searchModKeyLabel } from "../lib/utils";
+import { useVimStore } from "../store/vimStore";
 
 // Type for trash items from backend
 interface TrashItem {
@@ -91,6 +93,8 @@ export const Sidebar = () => {
   const [folderRenameValue, setFolderRenameValue] = useState("");
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const expandedFolders = useUiStore((state) => state.expandedFolders);
+  const folderRenameRequest = useUiStore((state) => state.folderRenameRequest);
+  const vimCursorId = useVimStore((state) => (state.mode === "explorer" ? state.explorerCursor : null));
 
   // Trash dialog state
   const [isTrashOpen, setIsTrashOpen] = useState(false);
@@ -117,6 +121,14 @@ export const Sidebar = () => {
     loadNotes();
     loadFolders();
   }, [loadNotes, loadFolders]);
+
+  // Folder renames requested from outside (vim explorer `r` / `A`)
+  useEffect(() => {
+    if (!folderRenameRequest) return;
+    setRenamingFolderId(folderRenameRequest.id);
+    setFolderRenameValue(folderRenameRequest.name);
+    useUiStore.getState().setFolderRenameRequest(null);
+  }, [folderRenameRequest]);
 
   useEffect(() => {
     const handleClickOutside = () => setContextMenu(null);
@@ -416,6 +428,12 @@ export const Sidebar = () => {
                 onDeleteNote={handleDeleteNote}
                 selectedFolderId={selectedFolderId}
                 selectedNoteId={currentNote?.id || null}
+                vimCursorId={vimCursorId}
+                onCancelRename={finishRenaming}
+                onCancelFolderRename={() => {
+                  setRenamingFolderId(null);
+                  setFolderRenameValue("");
+                }}
                 expandedFolders={expandedFolders}
                 onExpandedFoldersChange={setExpandedFolders}
                 renamingNoteId={renamingNoteId}
@@ -558,14 +576,12 @@ export const Sidebar = () => {
                     }
 
                     // 3. Process with AI Utility
-                    const googleApiKey = await useUiStore.getState().ensureGoogleApiKey();
                     const editor = useUiStore.getState().editor; // Access editor instance
                     const currentContent =
                       JSON.parse(noteToUpdate.content || "[]") || [];
 
                     await processTranscription({
                       transcriptionText: transcriptText,
-                      googleApiKey,
                       editor,
                       updateCurrentNoteContent,
                       saveCurrentNote: useNotesStore.getState().saveCurrentNote,
@@ -740,6 +756,7 @@ export const Sidebar = () => {
         </div>
       </Dialog>
 
+      {createPortal(
       <AnimatePresence>
         {contextMenu && (
           <motion.div
@@ -747,8 +764,11 @@ export const Sidebar = () => {
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
             transition={{ duration: 0.1, ease: "easeOut" }}
-            style={{ top: contextMenu.y, left: contextMenu.x }}
-            className="absolute z-50 bg-zinc-900 border border-zinc-800 rounded-lg shadow-xl py-1.5 min-w-[140px] overflow-hidden"
+            style={{
+              top: Math.min(contextMenu.y, window.innerHeight - 220),
+              left: Math.min(contextMenu.x, window.innerWidth - 170),
+            }}
+            className="fixed z-[1100] bg-zinc-900 border border-zinc-800 rounded-lg shadow-xl py-1.5 min-w-[140px] overflow-hidden"
           >
             {contextMenu.note && (
               <>
@@ -839,6 +859,7 @@ export const Sidebar = () => {
           </motion.div>
         )}
       </AnimatePresence>
+      , document.body)}
 
       <KanbanBoardContainer
         isOpen={isKanbanOpen}

@@ -178,177 +178,242 @@ fn try_delete_keyring(service: &str, username: &str) -> bool {
     false
 }
 
-// Service/username used for storing the Google API key
+// Service used for storing AI provider API keys
 const KEYRING_SERVICE: &str = "Logia";
-const KEYRING_USERNAME: &str = "google_api_key";
 
-#[tauri::command]
-pub async fn has_google_api_key(app_handle: tauri::AppHandle) -> Result<bool, String> {
-    // Check keyring first
-    if try_get_keyring(KEYRING_SERVICE, KEYRING_USERNAME).is_some() {
+/// Provider ids come from the frontend; keep them to a safe charset because
+/// they end up in keyring usernames and config.json field names.
+fn validate_provider(provider: &str) -> Result<(), String> {
+    let ok = !provider.is_empty()
+        && provider.len() <= 32
+        && provider
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_');
+    if ok {
+        Ok(())
+    } else {
+        Err(format!("Invalid provider id: {}", provider))
+    }
+}
+
+/// Google keeps its original storage names so existing installs keep working.
+fn keyring_username(provider: &str) -> String {
+    if provider == "google" {
+        "google_api_key".to_string()
+    } else {
+        format!("ai_key_{}", provider)
+    }
+}
+
+fn encrypted_field(provider: &str) -> String {
+    if provider == "google" {
+        "encrypted_google_api_key".to_string()
+    } else {
+        format!("encrypted_ai_key_{}", provider)
+    }
+}
+
+/// Legacy plain-text field (only Google ever used one).
+fn legacy_plain_field(provider: &str) -> Option<&'static str> {
+    if provider == "google" {
+        Some("google_api_key")
+    } else {
+        None
+    }
+}
+
+fn read_config(config_file: &PathBuf) -> serde_json::Value {
+    fs::read_to_string(config_file)
+        .ok()
+        .and_then(|c| serde_json::from_str::<serde_json::Value>(&c).ok())
+        .unwrap_or(serde_json::json!({}))
+}
+
+fn write_config(config_file: &PathBuf, config: &serde_json::Value) -> Result<(), String> {
+    let content = serde_json::to_string_pretty(config)
+        .map_err(|e| format!("Failed to serialize config: {}", e))?;
+    atomic_write_file(config_file, &content)
+}
+
+fn has_key_for(app_handle: &tauri::AppHandle, provider: &str) -> Result<bool, String> {
+    validate_provider(provider)?;
+    if try_get_keyring(KEYRING_SERVICE, &keyring_username(provider)).is_some() {
         return Ok(true);
     }
-
-    // Check config.json for encrypted or legacy plain key
-    let config_dir = get_config_directory(&app_handle)?;
-    let config_file = config_dir.join("config.json");
-
+    let config_file = get_config_directory(app_handle)?.join("config.json");
     if config_file.exists() {
-        if let Ok(content) = fs::read_to_string(&config_file) {
-            if let Ok(config) = serde_json::from_str::<serde_json::Value>(&content) {
-                if config.get("encrypted_google_api_key").is_some()
-                    || config.get("google_api_key").is_some()
-                {
-                    return Ok(true);
-                }
+        let config = read_config(&config_file);
+        if config.get(encrypted_field(provider)).is_some() {
+            return Ok(true);
+        }
+        if let Some(legacy) = legacy_plain_field(provider) {
+            if config.get(legacy).is_some() {
+                return Ok(true);
             }
         }
     }
-
     Ok(false)
 }
 
-#[tauri::command]
-pub async fn get_google_api_key(app_handle: tauri::AppHandle) -> Result<String, String> {
-    // Try keyring first (works on Windows Credential Manager, macOS Keychain, Linux Secret Service)
-    if let Some(pw) = try_get_keyring(KEYRING_SERVICE, KEYRING_USERNAME) {
+fn get_key_for(app_handle: &tauri::AppHandle, provider: &str) -> Result<String, String> {
+    validate_provider(provider)?;
+    let username = keyring_username(provider);
+    // Try keyring first (Windows Credential Manager, macOS Keychain, Linux Secret Service)
+    if let Some(pw) = try_get_keyring(KEYRING_SERVICE, &username) {
         return Ok(pw);
     }
 
-    // Fallback: check config.json for encrypted key
-    let config_dir = get_config_directory(&app_handle)?;
-    let config_file = config_dir.join("config.json");
-
+    // Fallback: encrypted copy in config.json
+    let config_file = get_config_directory(app_handle)?.join("config.json");
     if config_file.exists() {
-        let content = fs::read_to_string(&config_file)
-            .map_err(|e| format!("Failed to read config file: {}", e))?;
+        let config = read_config(&config_file);
 
-        let config: serde_json::Value = serde_json::from_str(&content)
-            .map_err(|e| format!("Failed to parse config file: {}", e))?;
-
-        // Check for encrypted key
-        if let Some(encrypted_key) = config.get("encrypted_google_api_key").and_then(|v| v.as_str()) {
-            let key = decrypt_api_key(&app_handle, encrypted_key)?;
+        if let Some(encrypted_key) = config.get(encrypted_field(provider)).and_then(|v| v.as_str()) {
+            let key = decrypt_api_key(app_handle, encrypted_key)?;
             // Try to migrate into keyring for future
-            let _ = try_set_keyring(KEYRING_SERVICE, KEYRING_USERNAME, &key);
+            let _ = try_set_keyring(KEYRING_SERVICE, &username, &key);
             return Ok(key);
         }
 
-        // Legacy: Check for plain key and migrate
-        if let Some(plain_key) = config.get("google_api_key").and_then(|v| v.as_str()) {
-            // Migrate to keyring if possible
-            if try_set_keyring(KEYRING_SERVICE, KEYRING_USERNAME, plain_key) {
-                // Remove plain key from config
-                let mut updated_config = config.clone();
-                if let Some(obj) = updated_config.as_object_mut() {
-                    obj.remove("google_api_key");
-                    // also attempt to store encrypted form
-                    if let Ok(encrypted) = encrypt_api_key(&app_handle, plain_key) {
-                        obj.insert("encrypted_google_api_key".to_string(), serde_json::Value::String(encrypted));
+        // Legacy: plain key — migrate to keyring + encrypted form
+        if let Some(legacy) = legacy_plain_field(provider) {
+            if let Some(plain_key) = config.get(legacy).and_then(|v| v.as_str()) {
+                if try_set_keyring(KEYRING_SERVICE, &username, plain_key) {
+                    let mut updated_config = config.clone();
+                    if let Some(obj) = updated_config.as_object_mut() {
+                        obj.remove(legacy);
+                        if let Ok(encrypted) = encrypt_api_key(app_handle, plain_key) {
+                            obj.insert(encrypted_field(provider), serde_json::Value::String(encrypted));
+                        }
                     }
+                    let _ = write_config(&config_file, &updated_config);
                 }
-                let content = serde_json::to_string_pretty(&updated_config).unwrap_or_default();
-                let _ = atomic_write_file(&config_file, &content);
+                return Ok(plain_key.to_string());
             }
-
-            return Ok(plain_key.to_string());
         }
     }
 
     Err("API key not configured".to_string())
 }
 
-#[tauri::command]
-pub async fn save_google_api_key(key: String, app_handle: tauri::AppHandle) -> Result<(), String> {
-    // First attempt to save to keyring (preferred)
-    if try_set_keyring(KEYRING_SERVICE, KEYRING_USERNAME, &key) {
-        // Also persist an encrypted copy to config.json as a fallback for dev/reload scenarios
-        let encrypted_key = encrypt_api_key(&app_handle, &key)?;
-        let config_dir = get_config_directory(&app_handle)?;
-        let config_file = config_dir.join("config.json");
+fn save_key_for(app_handle: &tauri::AppHandle, provider: &str, key: &str) -> Result<(), String> {
+    validate_provider(provider)?;
+    let keyring_ok = try_set_keyring(KEYRING_SERVICE, &keyring_username(provider), key);
 
-        let mut config = if config_file.exists() {
-            if let Ok(content) = fs::read_to_string(&config_file) {
-                serde_json::from_str::<serde_json::Value>(&content).unwrap_or(serde_json::json!({}))
-            } else {
-                serde_json::json!({})
-            }
-        } else {
-            serde_json::json!({})
-        };
-
-        if let Some(obj) = config.as_object_mut() {
-            obj.insert("encrypted_google_api_key".to_string(), serde_json::Value::String(encrypted_key));
-            // Remove any plain key
-            obj.remove("google_api_key");
-        }
-
-        let content = serde_json::to_string_pretty(&config)
-            .map_err(|e| format!("Failed to serialize config: {}", e))?;
-
-        let _ = atomic_write_file(&config_file, &content);
-
-        // Also remove plain key from config.json if present
-        // (already removed above)
-        return Ok(());
-    }
-
-    // Fallback to encrypted config.json
-    let encrypted_key = encrypt_api_key(&app_handle, &key)?;
-
-    let config_dir = get_config_directory(&app_handle)?;
-    let config_file = config_dir.join("config.json");
-
-    let mut config = if config_file.exists() {
-        if let Ok(content) = fs::read_to_string(&config_file) {
-            serde_json::from_str::<serde_json::Value>(&content).unwrap_or(serde_json::json!({}))
-        } else {
-            serde_json::json!({})
-        }
-    } else {
-        serde_json::json!({})
-    };
-
+    // Always persist an encrypted copy to config.json as a fallback for
+    // dev/reload scenarios and machines without a keyring.
+    let encrypted_key = encrypt_api_key(app_handle, key)?;
+    let config_file = get_config_directory(app_handle)?.join("config.json");
+    let mut config = read_config(&config_file);
     if let Some(obj) = config.as_object_mut() {
-        obj.insert("encrypted_google_api_key".to_string(), serde_json::Value::String(encrypted_key));
-        // Remove any plain key
-        obj.remove("google_api_key");
+        obj.insert(encrypted_field(provider), serde_json::Value::String(encrypted_key));
+        if let Some(legacy) = legacy_plain_field(provider) {
+            obj.remove(legacy);
+        }
     }
 
-    let content = serde_json::to_string_pretty(&config)
-        .map_err(|e| format!("Failed to serialize config: {}", e))?;
+    let result = write_config(&config_file, &config);
+    if keyring_ok {
+        // Keyring holds the key; the config copy is best-effort.
+        Ok(())
+    } else {
+        result
+    }
+}
 
-    atomic_write_file(&config_file, &content)?;
+fn remove_key_for(app_handle: &tauri::AppHandle, provider: &str) -> Result<(), String> {
+    validate_provider(provider)?;
+    let _ = try_delete_keyring(KEYRING_SERVICE, &keyring_username(provider));
 
+    let config_file = get_config_directory(app_handle)?.join("config.json");
+    if config_file.exists() {
+        let mut config = read_config(&config_file);
+        if let Some(obj) = config.as_object_mut() {
+            obj.remove(&encrypted_field(provider));
+            if let Some(legacy) = legacy_plain_field(provider) {
+                obj.remove(legacy);
+            }
+        }
+        write_config(&config_file, &config)?;
+    }
     Ok(())
 }
 
 #[tauri::command]
+pub async fn has_ai_key(provider: String, app_handle: tauri::AppHandle) -> Result<bool, String> {
+    has_key_for(&app_handle, &provider)
+}
+
+/// Which of the given providers have a stored key.
+#[tauri::command]
+pub async fn ai_keys_status(
+    providers: Vec<String>,
+    app_handle: tauri::AppHandle,
+) -> Result<std::collections::HashMap<String, bool>, String> {
+    let mut out = std::collections::HashMap::new();
+    for p in providers {
+        let has = has_key_for(&app_handle, &p).unwrap_or(false);
+        out.insert(p, has);
+    }
+    Ok(out)
+}
+
+#[tauri::command]
+pub async fn get_ai_key(provider: String, app_handle: tauri::AppHandle) -> Result<String, String> {
+    get_key_for(&app_handle, &provider)
+}
+
+#[tauri::command]
+pub async fn save_ai_key(provider: String, key: String, app_handle: tauri::AppHandle) -> Result<(), String> {
+    save_key_for(&app_handle, &provider, &key)
+}
+
+#[tauri::command]
+pub async fn remove_ai_key(provider: String, app_handle: tauri::AppHandle) -> Result<(), String> {
+    remove_key_for(&app_handle, &provider)
+}
+
+// Google-specific commands kept for backwards compatibility.
+
+#[tauri::command]
+pub async fn has_google_api_key(app_handle: tauri::AppHandle) -> Result<bool, String> {
+    has_key_for(&app_handle, "google")
+}
+
+#[tauri::command]
+pub async fn get_google_api_key(app_handle: tauri::AppHandle) -> Result<String, String> {
+    get_key_for(&app_handle, "google")
+}
+
+#[tauri::command]
+pub async fn save_google_api_key(key: String, app_handle: tauri::AppHandle) -> Result<(), String> {
+    save_key_for(&app_handle, "google", &key)
+}
+
+#[tauri::command]
 pub async fn remove_google_api_key(app_handle: tauri::AppHandle) -> Result<(), String> {
-    // Try to remove from keyring
-    let _ = try_delete_keyring(KEYRING_SERVICE, KEYRING_USERNAME);
+    remove_key_for(&app_handle, "google")
+}
 
-    // Also remove from config.json
-    let config_dir = get_config_directory(&app_handle)?;
-    let config_file = config_dir.join("config.json");
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    if config_file.exists() {
-        let content = fs::read_to_string(&config_file)
-            .map_err(|e| format!("Failed to read config file: {}", e))?;
-
-        let mut config: serde_json::Value = serde_json::from_str(&content)
-            .map_err(|e| format!("Failed to parse config file: {}", e))?;
-
-        if let Some(obj) = config.as_object_mut() {
-            obj.remove("google_api_key");
-            obj.remove("encrypted_google_api_key");
-        }
-
-        let content = serde_json::to_string_pretty(&config)
-            .map_err(|e| format!("Failed to serialize config: {}", e))?;
-
-        atomic_write_file(&config_file, &content)?;
+    #[test]
+    fn provider_ids_are_validated() {
+        assert!(validate_provider("openai").is_ok());
+        assert!(validate_provider("open-router_2").is_ok());
+        assert!(validate_provider("").is_err());
+        assert!(validate_provider("../etc").is_err());
+        assert!(validate_provider("OpenAI").is_err());
     }
 
-    Ok(())
+    #[test]
+    fn google_keeps_legacy_storage_names() {
+        assert_eq!(keyring_username("google"), "google_api_key");
+        assert_eq!(encrypted_field("google"), "encrypted_google_api_key");
+        assert_eq!(keyring_username("openai"), "ai_key_openai");
+        assert_eq!(encrypted_field("openai"), "encrypted_ai_key_openai");
+        assert_eq!(legacy_plain_field("openai"), None);
+    }
 }

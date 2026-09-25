@@ -6,8 +6,9 @@ import {
   commandPaletteResults,
   cycleIndex,
   footerSaveLabel,
+  flattenVisibleTree,
 } from './note-utils.ts';
-import type { Note } from '../types/Note.ts';
+import type { Note, Folder } from '../types/Note.ts';
 
 function makeNote(partial: Partial<Note> & { id: string; title: string }): Note {
   return {
@@ -124,3 +125,38 @@ assert.equal(footerSaveLabel(true), 'Saved');
 assert.equal(footerSaveLabel(false), 'Saving…');
 console.log('note-utils footerSaveLabel: ok');
 
+
+// --- flattenVisibleTree ---
+{
+  const folder = (id: string, parent_id?: string): Folder => ({
+    id,
+    name: id,
+    parent_id,
+    created_at: '2026-01-01T00:00:00.000Z',
+    updated_at: '2026-01-01T00:00:00.000Z',
+  });
+  const folders = [folder('A'), folder('A1', 'A'), folder('B')];
+  const notes = [
+    makeNote({ id: 'root', title: 'root' }),
+    makeNote({ id: 'inA', title: 'inA', folder_id: 'A' }),
+    makeNote({ id: 'inA1', title: 'inA1', folder_id: 'A1' }),
+  ];
+
+  assert.deepEqual(
+    flattenVisibleTree(folders, notes, new Set()).map((i) => i.id),
+    ['A', 'B', 'root'],
+    'collapsed folders hide their contents',
+  );
+  const open = flattenVisibleTree(folders, notes, new Set(['A', 'A1']));
+  assert.deepEqual(
+    open.map((i) => i.id),
+    ['A', 'A1', 'inA1', 'inA', 'B', 'root'],
+    'child folders come before notes, like the rendered tree',
+  );
+  assert.deepEqual(
+    open.map((i) => i.depth),
+    [0, 1, 2, 1, 0, 0],
+  );
+  assert.equal(open.find((i) => i.id === 'inA1')?.parentId, 'A1');
+  console.log('note-utils flattenVisibleTree: ok');
+}

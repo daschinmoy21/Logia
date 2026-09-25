@@ -11,6 +11,7 @@ mod audio;
 mod git_sync;
 mod notes;
 mod config_crypto;
+mod ai_cli;
 
 use notes::*;
 use config_crypto::*;
@@ -773,6 +774,8 @@ pub fn run() {
 
     tauri::Builder::default()
         .manage(git_sync::GitSyncState::new())
+        .manage(ai_cli::AiCliState::default())
+        .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
@@ -796,6 +799,14 @@ pub fn run() {
             has_google_api_key,
             save_google_api_key,
             remove_google_api_key,
+            has_ai_key,
+            ai_keys_status,
+            get_ai_key,
+            save_ai_key,
+            remove_ai_key,
+            ai_cli::ai_cli_detect,
+            ai_cli::ai_cli_run,
+            ai_cli::ai_cli_cancel,
             install_transcription_dependencies,
             install_system_dependencies,
             greet,

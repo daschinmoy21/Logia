@@ -23,6 +23,13 @@ export const CommandPalette = () => {
     setSelectedIndex(0);
   }, [displayResults]);
 
+  // Keep the keyboard selection visible while moving through long lists
+  useEffect(() => {
+    document
+      .querySelector('#command-palette-results [aria-selected="true"]')
+      ?.scrollIntoView({ block: 'nearest' });
+  }, [selectedIndex]);
+
   useEffect(() => {
     if (!isCommandPaletteOpen) return;
 
@@ -63,10 +70,12 @@ export const CommandPalette = () => {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'ArrowDown') {
+    const ctrlNext = e.ctrlKey && (e.key === 'j' || e.key === 'n');
+    const ctrlPrev = e.ctrlKey && (e.key === 'k' || e.key === 'p');
+    if (e.key === 'ArrowDown' || ctrlNext) {
       e.preventDefault();
       setSelectedIndex((prev) => cycleIndex(prev, 1, displayResults.length));
-    } else if (e.key === 'ArrowUp') {
+    } else if (e.key === 'ArrowUp' || ctrlPrev) {
       e.preventDefault();
       setSelectedIndex((prev) => cycleIndex(prev, -1, displayResults.length));
     } else if (e.key === 'Enter') {
