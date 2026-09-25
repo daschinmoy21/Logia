@@ -1,11 +1,13 @@
 import { PromptInputBox } from "@/components/ui/ai-prompt-box";
 import { useNotesStore } from "@/store/notesStore";
 import { SuggestionCard } from "./chat/SuggestionCard";
+import { countWordsInNoteContent } from "@/lib/note-utils";
 import useUiStore from "../store/UiStore";
 import { Resizable } from "re-resizable";
-import { streamText } from "ai";
-import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { useState, useEffect, useRef } from "react";
+import { activeProvider, friendlyAiError, streamChat } from "../lib/ai/client";
+import { isProviderReady } from "../store/settingsStore";
+import { ProviderSwitcher } from "./ProviderSwitcher";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
@@ -13,27 +15,30 @@ import {
   Sparkles,
   Calendar as CalendarIcon,
   Hash,
-  List,
   AlignLeft,
   ChevronLeft,
   ChevronRight,
-  MoreHorizontal,
-  Plus,
   FileText,
+  Square,
+  Star,
+  Clock,
+  Folder as FolderIcon,
+  Type,
+  Trash2,
 } from "lucide-react";
-import toast from "react-hot-toast";
 import { AnimatePresence, motion } from "framer-motion";
+import toast from "react-hot-toast";
 
 interface AiSidebarProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
-type Tab = "chat" | "calendar" | "tags";
+type Tab = "chat" | "calendar" | "info";
 
 const AiSidebar = ({ isOpen, onClose }: AiSidebarProps) => {
-  const { currentNote } = useNotesStore();
-  const { ensureGoogleApiKey, hasGoogleApiKey } = useUiStore();
+  const { currentNote, notes, folders, selectNote } = useNotesStore();
+  const setIsSettingsOpen = useUiStore((s) => s.setIsSettingsOpen);
   const [activeTab, setActiveTab] = useState<Tab>("chat");
 
   // Chat State - includes actionStatus for persistence
@@ -43,9 +48,11 @@ const AiSidebar = ({ isOpen, onClose }: AiSidebarProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [streamingMessage, setStreamingMessage] = useState<string>("");
   const scrollableContainerRef = useRef<HTMLDivElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   // Calendar State
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [selectedDay, setSelectedDay] = useState<Date>(new Date());
 
   const messages = currentNote ? messagesMap[currentNote.id] || [] : [];
 
@@ -69,34 +76,14 @@ const AiSidebar = ({ isOpen, onClose }: AiSidebarProps) => {
   }, [messages, streamingMessage, activeTab]);
 
   const handleSendMessage = async (message: string) => {
-    if (!message.trim()) return;
-    if (!hasGoogleApiKey) {
-      toast.error("Google API key not configured.", {
-        style: { background: "#333", color: "#fff" },
-      });
+    if (!message.trim() || isLoading) return;
+    const provider = activeProvider();
+    if (!isProviderReady(provider.id)) {
+      toast.error(`${provider.label} isn't set up yet.`);
+      setIsSettingsOpen(true, 'ai');
       return;
     }
-
-    let key: string;
-    try {
-      key = await ensureGoogleApiKey();
-    } catch {
-      toast.error("Failed to load API key.", {
-        style: { background: "#333", color: "#fff" },
-      });
-      return;
-    }
-
-    if (!key) {
-      toast.error("Google API key not configured.", {
-        style: { background: "#333", color: "#fff" },
-      });
-      return;
-    }
-
-    const googleClient = createGoogleGenerativeAI({ apiKey: key });
     if (!currentNote) return;
-
     const userMessage = { role: "user" as const, content: message };
     setMessagesMap((prev) => ({
       ...prev,
@@ -153,18 +140,22 @@ TO REPLACE CONTENT:
         ? `\n\nContext:\n---\n${currentNote.content}\n---`
         : "";
 
-      const result = await streamText({
-        model: googleClient("gemini-2.5-flash"),
-        system: systemPrompt + noteContext,
-        messages: [...messages, userMessage],
-      });
-
+      const controller = new AbortController();
+      abortRef.current = controller;
       let fullResponse = "";
-      for await (const delta of result.textStream) {
-        fullResponse += delta;
-        setStreamingMessage(fullResponse);
+      for await (const text of streamChat({
+        system: systemPrompt + noteContext,
+        messages: [...messages, userMessage].map(({ role, content }) => ({ role, content })),
+        signal: controller.signal,
+        provider,
+      })) {
+        fullResponse = text;
+        setStreamingMessage(text);
       }
 
+      if (controller.signal.aborted && !fullResponse.trim()) {
+        fullResponse = "_Stopped._";
+      }
       const assistantMessage = {
         role: "assistant" as const,
         content: fullResponse,
@@ -174,22 +165,10 @@ TO REPLACE CONTENT:
         [currentNote.id]: [...(prev[currentNote.id] || []), assistantMessage],
       }));
       setStreamingMessage("");
-    } catch (error: any) {
-      console.error("AI error:", error);
-
-      // Parse error message for common issues
-      let errorMessage = "⚠️ An error occurred while processing your request.";
-      const errorStr = error?.message || error?.toString() || "";
-
-      if (errorStr.includes("401") || errorStr.includes("API key") || errorStr.includes("authentication")) {
-        errorMessage = "🔑 **API Key Error**\n\nYour API key may be invalid or expired. Please check your API key in Settings.";
-      } else if (errorStr.includes("429") || errorStr.includes("rate") || errorStr.includes("quota") || errorStr.includes("limit")) {
-        errorMessage = "⏳ **Rate Limited**\n\nYou've exceeded the API rate limit. Please wait a moment and try again, or check your quota at [Google AI Studio](https://aistudio.google.com/).";
-      } else if (errorStr.includes("403") || errorStr.includes("forbidden")) {
-        errorMessage = "🚫 **Access Denied**\n\nYour API key doesn't have permission for this model. Check your API key settings.";
-      } else if (errorStr.includes("network") || errorStr.includes("fetch") || errorStr.includes("connect")) {
-        errorMessage = "🌐 **Network Error**\n\nCouldn't connect to the AI service. Please check your internet connection.";
-      }
+    } catch (error: unknown) {
+      const aborted = abortRef.current?.signal.aborted;
+      if (!aborted) console.error("AI error:", error);
+      const errorMessage = aborted ? "_Stopped._" : friendlyAiError(error, provider);
 
       setMessagesMap((prev) => ({
         ...prev,
@@ -200,8 +179,30 @@ TO REPLACE CONTENT:
       }));
       setStreamingMessage("");
     } finally {
+      abortRef.current = null;
       setIsLoading(false);
     }
+  };
+
+  const stopGeneration = () => abortRef.current?.abort();
+
+  // Prompts sent from elsewhere (e.g. the vim `:ai <prompt>` command)
+  const pendingAiPrompt = useUiStore((s) => s.pendingAiPrompt);
+  useEffect(() => {
+    if (!pendingAiPrompt || !isOpen || !currentNote || isLoading) return;
+    useUiStore.getState().setPendingAiPrompt(null);
+    setActiveTab("chat");
+    void handleSendMessage(pendingAiPrompt);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingAiPrompt, isOpen, currentNote?.id, isLoading]);
+
+  const folderName = currentNote?.folder_id
+    ? folders.find((f) => f.id === currentNote.folder_id)?.name
+    : undefined;
+  const wordCount = currentNote ? countWordsInNoteContent(currentNote.content) : 0;
+  const clearChat = () => {
+    if (!currentNote) return;
+    setMessagesMap((prev) => ({ ...prev, [currentNote.id]: [] }));
   };
 
   // Calendar Logic
@@ -227,6 +228,16 @@ TO REPLACE CONTENT:
   };
 
   const calendarDays = getDaysInMonth(currentDate);
+
+  // Notes touched per day (by last update), for activity dots and the day list
+  const notesByDay = new Map<string, typeof notes>();
+  for (const note of notes) {
+    const key = new Date(note.updated_at).toDateString();
+    const list = notesByDay.get(key);
+    if (list) list.push(note);
+    else notesByDay.set(key, [note]);
+  }
+  const selectedDayNotes = notesByDay.get(selectedDay.toDateString()) ?? [];
 
   const prevMonth = () =>
     setCurrentDate(
@@ -280,10 +291,10 @@ TO REPLACE CONTENT:
                   </button>
                   <button
                     type="button"
-                    onClick={() => setActiveTab("tags")}
-                    className={`p-1.5 rounded-md transition-all ${activeTab === "tags" ? "bg-zinc-800 text-zinc-100 shadow-sm" : "text-zinc-500 hover:text-zinc-300"}`}
-                    title="Tags & Properties"
-                    aria-pressed={activeTab === "tags"}
+                    onClick={() => setActiveTab("info")}
+                    className={`p-1.5 rounded-md transition-all ${activeTab === "info" ? "bg-zinc-800 text-zinc-100 shadow-sm" : "text-zinc-500 hover:text-zinc-300"}`}
+                    title="Note info"
+                    aria-pressed={activeTab === "info"}
                   >
                     <Hash size={16} />
                   </button>
@@ -504,12 +515,33 @@ TO REPLACE CONTENT:
                                 Thinking...
                               </span>
                             )}
+                            <button
+                              type="button"
+                              onClick={stopGeneration}
+                              className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-zinc-800 px-2 py-1 text-xs text-zinc-400 hover:text-zinc-100 hover:border-zinc-600 transition-colors"
+                            >
+                              <Square size={10} className="fill-current" /> Stop
+                            </button>
                           </div>
                         </div>
                       )}
                     </div>
                     {currentNote && (
-                      <div className="p-4 bg-zinc-950 border-t border-zinc-900/50">
+                      <div className="p-3 pt-2 bg-zinc-950 border-t border-zinc-900/50" data-vim-escape-to-editor>
+                        <div className="flex items-center justify-between mb-2">
+                          <ProviderSwitcher />
+                          {messages.length > 0 && !isLoading && (
+                            <button
+                              type="button"
+                              onClick={clearChat}
+                              className="p-1 rounded text-zinc-600 hover:text-zinc-300 hover:bg-zinc-900 transition-colors"
+                              title="Clear chat"
+                              aria-label="Clear chat"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          )}
+                        </div>
                         <PromptInputBox
                           onSend={handleSendMessage}
                           isLoading={isLoading}
@@ -563,128 +595,93 @@ TO REPLACE CONTENT:
                         </div>
                       ))}
                     </div>
-                    <div className="grid grid-cols-7 gap-1 flex-1 content-start">
-                      {calendarDays.map((date, i) => (
-                        <div
-                          key={i}
-                          className={`aspect-square flex items-center justify-center text-sm rounded-md transition-colors
-                                    ${!date ? "invisible" : ""}
-                                    ${date && date.toDateString() === new Date().toDateString() ? "bg-blue-600 text-white font-medium shadow-lg shadow-blue-500/20" : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100"}
-                                `}
-                        >
-                          {date?.getDate()}
-                        </div>
-                      ))}
+                    <div className="grid grid-cols-7 gap-1 content-start">
+                      {calendarDays.map((date, i) => {
+                        if (!date) return <div key={i} className="aspect-square" />;
+                        const isToday = date.toDateString() === new Date().toDateString();
+                        const isSelected = date.toDateString() === selectedDay.toDateString();
+                        const count = notesByDay.get(date.toDateString())?.length ?? 0;
+                        return (
+                          <button
+                            type="button"
+                            key={i}
+                            onClick={() => setSelectedDay(date)}
+                            className={`relative aspect-square flex items-center justify-center text-sm rounded-md transition-colors
+                              ${isToday ? "bg-blue-600 text-white font-medium shadow-lg shadow-blue-500/20" : isSelected ? "bg-zinc-800 text-zinc-100" : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100"}
+                            `}
+                            aria-label={`${date.toDateString()}${count ? `, ${count} notes updated` : ""}`}
+                            aria-pressed={isSelected}
+                          >
+                            {date.getDate()}
+                            {count > 0 && (
+                              <span className={`absolute bottom-1 size-1 rounded-full ${isToday ? "bg-white" : "bg-blue-400"}`} />
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <div className="mt-5 border-t border-zinc-900 pt-4 min-h-0 flex-1 overflow-y-auto">
+                      <p className="text-xs font-medium text-zinc-500 mb-2 px-1">
+                        {selectedDay.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}
+                      </p>
+                      {selectedDayNotes.length === 0 ? (
+                        <p className="text-xs text-zinc-600 px-1">No notes updated this day.</p>
+                      ) : (
+                        <ul className="space-y-0.5">
+                          {selectedDayNotes.map((note) => (
+                            <li key={note.id}>
+                              <button
+                                type="button"
+                                onClick={() => selectNote(note)}
+                                className={`w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded-md text-left transition-colors ${currentNote?.id === note.id ? "bg-zinc-800 text-zinc-100" : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"}`}
+                              >
+                                <FileText size={13} className="flex-shrink-0 text-zinc-500" />
+                                <span className="truncate">{note.title || "Untitled"}</span>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
                     </div>
                   </div>
                 )}
 
-                {/* --- TAGS / PROPERTIES VIEW --- */}
-                {activeTab === "tags" && (
-                  <div className="flex flex-col h-full bg-zinc-950 overflow-y-auto">
-                    <div className="p-4">
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-zinc-400 font-medium text-sm">
-                          Properties
+                {/* --- NOTE INFO VIEW --- */}
+                {activeTab === "info" && (
+                  <div className="flex flex-col h-full bg-zinc-950 overflow-y-auto p-4">
+                    {!currentNote ? (
+                      <p className="text-sm text-zinc-500 text-center mt-10">
+                        Open a note to see its details.
+                      </p>
+                    ) : (
+                      <>
+                        <h3 className="text-zinc-100 font-medium text-sm mb-4 truncate" title={currentNote.title}>
+                          {currentNote.title || "Untitled"}
                         </h3>
-                      </div>
-
-                      <div className="space-y-1">
-                        {[
-                          {
-                            icon: <Hash size={14} />,
-                            label: "Tags",
-                            value: "Always show",
-                            action: true,
-                          },
-                          {
-                            icon: <AlignLeft size={14} />,
-                            label: "Doc mode",
-                            value: "Always hide",
-                            action: true,
-                          },
-                          {
-                            icon: <CalendarIcon size={14} />,
-                            label: "Journal",
-                            value: "Always hide",
-                            action: true,
-                          },
-                          {
-                            icon: <List size={14} />,
-                            label: "Template",
-                            value: "Always hide",
-                            action: true,
-                          },
-                          {
-                            icon: <CalendarIcon size={14} />,
-                            label: "Created",
-                            value: "Always show",
-                            action: true,
-                          },
-                          {
-                            icon: <CalendarIcon size={14} />,
-                            label: "Updated",
-                            value: "Always show",
-                            action: true,
-                          },
-                          {
-                            icon: <User size={14} />,
-                            label: "Created by",
-                            value: "Always hide",
-                            action: true,
-                          },
-                        ].map((item, i) => (
-                          <div
-                            key={i}
-                            className="group flex items-center justify-between py-1.5 px-2 hover:bg-zinc-900/60 rounded-md cursor-pointer transition-colors"
-                          >
-                            <div className="flex items-center gap-3 text-zinc-400 group-hover:text-zinc-300">
-                              <span className="opacity-70">{item.icon}</span>
-                              <span className="text-sm">{item.label}</span>
+                        <dl className="space-y-1">
+                          {[
+                            { icon: <Type size={14} />, label: "Type", value: currentNote.note_type === "canvas" ? "Canvas" : "Text" },
+                            { icon: <AlignLeft size={14} />, label: "Words", value: currentNote.note_type === "canvas" ? "—" : wordCount.toLocaleString() },
+                            { icon: <FolderIcon size={14} />, label: "Folder", value: folderName ?? "Root" },
+                            { icon: <Star size={14} />, label: "Starred", value: currentNote.starred ? "Yes" : "No" },
+                            { icon: <CalendarIcon size={14} />, label: "Created", value: new Date(currentNote.created_at).toLocaleString() },
+                            { icon: <Clock size={14} />, label: "Updated", value: new Date(currentNote.updated_at).toLocaleString() },
+                          ].map((item) => (
+                            <div
+                              key={item.label}
+                              className="flex items-center justify-between gap-3 py-1.5 px-2 rounded-md hover:bg-zinc-900/60 transition-colors"
+                            >
+                              <dt className="flex items-center gap-3 text-zinc-500">
+                                <span className="opacity-70">{item.icon}</span>
+                                <span className="text-sm">{item.label}</span>
+                              </dt>
+                              <dd className="text-xs text-zinc-300 truncate text-right">{item.value}</dd>
                             </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs text-zinc-600 group-hover:text-zinc-500">
-                                {item.value}
-                              </span>
-                              {item.action && (
-                                <MoreHorizontal
-                                  size={14}
-                                  className="text-zinc-700 group-hover:text-zinc-500"
-                                />
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-
-                      <div className="mt-8">
-                        <button className="flex items-center gap-2 text-zinc-500 hover:text-zinc-300 text-sm font-medium transition-colors px-2">
-                          <span>Add more properties</span>
-                          <ChevronRight size={14} />
-                        </button>
-
-                        <div className="mt-4 pl-2 border-l-2 border-zinc-900 ml-3 space-y-3">
-                          {["Text", "Number", "Checkbox", "Date", "Person"].map(
-                            (type, i) => (
-                              <div
-                                key={i}
-                                className="flex items-center justify-between group cursor-pointer"
-                              >
-                                <div className="flex items-center gap-3 text-zinc-500 group-hover:text-zinc-300">
-                                  {/* Mock icons */}
-                                  <span className="text-xs opacity-50">T</span>
-                                  <span className="text-sm">{type}</span>
-                                </div>
-                                <Plus
-                                  size={14}
-                                  className="text-zinc-700 opacity-0 group-hover:opacity-100 transition-opacity"
-                                />
-                              </div>
-                            ),
-                          )}
-                        </div>
-                      </div>
-                    </div>
+                          ))}
+                        </dl>
+                      </>
+                    )}
                   </div>
                 )}
               </div>

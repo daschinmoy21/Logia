@@ -1,7 +1,7 @@
 const devLog = (...args: unknown[]) => { if (import.meta.env.DEV) console.log(...args); };
 
-import { createGoogleGenerativeAI } from "@ai-sdk/google";
-import { generateText } from "ai";
+import { activeProvider, complete, describeProvider } from "./ai/client";
+import { isProviderReady } from "../store/settingsStore";
 import toast from "react-hot-toast";
 
 // Interface for BlockNote blocks (simplified for this utility)
@@ -15,7 +15,6 @@ interface Block {
 
 interface ProcessTranscriptionParams {
     transcriptionText: string;
-    googleApiKey: string;
     editor?: any; // BlockNote editor instance
     updateCurrentNoteContent: (content: string) => void;
     updateCurrentNoteTitle?: (title: string) => void;
@@ -25,7 +24,6 @@ interface ProcessTranscriptionParams {
 
 export const processTranscription = async ({
     transcriptionText,
-    googleApiKey,
     editor,
     updateCurrentNoteContent,
     updateCurrentNoteTitle: _updateCurrentNoteTitle,
@@ -34,11 +32,11 @@ export const processTranscription = async ({
 }: ProcessTranscriptionParams) => {
 
 
-    // 1. Check if we have an API key
-    // 1. Check if we have an API key
-    if (!googleApiKey) {
-        console.warn("Google API Key is missing provided to processTranscription");
-        toast("API Key missing - Saved raw text", { icon: "⚠️" });
+    // 1. Check that an AI provider is configured
+    const provider = activeProvider();
+    if (!isProviderReady(provider.id)) {
+        console.warn(`AI provider ${provider.id} is not configured; saving raw transcript`);
+        toast("AI not configured - Saved raw text", { icon: "⚠️" });
         return appendRawText(
             transcriptionText,
             editor,
@@ -48,14 +46,10 @@ export const processTranscription = async ({
         );
     }
 
-    const toastId = toast.loading("🤖 Structuring with AI...");
+    const toastId = toast.loading(`🤖 Structuring with ${describeProvider(provider)}...`);
     devLog("Starting AI structuring...");
 
     try {
-        // 2. Initialize AI Model
-        const google = createGoogleGenerativeAI({ apiKey: googleApiKey });
-        const model = google("models/gemini-2.5-flash");
-
         // 3. Construct Prompt
         const systemPrompt = `You are an expert note-taker. Transform the raw transcription into a highly structured, educational note using BlockNote JSON blocks.
 
@@ -109,19 +103,25 @@ RULES:
 - **CRITICAL RULE: The first block MUST be a Heading Level 1 with a VERY SHORT, concise title (max 3-5 words) summarizing the note. This will be used as the filename.**`;
 
         // 4. Generate Content
-        const { text: structuredJsonString } = await generateText({
-            model: model,
+        const structuredJsonString = await complete({
             system: systemPrompt,
             prompt: transcriptionText,
+            provider,
         });
 
         devLog("AI Generation result:", structuredJsonString);
 
         // 5. Parse JSON
-        const cleanJson = structuredJsonString
+        let cleanJson = structuredJsonString
             .replace(/```json/g, "")
             .replace(/```/g, "")
             .trim();
+        // CLI agents sometimes add a sentence around the JSON; keep the array.
+        const arrayStart = cleanJson.indexOf("[");
+        const arrayEnd = cleanJson.lastIndexOf("]");
+        if (arrayStart > 0 && arrayEnd > arrayStart) {
+            cleanJson = cleanJson.slice(arrayStart, arrayEnd + 1);
+        }
         let newBlocks: Block[] = JSON.parse(cleanJson);
 
         if (!Array.isArray(newBlocks)) {

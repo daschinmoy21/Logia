@@ -1,4 +1,4 @@
-import type { Note } from '../types/Note';
+import type { Note, Folder } from '../types/Note';
 
 /** Merge a newly created note into the list and open it as current. */
 export function openCreatedNote(
@@ -105,4 +105,37 @@ export function cycleIndex(current: number, delta: number, length: number): numb
 /** Footer save indicator label from pending-autosave state. */
 export function footerSaveLabel(isSaved: boolean): string {
   return isSaved ? 'Saved' : 'Saving…';
+}
+
+export type TreeItem =
+  | { kind: 'folder'; id: string; parentId: string | null; depth: number; folder: Folder }
+  | { kind: 'note'; id: string; parentId: string | null; depth: number; note: Note };
+
+/**
+ * Visible sidebar rows in display order: root folders (recursively — child
+ * folders, then notes, only when expanded), then root notes. Matches the
+ * order AnimatedFileTree renders.
+ */
+export function flattenVisibleTree(
+  folders: Folder[],
+  notes: Note[],
+  expanded: Set<string>,
+): TreeItem[] {
+  const out: TreeItem[] = [];
+  const walk = (parentId: string | null, depth: number) => {
+    for (const folder of folders.filter((f) => (f.parent_id ?? null) === parentId)) {
+      out.push({ kind: 'folder', id: folder.id, parentId, depth, folder });
+      if (expanded.has(folder.id)) {
+        walk(folder.id, depth + 1);
+        for (const note of notes.filter((n) => n.folder_id === folder.id)) {
+          out.push({ kind: 'note', id: note.id, parentId: folder.id, depth: depth + 1, note });
+        }
+      }
+    }
+  };
+  walk(null, 0);
+  for (const note of notes.filter((n) => n.folder_id == null)) {
+    out.push({ kind: 'note', id: note.id, parentId: null, depth: 0, note });
+  }
+  return out;
 }

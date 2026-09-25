@@ -9,7 +9,9 @@ Logia blends structured text editing with infinite visual canvases, ensuring you
 
 ## Features
 
-- **AI-Powered Assistance**: Integrated with Google AI for intelligent note generation and editing.
+- **AI-Powered Assistance**: Chat with your notes and edit them with AI using the provider you prefer — Google Gemini, OpenAI, Anthropic Claude, OpenRouter, Groq, DeepSeek, Mistral, local models (Ollama, LM Studio, any OpenAI-compatible server), or the coding-agent CLIs you already have installed (Claude Code, Codex, OpenCode, Gemini CLI).
+- **Vim Mode**: Optional modal editing in notes (motions, operators, text objects, visual mode, search, registers) plus keyboard navigation for the whole app — a leader key, a `:` command line and a file explorer.
+- **Auto-hide Sidebar**: Pin the sidebar, or let it slide in when the pointer reaches the left edge (`Ctrl/⌘+\` to toggle).
 - **Rich Text Editing**: Full-featured editor with BlockNote for structured content creation.
 - **Visual Note-Taking**: Integrated **tldraw** canvas for infinite sketching, diagrams, and whiteboarding.
 - **Audio Recording & Transcription**: Record and transcribe audio content directly in your notes.
@@ -20,6 +22,27 @@ Logia blends structured text editing with infinite visual canvases, ensuring you
 - **Kanban Boards**: Organize your tasks and workflows with visual boards.
 - **Cross-Platform**: Native desktop app for Windows, macOS, and Linux.
 - **Markdown Support**: Full markdown rendering with GitHub Flavored Markdown.
+
+## AI providers
+
+Open **Settings → AI providers**, pick a provider, add its API key (stored encrypted in your OS keychain) and choose a model. You can switch providers any time from the picker above the AI chat box, or with `:provider <id>` in vim mode.
+
+| Kind | Providers | Notes |
+| --- | --- | --- |
+| Cloud APIs | Google Gemini, OpenAI, Anthropic, OpenRouter, Groq, DeepSeek, Mistral | Need an API key |
+| Local | Ollama, LM Studio, custom OpenAI-compatible URL | No key needed; runs offline |
+| CLI agents | Claude Code (`claude`), Codex (`codex`), OpenCode (`opencode`), Gemini CLI (`gemini`) | Uses your existing CLI login/subscription. Logia runs them non-interactively in a scratch folder (Codex in its read-only sandbox) |
+
+CLI agents power chat and transcript structuring; the inline `/ai` editor menu needs an HTTP provider.
+
+## Vim mode
+
+Turn it on in **Settings → Editor & Vim** or with the `VIM` badge in the header. The badge then shows the current mode; click it for the full cheat sheet.
+
+- **Editor:** `hjkl`, `w b e`, `0 ^ $`, `gg G`, `f t ; ,`, `x r ~ J`, `d c y` + motion / text object (`dw`, `ciw`, `di"`), `dd yy cc p P`, `v V`, `>> <<`, `u` / `Ctrl-r`, `/ ? n N *`, counts.
+- **Leader (`Space`):** `e` explorer, `f` find note, `a` AI chat, `n` new note, `c` new canvas, `b` pin/auto-hide sidebar, `t` to-do board, `h` home, `s` settings.
+- **Explorer:** `j k` move, `l`/`Enter` open or expand, `h` collapse, `a`/`A` new note/folder, `r` rename, `d` delete, `s` star, `Esc` back to the editor.
+- **Command line:** `:w`, `:q`, `:wq`, `:e <note>`, `:new`, `:canvas`, `:ai <prompt>`, `:provider <id>`, `:set novim`, `:help`.
 
 ## Installation
 

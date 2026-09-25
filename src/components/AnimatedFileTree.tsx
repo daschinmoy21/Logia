@@ -35,6 +35,10 @@ interface AnimatedFileTreeProps {
   onStartRenaming: (noteId: string, title: string) => void;
   onStartFolderRenaming: (folderId: string, name: string) => void;
   selectedNoteId: string | null;
+  /** Keyboard cursor row while the vim explorer is active. */
+  vimCursorId?: string | null;
+  onCancelRename?: () => void;
+  onCancelFolderRename?: () => void;
 }
 
 export const AnimatedFileTree: React.FC<AnimatedFileTreeProps> = ({
@@ -57,7 +61,21 @@ export const AnimatedFileTree: React.FC<AnimatedFileTreeProps> = ({
   onStartRenaming,
   onStartFolderRenaming,
   selectedNoteId,
+  vimCursorId = null,
+  onCancelRename,
+  onCancelFolderRename,
 }) => {
+  const rootRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (!vimCursorId) return;
+    const row = rootRef.current?.querySelector<HTMLElement>(`[data-tree-id="${CSS.escape(vimCursorId)}"]`);
+    row?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [vimCursorId]);
+
+  const cursorRing = (id: string) =>
+    id === vimCursorId ? ' ring-1 ring-inset ring-blue-400/70 bg-zinc-800/60' : '';
+
   const currentNotes = useNotesStore((state) => state.notes);
   const currentFolders = useNotesStore((state) => state.folders);
 
@@ -84,11 +102,12 @@ export const AnimatedFileTree: React.FC<AnimatedFileTreeProps> = ({
     return (
       <FolderItem key={folder.id} value={folder.id}>
         <div
+          data-tree-id={folder.id}
           className={`flex items-center py-1.5 px-1 rounded-md cursor-pointer transition-all duration-200 group
             ${isSelected
               ? 'bg-blue-600/10 text-blue-100 border-l-2 border-blue-500'
               : 'hover:bg-zinc-800/70 text-zinc-300'
-            }`}
+            }${cursorRing(folder.id)}`}
           style={{ paddingLeft: `${depth * 8}px` }}
           onClick={(e) => {
             e.stopPropagation();
@@ -123,9 +142,7 @@ export const AnimatedFileTree: React.FC<AnimatedFileTreeProps> = ({
                 onBlur={onFolderRename}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') onFolderRename();
-                  if (e.key === 'Escape') {
-                    // Reset renaming state
-                  }
+                  if (e.key === 'Escape') onCancelFolderRename?.();
                 }}
                 className="flex-1 bg-zinc-700 text-white text-sm px-1 py-0.5 border-none outline-none focus:ring-0"
                 autoFocus
@@ -161,6 +178,7 @@ export const AnimatedFileTree: React.FC<AnimatedFileTreeProps> = ({
           {folderNotes.map(note => (
             <File
               key={note.id}
+              data-tree-id={note.id}
               className={`
                 group relative font-small px-2 py-1.5 rounded-md cursor-pointer transition-all duration-200 flex items-center
                 ${note.id === renamingNoteId
@@ -168,7 +186,7 @@ export const AnimatedFileTree: React.FC<AnimatedFileTreeProps> = ({
                   : note.id === selectedNoteId
                     ? 'bg-blue-600/20 text-blue-100 border-l-2 border-blue-500'
                     : 'hover:bg-zinc-800/50 text-zinc-300'
-                }
+                }${cursorRing(note.id)}
               `}
               style={{ paddingLeft: `${(depth + 1) * 16 + 8}px` }}
               onClick={() => onSelectNote(note)}
@@ -192,9 +210,7 @@ export const AnimatedFileTree: React.FC<AnimatedFileTreeProps> = ({
                         onBlur={onRename}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') onRename();
-                          if (e.key === 'Escape') {
-                            // Reset renaming state
-                          }
+                          if (e.key === 'Escape') onCancelRename?.();
                         }}
                         className="w-full bg-zinc-700 text-white text-sm p-0 border-none outline-none focus:ring-0"
                         autoFocus
@@ -236,7 +252,7 @@ export const AnimatedFileTree: React.FC<AnimatedFileTreeProps> = ({
   const rootNotes = getNotesInFolder(undefined);
 
   return (
-    <div className='space-y-1'>
+    <div ref={rootRef} className='space-y-1'>
       <Files
         open={Array.from(expandedFolders)}
         onOpenChange={(open) => onExpandedFoldersChange(new Set(open))}
@@ -248,6 +264,7 @@ export const AnimatedFileTree: React.FC<AnimatedFileTreeProps> = ({
       {rootNotes.map((note) => (
         <File
           key={note.id}
+          data-tree-id={note.id}
           className={`
             group relative font-small px-2 py-1.5 rounded-lg cursor-pointer transition-all duration-200 flex items-center
             ${note.id === renamingNoteId
@@ -255,7 +272,7 @@ export const AnimatedFileTree: React.FC<AnimatedFileTreeProps> = ({
               : note.id === selectedNoteId
                 ? 'bg-blue-600/30 text-blue-100 border-l-2 border-blue-500'
                 : 'hover:bg-zinc-800/50 border border-transparent text-zinc-300'
-            }
+            }${cursorRing(note.id)}
           `}
           onClick={() => onSelectNote(note)}
           onContextMenu={(e) => onContextMenu(e, { note })}
@@ -278,9 +295,7 @@ export const AnimatedFileTree: React.FC<AnimatedFileTreeProps> = ({
                     onBlur={onRename}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') onRename();
-                      if (e.key === 'Escape') {
-                        // Reset renaming state
-                      }
+                      if (e.key === 'Escape') onCancelRename?.();
                     }}
                     className="w-full bg-zinc-700 text-white text-sm p-0 border-none outline-none focus:ring-0"
                     autoFocus

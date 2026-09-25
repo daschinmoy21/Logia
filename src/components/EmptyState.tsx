@@ -114,7 +114,7 @@ export function EmptyState() {
                 onClick={async () => {
                   if (!gitSyncConfigured) {
                     // Open settings for configuration
-                    useUiStore.getState().setIsSettingsOpen(true);
+                    useUiStore.getState().setIsSettingsOpen(true, 'sync');
                   } else {
                     setIsSyncing(true);
                     try {

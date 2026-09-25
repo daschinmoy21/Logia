@@ -1,6 +1,6 @@
 import { BlockNoteEditor, filterSuggestionItems } from "@blocknote/core";
 import { useCreateBlockNote } from "@blocknote/react";
-import { ReactNode, createContext, useContext, useRef, useMemo, useEffect, useState } from "react";
+import { ReactNode, createContext, useContext, useRef, useEffect } from "react";
 import { codeBlock } from "@blocknote/code-block";
 import {
   createAIExtension,
@@ -23,7 +23,7 @@ import {
   CreateLinkButton,
 } from "@blocknote/react";
 import { Note } from "../types/Note";
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
+import type { LanguageModel } from 'ai';
 import useUiStore from '../store/UiStore';
 
 
@@ -64,33 +64,19 @@ const convertFileToBase64 = (file: File): Promise<string> => {
 export function EditorProvider({
   children,
   currentNote,
+  aiModel,
   updateCurrentNoteContent,
   updateCurrentNoteTitle,
 }: {
   children: ReactNode;
   currentNote: Note;
+  aiModel: LanguageModel | null;
   updateCurrentNoteContent: (content: string) => void;
   updateCurrentNoteTitle: (title: string) => void;
 }) {
-  const { ensureGoogleApiKey, hasGoogleApiKey, setEditor } = useUiStore();
-  const [resolvedKey, setResolvedKey] = useState<string>('');
-
-  useEffect(() => {
-    if (hasGoogleApiKey) {
-      ensureGoogleApiKey().then(setResolvedKey);
-    }
-  }, [ensureGoogleApiKey, hasGoogleApiKey]);
-
-  // Create model only when API key becomes available
-  const model = useMemo(() => {
-    if (resolvedKey) {
-      const googleAI = createGoogleGenerativeAI({
-        apiKey: resolvedKey,
-      });
-      return googleAI('gemini-2.5-flash');
-    }
-    return null;
-  }, [resolvedKey]);
+  const { setEditor } = useUiStore();
+  // The model is fixed for the editor's lifetime; the parent remounts us when it changes.
+  const model = aiModel;
 
   const hasAI = Boolean(model);
 
@@ -240,7 +226,7 @@ export function FormattingToolbarWithAI() {
 
 // Slash menu with the AI option added
 export function SuggestionMenuWithAI({ editor }: { editor: BlockNoteEditor<any, any, any> }) {
-  const { hasGoogleApiKey } = useUiStore();
+  const { hasAI } = useEditorContext();
 
   return (
     <SuggestionMenuController
@@ -249,8 +235,8 @@ export function SuggestionMenuWithAI({ editor }: { editor: BlockNoteEditor<any, 
         filterSuggestionItems(
           [
             ...getDefaultReactSlashMenuItems(editor),
-            // add the default AI slash menu items only if API key is present
-            ...(hasGoogleApiKey ? getAISlashMenuItems(editor) : []),
+            // add the default AI slash menu items only if an AI model is available
+            ...(hasAI ? getAISlashMenuItems(editor) : []),
           ],
           query,
         )

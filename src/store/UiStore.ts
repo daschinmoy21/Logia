@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import Fuse from 'fuse.js';
 import { Note, Folder } from '../types/Note';
-import { invoke } from '@tauri-apps/api/core';
+
+export type SettingsTab = 'ai' | 'editor' | 'transcription' | 'sync';
 
 interface UiState {
   isSearchActive: boolean;
@@ -12,7 +13,6 @@ interface UiState {
   setSearchQuery: (query: string, notes: Note[]) => void;
   openCommandPalette: () => void;
   closeCommandPalette: () => void;
-  loadApiKey: () => Promise<void>;
 
   // States moved from Sidebar
   deleteConfirmId: string | null;
@@ -21,16 +21,16 @@ interface UiState {
   renameValue: string;
   contextMenu: { x: number; y: number; note?: Note; folder?: Folder } | null;
   isSettingsOpen: boolean;
+  settingsTab: SettingsTab;
+  folderRenameRequest: { id: string; name: string } | null;
+  pendingAiPrompt: string | null;
   isKanbanOpen: boolean;
   isSupportOpen: boolean;
   isRecording: boolean;
   isProcessingRecording: boolean;
   recordingStartTime: number | null;
   isAiSidebarOpen: boolean;
-  isSidebarFloating: boolean;
   expandedFolders: Set<string>;
-  googleApiKey: string;
-  hasGoogleApiKey: boolean;
   gitSyncConfigured: boolean;
   isSyncing: boolean; // [NEW]
   lastSyncedAt: Date | null; // [NEW]
@@ -48,16 +48,15 @@ interface UiState {
   finishRenaming: () => void;
   setRenameValue: (value: string) => void;
   setContextMenu: (contextMenu: { x: number; y: number; note?: Note; folder?: Folder } | null) => void;
-  setIsSettingsOpen: (isOpen: boolean) => void;
+  setIsSettingsOpen: (isOpen: boolean, tab?: SettingsTab) => void;
+  setFolderRenameRequest: (req: { id: string; name: string } | null) => void;
+  setPendingAiPrompt: (prompt: string | null) => void;
   setIsKanbanOpen: (isOpen: boolean) => void;
   setIsSupportOpen: (isOpen: boolean) => void;
   setIsRecording: (isRecording: boolean) => void;
   setIsProcessingRecording: (isProcessing: boolean) => void;
   setIsAiSidebarOpen: (isOpen: boolean) => void;
-  setIsSidebarFloating: (isFloating: boolean) => void;
   setExpandedFolders: (folders: Set<string>) => void;
-  setGoogleApiKey: (key: string) => void;
-  ensureGoogleApiKey: () => Promise<string>;
   setGitSyncConfigured: (configured: boolean) => void;
   setIsSyncing: (isSyncing: boolean) => void; // [NEW]
   setLastSyncedAt: (date: Date | null) => void; // [NEW]
@@ -94,31 +93,21 @@ const useUiStore = create<UiState>((set) => ({
   openCommandPalette: () => set({ isCommandPaletteOpen: true }),
   closeCommandPalette: () => set({ isCommandPaletteOpen: false, searchQuery: '', searchResults: [] }),
 
-  // Load API key existence on initialization (never the raw key)
-  loadApiKey: async () => {
-    try {
-      const hasKey = await invoke<boolean>('has_google_api_key');
-      set({ hasGoogleApiKey: hasKey });
-    } catch (error) {
-      console.error('Failed to check API key:', error);
-    }
-  },
-
   // States moved from Sidebar
   deleteConfirmId: null,
   renamingNoteId: null,
   renameValue: '',
   contextMenu: null,
   isSettingsOpen: false,
+  settingsTab: 'ai',
+  folderRenameRequest: null,
+  pendingAiPrompt: null,
   isKanbanOpen: false,
   isSupportOpen: false,
   isRecording: false,
   isAiSidebarOpen: false,
-  isSidebarFloating: false,
   expandedFolders: new Set(),
   deleteConfirmFolderId: null,
-  googleApiKey: '',
-  hasGoogleApiKey: false,
   gitSyncConfigured: false,
   isSyncing: false, // [NEW]
   lastSyncedAt: null, // [NEW]
@@ -139,7 +128,9 @@ const useUiStore = create<UiState>((set) => ({
   finishRenaming: () => set({ renamingNoteId: null, renameValue: '' }),
   setRenameValue: (value) => set({ renameValue: value }),
   setContextMenu: (contextMenu) => set({ contextMenu }),
-  setIsSettingsOpen: (isOpen) => set({ isSettingsOpen: isOpen }),
+  setIsSettingsOpen: (isOpen, tab) => set(tab ? { isSettingsOpen: isOpen, settingsTab: tab } : { isSettingsOpen: isOpen }),
+  setFolderRenameRequest: (folderRenameRequest) => set({ folderRenameRequest }),
+  setPendingAiPrompt: (pendingAiPrompt) => set({ pendingAiPrompt }),
   setIsKanbanOpen: (isOpen) => set({ isKanbanOpen: isOpen }),
   setIsSupportOpen: (isOpen) => set({ isSupportOpen: isOpen }),
   setIsRecording: (isRecording) => set({
@@ -148,21 +139,8 @@ const useUiStore = create<UiState>((set) => ({
   }),
   setIsProcessingRecording: (isProcessing) => set({ isProcessingRecording: isProcessing }),
   setIsAiSidebarOpen: (isOpen) => set({ isAiSidebarOpen: isOpen }),
-  setIsSidebarFloating: (isFloating) => set({ isSidebarFloating: isFloating }),
   setExpandedFolders: (expandedFolders) => set({ expandedFolders }),
-  setGoogleApiKey: (key) => set({ googleApiKey: key, hasGoogleApiKey: !!key }),
 
-  ensureGoogleApiKey: async (): Promise<string> => {
-    const { googleApiKey } = useUiStore.getState();
-    if (googleApiKey) return googleApiKey;
-    try {
-      const key = await invoke<string>('get_google_api_key');
-      set({ googleApiKey: key, hasGoogleApiKey: !!key });
-      return key;
-    } catch {
-      return '';
-    }
-  },
   setGitSyncConfigured: (configured) => set({ gitSyncConfigured: configured }),
   setIsSyncing: (isSyncing) => set({ isSyncing }), // [NEW]
   setLastSyncedAt: (date) => set({ lastSyncedAt: date }), // [NEW]

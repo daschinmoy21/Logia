@@ -6,7 +6,7 @@ import { NoteEditor } from "./NoteEditor";
 import { EditorProvider } from "./EditorProvider";
 import { EmptyState } from "./EmptyState";
 import './styles.css';
-import useUiStore from '../store/UiStore';
+import { useEditorAiModel } from '../hooks/useEditorAiModel';
 
 // Lazy load Canvas to prevent huge bundle load on startup
 const Canvas = lazy(() => import("./Canvas"));
@@ -17,7 +17,7 @@ function Editor() {
     updateCurrentNoteContent,
     updateCurrentNoteTitle,
   } = useNotesStore();
-  const { hasGoogleApiKey } = useUiStore();
+  const { model: aiModel, signature: aiSignature } = useEditorAiModel();
 
   // Show empty state when no note is selected
   if (!currentNote) {
@@ -39,15 +39,16 @@ function Editor() {
     );
   }
 
-  // Key based on API key + note ID ensures the editor remounts when:
+  // Key based on AI model + note ID ensures the editor remounts when:
   // 1. The user switches notes
-  // 2. The user adds/removes/changes the API key (toggling AI features)
-  const editorKey = `${currentNote.id}-${hasGoogleApiKey ? 'ai' : 'no-ai'}`;
+  // 2. The AI provider/model changes (the AI extension is set at creation)
+  const editorKey = `${currentNote.id}-${aiSignature}`;
 
   return (
     <EditorProvider
       key={editorKey}
       currentNote={currentNote}
+      aiModel={aiModel}
       updateCurrentNoteContent={updateCurrentNoteContent}
       updateCurrentNoteTitle={updateCurrentNoteTitle}
     >

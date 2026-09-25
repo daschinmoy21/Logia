@@ -32,6 +32,7 @@ libc = "0.2.175"
 dotenvy = "0.15"
 keyring = "3.6.3"
 tauri-plugin-shell = "2"
+tauri-plugin-http = "2"
 aes-gcm = "0.10"
 base64 = "0.22"
 tokio = { version = "1", features = ["full"] }
