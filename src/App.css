@@ -250,3 +250,16 @@ body.vim-visual-active .bn-formatting-toolbar {
     animation: none;
   }
 }
+
+/* ---------- Note editor ---------- */
+/* BlockNote's 54px gutter holds the block handles; on a phone it costs too much text. */
+@media (max-width: 639px) {
+  .note-editor-view .bn-editor {
+    padding-inline: 30px;
+  }
+}
+
+/* Headings reached from the outline shouldn't land hard against the toolbar. */
+.note-editor-view [data-id] {
+  scroll-margin-top: 12px;
+}

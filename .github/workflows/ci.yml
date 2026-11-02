@@ -10,14 +10,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install Bun
-        run: |
-          curl -fsSL https://bun.sh/install | bash
-          echo "$HOME/.bun/bin" >> $GITHUB_PATH
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
       - name: Install dependencies
-        run: bun install
+        run: bun install --frozen-lockfile
       - name: Type-check
-        run: bunx tsc --noEmit
+        run: bun run check
+      - name: Workspace and agent tests
+        run: bun run test:unit && bun run test:agent
+      - name: Install test browser
+        run: bunx playwright install --with-deps chromium
+      - name: Browser tests
+        run: bun run test:browser
 
   rust:
     runs-on: ubuntu-latest
@@ -35,6 +43,8 @@ jobs:
             libappindicator3-dev \
             librsvg2-dev \
             patchelf
+      - name: Interactive terminal lifecycle tests (no GUI)
+        run: cargo test --manifest-path src-tauri/terminal-tests/Cargo.toml --locked
       - name: Cargo check
         run: cargo check --manifest-path src-tauri/Cargo.toml
       - name: Cargo test

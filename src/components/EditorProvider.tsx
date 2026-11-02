@@ -25,6 +25,7 @@ import {
 import { Note } from "../types/Note";
 import type { LanguageModel } from 'ai';
 import useUiStore from '../store/UiStore';
+import { useNotesStore } from '../store/notesStore';
 
 
 type EditorContextType = {
@@ -112,7 +113,6 @@ export function EditorProvider({
   });
 
   const previousNoteIdRef = useRef<string | null>(null);
-  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Set editor in store
   useEffect(() => {
@@ -143,49 +143,47 @@ export function EditorProvider({
   }, [currentNote?.id, editor]);
   // Removed `currentNote.content` from dependency to prevent re-entrancy loops/overwrites
 
-  // Handle content changes with DEBOUNCE (not throttle)
-  // This ensures the LAST keystroke is always saved.
+  const noteId = currentNote.id;
+
+  // Publish every edit to the store as it happens. The store owns the disk debounce,
+  // so its dirty state and navigation guards see these edits before any unmount.
   useEffect(() => {
+    const firstBlockTitle = () => {
+      const content = editor.document[0]?.content;
+      if (typeof content === 'string') return content || "Untitled";
+      if (Array.isArray(content)) return content.map((c: any) => c.text).join('') || "Untitled";
+      return "Untitled";
+    };
+
+    let lastContent = JSON.stringify(editor.document);
+    let lastFirstBlock = firstBlockTitle();
+
     const handleChange = () => {
-      // Clear previous timeout to reset the timer (debounce)
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
+      const store = useNotesStore.getState();
+      if (store.currentNote?.id !== noteId) return;
+
+      const content = JSON.stringify(editor.document);
+      if (content === lastContent) return;
+      lastContent = content;
+      updateCurrentNoteContent(content);
+
+      // The title follows the first block only while they still agree, so a title
+      // renamed elsewhere survives edits to the note's text.
+      const firstBlock = firstBlockTitle();
+      const previousFirstBlock = lastFirstBlock;
+      lastFirstBlock = firstBlock;
+      if (firstBlock === previousFirstBlock) return;
+      const title = store.currentNote.title.trim();
+      if (title === previousFirstBlock.trim() || !title || title === "Untitled") {
+        updateCurrentNoteTitle(firstBlock);
       }
-
-      // Set new timeout
-      saveTimeoutRef.current = setTimeout(() => {
-        if (currentNote) {
-          const content = JSON.stringify(editor.document);
-          updateCurrentNoteContent(content);
-
-          // Update title based on first block
-          const firstBlock = editor.document[0];
-          let title = "Untitled";
-          if (firstBlock) {
-            const content = firstBlock.content;
-            if (typeof content === 'string') {
-              title = content || "Untitled";
-            } else if (Array.isArray(content)) {
-              title = content.map((c: any) => c.text).join('') || "Untitled";
-            }
-          }
-          // Only update if changed to avoid loop (store check might be enough but let's be safe)
-          if (currentNote.title !== title) {
-            updateCurrentNoteTitle(title);
-          }
-        }
-      }, 500); // 500ms debounce
     };
 
-    // Listen for editor changes
-    editor.onChange(handleChange);
-
+    const unsubscribe = editor.onChange(handleChange);
     return () => {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
+      unsubscribe?.();
     };
-  }, [editor, currentNote, updateCurrentNoteContent]);
+  }, [editor, noteId, updateCurrentNoteContent, updateCurrentNoteTitle]);
 
   return (
     <EditorContext.Provider value={{ editor, updateCurrentNoteTitle, hasAI }}>

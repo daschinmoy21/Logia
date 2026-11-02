@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import Fuse from 'fuse.js';
+import { searchWorkspaceNotes } from '../lib/workspace';
 import { Note, Folder } from '../types/Note';
 
 export type SettingsTab = 'ai' | 'editor' | 'transcription' | 'sync';
@@ -78,17 +78,7 @@ const useUiStore = create<UiState>((set) => ({
   isCommandPaletteOpen: false,
   toggleSearch: () => set((state) => ({ isSearchActive: !state.isSearchActive })),
   setSearchQuery: (query, notes) => {
-    set({ searchQuery: query });
-    if (query) {
-      const fuse = new Fuse(notes, {
-        keys: ['title', 'content'],
-        includeScore: true,
-      });
-      const results = fuse.search(query);
-      set({ searchResults: results.map((result) => result.item) });
-    } else {
-      set({ searchResults: [] });
-    }
+    set({ searchQuery: query, searchResults: searchWorkspaceNotes(query, notes) });
   },
   openCommandPalette: () => set({ isCommandPaletteOpen: true }),
   closeCommandPalette: () => set({ isCommandPaletteOpen: false, searchQuery: '', searchResults: [] }),

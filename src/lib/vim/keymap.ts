@@ -78,6 +78,7 @@ export const EX_COMMANDS: KeyDoc[] = [
 export const GLOBAL_KEYS: KeyDoc[] = [
   { keys: 'Space', label: 'Leader (see popup)' },
   { keys: ':', label: 'Command line' },
-  { keys: 'Ctrl-h / Ctrl-l', label: 'Focus explorer / editor' },
-  { keys: 'Ctrl-j Ctrl-k', label: 'Move in the command palette' },
+  { keys: 'Ctrl-h / Ctrl-l', label: 'Focus pane to the left / right (also with Vim off)' },
+  { keys: 'Ctrl-j / Ctrl-k', label: 'Next / previous pane; next / previous result in the palette' },
+  { keys: 'Ctrl/⌘-Shift-P', label: 'Open command palette' },
 ];

@@ -27,14 +27,15 @@ import {
   DialogTitle,
 } from "@headlessui/react";
 import { useNotesStore } from "../store/notesStore";
+import { findNote, useNoteMeta } from "./workspace/noteMeta";
 import RecStatus from "./RecStatus";
 import useUiStore from "../store/UiStore";
 import KanbanBoardContainer from "./KanbanBoard";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke, isTauri } from "@tauri-apps/api/core";
 import { AnimatedFileTree } from "./AnimatedFileTree";
 import toast from "react-hot-toast";
 import { processTranscription } from "../lib/aiTranscription";
-import { searchModKeyLabel } from "../lib/utils";
+import { Kbd, SHORTCUTS } from "./workspace/shortcuts";
 import { useVimStore } from "../store/vimStore";
 
 // Type for trash items from backend
@@ -48,8 +49,10 @@ interface TrashItem {
 
 export const Sidebar = () => {
   // Subscribing to state changes individually
-  const currentNote = useNotesStore((state) => state.currentNote);
-  const notes = useNotesStore((state) => state.notes);
+  // Only what the sidebar shows: the full notes change on every keystroke.
+  const currentNoteId = useNotesStore((state) => state.currentNote?.id ?? null);
+  const currentNoteType = useNotesStore((state) => state.currentNote?.note_type);
+  const notes = useNoteMeta();
 
   // Getting actions (they don't cause re-renders)
   const {
@@ -85,8 +88,8 @@ export const Sidebar = () => {
   const gitSyncConfigured = useUiStore((state) => state.gitSyncConfigured);
   const isSyncing = useUiStore((state) => state.isSyncing);
   const lastSyncedAt = useUiStore((state) => state.lastSyncedAt);
-  const modKey = searchModKeyLabel();
-  const isHome = !currentNote;
+  const native = isTauri();
+  const isHome = !currentNoteId;
 
   // Folder renaming state
   const [renamingFolderId, setRenamingFolderId] = useState<string | null>(null);
@@ -116,11 +119,6 @@ export const Sidebar = () => {
     setExpandedFolders,
     setIsProcessingRecording,
   } = useUiStore.getState();
-
-  useEffect(() => {
-    loadNotes();
-    loadFolders();
-  }, [loadNotes, loadFolders]);
 
   // Folder renames requested from outside (vim explorer `r` / `A`)
   useEffect(() => {
@@ -175,6 +173,8 @@ export const Sidebar = () => {
         setDeleteConfirmFolderId(null);
       } catch (error) {
         console.error("Failed to delete folder", error);
+        toast.error(`Couldn't delete the folder: ${error}`);
+        setDeleteConfirmFolderId(null);
       }
     }
   };
@@ -186,6 +186,8 @@ export const Sidebar = () => {
         setDeleteConfirmId(null);
       } catch (error) {
         console.error("Failed to delete note", error);
+        toast.error(`Couldn't delete the note: ${error}`);
+        setDeleteConfirmId(null);
       }
     }
   };
@@ -280,9 +282,7 @@ export const Sidebar = () => {
             >
               <Search size={16} />
               <span>Search</span>
-              <kbd className="ml-auto pointer-events-none hidden h-5 select-none items-center gap-1 rounded border border-zinc-800 bg-zinc-900 px-1.5 font-mono text-[10px] text-zinc-500 group-hover:text-zinc-400 font-medium sm:flex">
-                <span className="text-xs">{modKey}</span>P
-              </kbd>
+              <Kbd keys={SHORTCUTS.quickSwitch} className="ml-auto" />
             </button>
             <button
               onClick={() => {
@@ -301,15 +301,18 @@ export const Sidebar = () => {
             </button>
             <button
               onClick={() => setIsKanbanOpen(true)}
-              className="w-full flex items-center gap-3 px-2 py-1.5 text-sm font-medium hover:bg-zinc-900 text-zinc-400 hover:text-zinc-200 rounded-md transition-colors"
+              disabled={!native}
+              title={native ? undefined : "Needs the desktop app"}
+              className="w-full flex items-center gap-3 px-2 py-1.5 text-sm font-medium hover:bg-zinc-900 text-zinc-400 hover:text-zinc-200 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-zinc-400"
             >
               <ListTodo size={16} />
               <span>To-do List</span>
             </button>
             <button
-              disabled={!currentNote || currentNote.note_type === "canvas"}
+              disabled={!native || !currentNoteId || currentNoteType === "canvas"}
+              title={native ? undefined : "Needs the desktop app"}
               onClick={async () => {
-                if (!currentNote || currentNote.note_type === "canvas") return;
+                if (!currentNoteId || currentNoteType === "canvas") return;
                 if (!isRecording) {
                   try {
                     await invoke("start_recording");
@@ -322,7 +325,7 @@ export const Sidebar = () => {
               }}
               className={`w-full flex items-center gap-3 px-2 py-1.5 text-sm font-medium hover:bg-zinc-900 rounded-md transition-colors
                      ${isRecording ? "text-red-400 animate-pulse" : "text-zinc-400 hover:text-zinc-200"}
-                     ${!currentNote || currentNote.note_type === "canvas" ? "opacity-50 cursor-not-allowed" : ""}
+                     ${!native || !currentNoteId || currentNoteType === "canvas" ? "opacity-50 cursor-not-allowed" : ""}
                     `}
             >
               <Sparkles size={16} />
@@ -355,8 +358,8 @@ export const Sidebar = () => {
                 {starredNotes.map((note) => (
                   <button
                     key={note.id}
-                    onClick={() => selectNote(note)}
-                    className={`w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded-md transition-colors text-left ${currentNote?.id === note.id
+                    onClick={() => selectNote(findNote(note.id) ?? null)}
+                    className={`w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded-md transition-colors text-left ${currentNoteId === note.id
                       ? 'bg-zinc-800 text-zinc-200'
                       : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'
                       }`}
@@ -427,7 +430,7 @@ export const Sidebar = () => {
                 onDeleteFolder={handleDeleteFolder}
                 onDeleteNote={handleDeleteNote}
                 selectedFolderId={selectedFolderId}
-                selectedNoteId={currentNote?.id || null}
+                selectedNoteId={currentNoteId}
                 vimCursorId={vimCursorId}
                 onCancelRename={finishRenaming}
                 onCancelFolderRename={() => {
@@ -488,7 +491,9 @@ export const Sidebar = () => {
             </div>
             <button
               onClick={openTrash}
-              className="w-full flex items-center gap-3 px-2 py-1.5 text-sm font-medium hover:bg-zinc-900 text-zinc-500 hover:text-zinc-300 rounded-md transition-colors"
+              disabled={!native}
+              title={native ? undefined : "Needs the desktop app"}
+              className="w-full flex items-center gap-3 px-2 py-1.5 text-sm font-medium hover:bg-zinc-900 text-zinc-500 hover:text-zinc-300 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-zinc-500"
             >
               <Trash2 size={16} />
               <span>Trash</span>
@@ -500,6 +505,7 @@ export const Sidebar = () => {
                   await openUrl('https://github.com/daschinmoy21/Logia');
                 } catch (e) {
                   console.error('Failed to open URL:', e);
+                  window.open('https://github.com/daschinmoy21/Logia', '_blank', 'noopener');
                 }
               }}
               className="w-full flex items-center gap-3 px-2 py-1.5 text-sm font-medium hover:bg-zinc-900 text-zinc-500 hover:text-zinc-300 rounded-md transition-colors"
@@ -555,7 +561,7 @@ export const Sidebar = () => {
                     }
 
                     // 2. Ensure we have a note
-                    let noteToUpdate = currentNote;
+                    let noteToUpdate = useNotesStore.getState().currentNote;
                     if (!noteToUpdate) {
                       try {
                         await createNote("text");

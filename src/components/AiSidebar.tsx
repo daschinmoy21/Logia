@@ -1,5 +1,5 @@
-import { PromptInputBox } from "@/components/ui/ai-prompt-box";
 import { useNotesStore } from "@/store/notesStore";
+import type { Note } from "@/types/Note";
 import { SuggestionCard } from "./chat/SuggestionCard";
 import { countWordsInNoteContent } from "@/lib/note-utils";
 import useUiStore from "../store/UiStore";
@@ -8,6 +8,11 @@ import { useState, useEffect, useRef } from "react";
 import { activeProvider, friendlyAiError, streamChat } from "../lib/ai/client";
 import { isProviderReady } from "../store/settingsStore";
 import { ProviderSwitcher } from "./ProviderSwitcher";
+import { AgentChooser, type AgentSelection } from "./agent/AgentChooser";
+import { AgentComposer } from "./agent/AgentComposer";
+import { AgentTerminalPane } from "./agent/AgentTerminalPane";
+import { closeAllAgentSessions, refreshAgentDetection } from "./agent/agentSessions";
+import { AGENT_TOOLS } from "../lib/ai/agent-terminal";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
@@ -19,12 +24,11 @@ import {
   ChevronLeft,
   ChevronRight,
   FileText,
-  Square,
+  Plus,
   Star,
   Clock,
   Folder as FolderIcon,
   Type,
-  Trash2,
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import toast from "react-hot-toast";
@@ -36,16 +40,32 @@ interface AiSidebarProps {
 
 type Tab = "chat" | "calendar" | "info";
 
+/** Matches the app's narrow layout: too little room to dock beside the note. */
+const COMPACT_QUERY = "(max-width: 767px)";
+
+/** Terminal UIs need more room than chat, so opening an agent widens a narrow panel once. */
+const TERMINAL_WIDTH = 480;
+
+const noNotes: Note[] = [];
+
 const AiSidebar = ({ isOpen, onClose }: AiSidebarProps) => {
-  const { currentNote, notes, folders, selectNote } = useNotesStore();
-  const setIsSettingsOpen = useUiStore((s) => s.setIsSettingsOpen);
   const [activeTab, setActiveTab] = useState<Tab>("chat");
+  const [activeAgent, setActiveAgent] = useState<AgentSelection>("logia");
+  const [includeNote, setIncludeNote] = useState(true);
+  const [panelWidth, setPanelWidth] = useState(320);
+  // A closed panel stays mounted to keep its chats, but shouldn't react to every keystroke.
+  const currentNote = useNotesStore((s) => (isOpen ? s.currentNote : null));
+  const notes = useNotesStore((s) => (isOpen && activeTab === "calendar" ? s.notes : noNotes));
+  const folders = useNotesStore((s) => s.folders);
+  const selectNote = useNotesStore((s) => s.selectNote);
+  const setIsSettingsOpen = useUiStore((s) => s.setIsSettingsOpen);
 
   // Chat State - includes actionStatus for persistence
   const [messagesMap, setMessagesMap] = useState<
     Record<string, { role: "user" | "assistant"; content: string; actionStatus?: "pending" | "approved" | "refused" }[]>
   >({});
   const [isLoading, setIsLoading] = useState(false);
+  const [isCompact, setIsCompact] = useState(() => window.matchMedia(COMPACT_QUERY).matches);
   const [streamingMessage, setStreamingMessage] = useState<string>("");
   const scrollableContainerRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -69,21 +89,52 @@ const AiSidebar = ({ isOpen, onClose }: AiSidebarProps) => {
   };
 
   useEffect(() => {
+    const query = window.matchMedia(COMPACT_QUERY);
+    const onChange = () => setIsCompact(query.matches);
+    query.addEventListener("change", onChange);
+    return () => query.removeEventListener("change", onChange);
+  }, []);
+
+  // Sessions outlive the panel's visibility, but not the panel itself or the window.
+  useEffect(() => {
+    window.addEventListener("beforeunload", closeAllAgentSessions);
+    return () => {
+      window.removeEventListener("beforeunload", closeAllAgentSessions);
+      closeAllAgentSessions();
+    };
+  }, []);
+
+  // Detection only looks for binaries on PATH; nothing launches until asked.
+  useEffect(() => {
+    if (isOpen) void refreshAgentDetection();
+  }, [isOpen]);
+
+  const selectAgent = (agent: AgentSelection) => {
+    setActiveAgent(agent);
+    setActiveTab("chat");
+    if (agent !== "logia") {
+      setPanelWidth((width) => Math.max(width, Math.min(TERMINAL_WIDTH, Math.floor(window.innerWidth * 0.55))));
+    }
+  };
+
+  useEffect(() => {
     if (scrollableContainerRef.current) {
       scrollableContainerRef.current.scrollTop =
         scrollableContainerRef.current.scrollHeight;
     }
   }, [messages, streamingMessage, activeTab]);
 
-  const handleSendMessage = async (message: string) => {
-    if (!message.trim() || isLoading) return;
+  const ensureProviderReady = () => {
     const provider = activeProvider();
-    if (!isProviderReady(provider.id)) {
-      toast.error(`${provider.label} isn't set up yet.`);
-      setIsSettingsOpen(true, 'ai');
-      return;
-    }
-    if (!currentNote) return;
+    if (isProviderReady(provider.id)) return true;
+    toast.error(`${provider.label} isn't set up yet.`);
+    setIsSettingsOpen(true, 'ai');
+    return false;
+  };
+
+  const handleSendMessage = async (message: string) => {
+    if (!message.trim() || isLoading || !ensureProviderReady() || !currentNote) return;
+    const provider = activeProvider();
     const userMessage = { role: "user" as const, content: message };
     setMessagesMap((prev) => ({
       ...prev,
@@ -93,7 +144,7 @@ const AiSidebar = ({ isOpen, onClose }: AiSidebarProps) => {
     setStreamingMessage("");
 
     try {
-      const systemPrompt = `You are DaddyAI, a helpful AI assistant in a note-taking app called Logia.
+      const systemPrompt = `You are Logia, a helpful AI assistant in the note-taking app of the same name.
 
 CAPABILITIES:
 1. Chat: Answer questions normally.
@@ -136,7 +187,7 @@ TO REPLACE CONTENT:
 - For tables, use insertTable action NOT insertHeading or insertText
 - Each action should be a separate JSON object
 `;
-      const noteContext = currentNote
+      const noteContext = includeNote
         ? `\n\nContext:\n---\n${currentNote.content}\n---`
         : "";
 
@@ -191,10 +242,15 @@ TO REPLACE CONTENT:
   useEffect(() => {
     if (!pendingAiPrompt || !isOpen || !currentNote || isLoading) return;
     useUiStore.getState().setPendingAiPrompt(null);
-    setActiveTab("chat");
+    selectAgent("logia");
     void handleSendMessage(pendingAiPrompt);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingAiPrompt, isOpen, currentNote?.id, isLoading]);
+
+  const threadTitle =
+    AGENT_TOOLS.find((tool) => tool.id === activeAgent)?.label ??
+    messages.find((m) => m.role === "user")?.content.split("\n")[0] ??
+    "New Logia thread";
 
   const folderName = currentNote?.folder_id
     ? folders.find((f) => f.id === currentNote.folder_id)?.name
@@ -252,25 +308,40 @@ TO REPLACE CONTENT:
     <AnimatePresence>
       {isOpen && (
         <motion.div
-          initial={{ width: 0, opacity: 0 }}
-          animate={{ width: "auto", opacity: 1 }}
-          exit={{ width: 0, opacity: 0 }}
+          initial={isCompact ? { x: "100%", opacity: 0 } : { width: 0, opacity: 0 }}
+          animate={isCompact ? { x: 0, opacity: 1 } : { width: "auto", opacity: 1 }}
+          exit={isCompact ? { x: "100%", opacity: 0 } : { width: 0, opacity: 0 }}
           transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-          style={{ height: "100%" }}
+          style={{ height: "100%", minWidth: 0, maxWidth: isCompact ? "100%" : undefined }}
+          className={isCompact ? "absolute inset-y-0 right-0 z-[800] w-[min(100%,28rem)]" : undefined}
         >
           <Resizable
-            defaultSize={{ width: 320, height: "100%" }}
-            enable={{ left: true }}
-            minWidth={300}
-            maxWidth={600}
+            size={{ width: isCompact ? "100%" : panelWidth, height: "100%" }}
+            onResizeStop={(_event, _direction, element) => setPanelWidth(element.offsetWidth)}
+            enable={{ left: !isCompact }}
+            minWidth={isCompact ? undefined : 300}
+            maxWidth={isCompact ? undefined : 900}
             handleClasses={{
               left: "w-1 bg-zinc-800 hover:bg-zinc-600 transition-colors",
             }}
           >
-            <div className="h-full bg-zinc-950 border-l border-zinc-800 flex flex-col shadow-2xl">
+            <div data-workspace-pane="ai" className="h-full bg-zinc-950 border-l border-zinc-800 flex flex-col shadow-2xl">
               {/* Top Tabs Bar */}
-              <div className="flex items-center justify-between px-2 py-2 border-b border-zinc-900 bg-zinc-950 sticky top-0 z-10">
-                <div className="flex items-center gap-1 bg-zinc-900/50 p-1 rounded-lg">
+              <div className="flex items-center justify-between gap-1 px-2 py-2 border-b border-zinc-900 bg-zinc-950 sticky top-0 z-10">
+                <AgentChooser selected={activeAgent} title={threadTitle} onSelect={selectAgent} />
+                {activeAgent === "logia" && (
+                  <button
+                    type="button"
+                    onClick={clearChat}
+                    disabled={isLoading || messages.length === 0}
+                    className="p-1.5 rounded-md text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-zinc-500 transition-colors"
+                    title="New thread (clears this note's chat)"
+                    aria-label="New thread"
+                  >
+                    <Plus size={16} />
+                  </button>
+                )}
+                <div className="flex flex-shrink-0 items-center gap-1 bg-zinc-900/50 p-1 rounded-lg">
                   <button
                     type="button"
                     onClick={() => setActiveTab("chat")}
@@ -313,7 +384,10 @@ TO REPLACE CONTENT:
               {/* Content Area */}
               <div className="flex-1 overflow-hidden relative flex flex-col bg-zinc-950">
                 {/* --- CHAT VIEW --- */}
-                {activeTab === "chat" && (
+                {activeTab === "chat" && activeAgent !== "logia" && (
+                  <AgentTerminalPane key={activeAgent} tool={activeAgent} />
+                )}
+                {activeTab === "chat" && activeAgent === "logia" && (
                   <>
                     <div
                       ref={scrollableContainerRef}
@@ -515,38 +589,38 @@ TO REPLACE CONTENT:
                                 Thinking...
                               </span>
                             )}
-                            <button
-                              type="button"
-                              onClick={stopGeneration}
-                              className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-zinc-800 px-2 py-1 text-xs text-zinc-400 hover:text-zinc-100 hover:border-zinc-600 transition-colors"
-                            >
-                              <Square size={10} className="fill-current" /> Stop
-                            </button>
                           </div>
                         </div>
                       )}
                     </div>
                     {currentNote && (
-                      <div className="p-3 pt-2 bg-zinc-950 border-t border-zinc-900/50" data-vim-escape-to-editor>
-                        <div className="flex items-center justify-between mb-2">
-                          <ProviderSwitcher />
-                          {messages.length > 0 && !isLoading && (
+                      <AgentComposer
+                        draftKey="logia"
+                        label="Message Logia"
+                        placeholder="Message Logia…"
+                        busy={isLoading}
+                        onStop={stopGeneration}
+                        onSend={(text) => {
+                          if (!ensureProviderReady()) return false;
+                          void handleSendMessage(text);
+                          return true;
+                        }}
+                        leading={
+                          <>
                             <button
                               type="button"
-                              onClick={clearChat}
-                              className="p-1 rounded text-zinc-600 hover:text-zinc-300 hover:bg-zinc-900 transition-colors"
-                              title="Clear chat"
-                              aria-label="Clear chat"
+                              onClick={() => setIncludeNote((on) => !on)}
+                              aria-pressed={includeNote}
+                              title={includeNote ? "This note is sent as context. Click to leave it out." : "This note isn't sent. Click to include it."}
+                              className={`flex max-w-[7rem] items-center gap-1 rounded-md px-1.5 py-1 text-xs transition-colors hover:bg-zinc-800 ${includeNote ? "text-zinc-200" : "text-zinc-600 line-through"}`}
                             >
-                              <Trash2 size={13} />
+                              <FileText size={12} className="flex-shrink-0" />
+                              <span className="truncate">{currentNote.title || "Untitled"}</span>
                             </button>
-                          )}
-                        </div>
-                        <PromptInputBox
-                          onSend={handleSendMessage}
-                          isLoading={isLoading}
-                        />
-                      </div>
+                            <ProviderSwitcher />
+                          </>
+                        }
+                      />
                     )}
                   </>
                 )}

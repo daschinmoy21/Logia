@@ -10,7 +10,11 @@
     "build": "bun run build:audio && tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "test:unit": "node --experimental-strip-types --test src/lib/*.test.ts"
+    "test:unit": "node --experimental-strip-types --test src/lib/*.test.ts",
+    "check": "tsc --noEmit",
+    "agent": "node --experimental-strip-types scripts/logia-agent.ts",
+    "test:agent": "node --experimental-strip-types --test scripts/*.test.ts",
+    "test:browser": "playwright test"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^2",
@@ -43,6 +47,8 @@
     "@tauri-apps/plugin-fs": "~2",
     "@tauri-apps/plugin-http": "~2.5.0",
     "@tauri-apps/plugin-opener": "^2",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
     "ai": "^5.0.15",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -68,6 +74,7 @@
     "zustand": "^5.0.8"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.1",
     "@tauri-apps/cli": "^2",
     "@types/node": "^24.3.0",
     "@types/react": "^19.1.8",

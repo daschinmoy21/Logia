@@ -1,6 +1,6 @@
 import { useState, useEffect, type ReactNode } from 'react';
 import { Dialog, DialogPanel, DialogTitle } from '@headlessui/react';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke, isTauri } from '@tauri-apps/api/core';
 import useUiStore, { type SettingsTab } from '../store/UiStore';
 import { isProviderReady, useSettingsStore } from '../store/settingsStore';
 import {
@@ -13,6 +13,9 @@ import {
   resolveModel,
 } from '../lib/ai/providers';
 import { complete, friendlyAiError } from '../lib/ai/client';
+import { AGENT_TOOLS } from '../lib/ai/agent-terminal';
+import { openExternal } from '../lib/utils';
+import { AVAILABILITY_LABELS, agentAvailability, refreshAgentDetection, useAgentSessions } from './agent/agentSessions';
 import { EDITOR_KEYS, EXPLORER_KEYS, EX_COMMANDS, GLOBAL_KEYS, LEADER_BINDINGS, type KeyDoc } from '../lib/vim/keymap';
 import {
   X,
@@ -62,14 +65,6 @@ const TABS: Array<{ id: SettingsTab; label: string; icon: ReactNode }> = [
 const inputClass =
   'w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 transition-colors';
 
-const openExternal = async (url: string) => {
-  try {
-    const { openUrl } = await import('@tauri-apps/plugin-opener');
-    await openUrl(url);
-  } catch {
-    window.open(url, '_blank', 'noopener');
-  }
-};
 
 export const Settings = () => {
   const isSettingsOpen = useUiStore((s) => s.isSettingsOpen);
@@ -88,7 +83,7 @@ export const Settings = () => {
       <div className="fixed inset-0 flex items-center justify-center p-4">
         <DialogPanel className="w-full max-w-3xl h-[min(680px,88vh)] rounded-xl bg-zinc-900 border border-zinc-800 shadow-2xl flex overflow-hidden">
           {/* Tab rail */}
-          <nav className="w-48 flex-shrink-0 border-r border-zinc-800 bg-zinc-950/40 p-3 flex flex-col gap-0.5">
+          <nav className="w-36 sm:w-48 flex-shrink-0 border-r border-zinc-800 bg-zinc-950/40 p-3 flex flex-col gap-0.5">
             <DialogTitle className="px-2 pb-3 text-sm font-semibold text-zinc-200">Settings</DialogTitle>
             {TABS.map((t) => (
               <button
@@ -121,8 +116,8 @@ export const Settings = () => {
             <div className="flex-1 overflow-y-auto px-6 py-5">
               {tab === 'ai' && <AiSettings />}
               {tab === 'editor' && <EditorSettings />}
-              {tab === 'transcription' && <TranscriptionSettings />}
-              {tab === 'sync' && <SyncSettings />}
+              {tab === 'transcription' && (isTauri() ? <TranscriptionSettings /> : <DesktopOnly feature="Audio transcription" />)}
+              {tab === 'sync' && (isTauri() ? <SyncSettings /> : <DesktopOnly feature="Git sync" />)}
             </div>
           </div>
         </DialogPanel>
@@ -130,6 +125,17 @@ export const Settings = () => {
     </Dialog>
   );
 };
+
+function DesktopOnly({ feature }: { feature: string }) {
+  return (
+    <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
+      <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-400" />
+      <p className="text-sm text-amber-200/90">
+        {feature} needs the Logia desktop app. This browser workspace can't reach it.
+      </p>
+    </div>
+  );
+}
 
 /* ------------------------------------------------------------------ AI -- */
 
@@ -139,6 +145,7 @@ function AiSettings() {
   const provider = getProvider(selectedId) ?? PROVIDERS[0];
 
   useEffect(() => {
+    if (!isTauri()) return;
     settings.refreshKeyStatus();
     settings.refreshCliStatus();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -148,6 +155,7 @@ function AiSettings() {
 
   return (
     <div className="space-y-6">
+      {!isTauri() && <DesktopOnly feature="Saving AI keys and using CLI agents" />}
       <p className="text-sm text-zinc-400">
         Pick where AI chat, the <code className="rounded bg-zinc-800 px-1 text-zinc-300">/ai</code> editor menu and transcript structuring get their answers.
         Keys are stored encrypted in your OS keychain.
@@ -188,7 +196,65 @@ function AiSettings() {
       ))}
 
       <ProviderDetails key={provider.id} provider={provider} />
+      <ExternalAgentSettings />
     </div>
+  );
+}
+
+/** Terminal agents in the AI panel. Each CLI handles its own sign-in, so only the binary is configured here. */
+function ExternalAgentSettings() {
+  const cliStatus = useSettingsStore((s) => s.cliStatus);
+  const cliBinaries = useSettingsStore((s) => s.cliBinaries);
+  const setCliBinary = useSettingsStore((s) => s.setCliBinary);
+  const detecting = useAgentSessions((s) => s.detecting);
+
+  return (
+    <section className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-5 space-y-4">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-zinc-100">
+            <Terminal size={14} /> External agents
+          </h3>
+          <p className="mt-1 text-xs text-zinc-500">
+            Interactive terminal sessions in the AI panel. Each CLI manages its own sign-in; Logia stores no tokens.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => void refreshAgentDetection()}
+          disabled={!isTauri()}
+          className="flex-shrink-0 p-1.5 rounded text-zinc-400 hover:text-zinc-100 hover:bg-white/10 disabled:opacity-40 transition-colors"
+          title="Detect again"
+          aria-label="Detect external agents again"
+        >
+          <RefreshCw size={13} className={detecting ? 'animate-spin' : ''} />
+        </button>
+      </div>
+      {AGENT_TOOLS.map((tool) => {
+        const info = cliStatus[tool.id];
+        const availability = agentAvailability(info, detecting);
+        return (
+          <Field
+            key={tool.id}
+            label={tool.label}
+            hint={
+              <span className={availability === 'installed' ? 'text-emerald-400' : availability === 'missing' ? 'text-amber-400' : undefined}>
+                {info?.available && info.path ? info.path : AVAILABILITY_LABELS[availability]}
+              </span>
+            }
+          >
+            <input
+              className={inputClass}
+              aria-label={`${tool.label} binary or full path`}
+              value={cliBinaries[tool.id] ?? ''}
+              placeholder={tool.binary}
+              onChange={(e) => setCliBinary(tool.id, e.target.value)}
+              onBlur={() => void refreshAgentDetection()}
+            />
+          </Field>
+        );
+      })}
+    </section>
   );
 }
 

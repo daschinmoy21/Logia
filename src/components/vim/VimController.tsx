@@ -9,6 +9,7 @@ import { vimBridge } from '../../lib/vim/bridge';
 import { LEADER_BINDINGS, type LeaderAction } from '../../lib/vim/keymap';
 import { flattenVisibleTree, type TreeItem } from '../../lib/note-utils';
 import { PROVIDERS, getProvider } from '../../lib/ai/providers';
+import { isPaneNavigationKey } from '../../hooks/usePaneNavigation';
 import { prefersReducedMotion } from '../../lib/utils';
 
 /* ------------------------------------------------------------- helpers -- */
@@ -414,7 +415,8 @@ export function VimController() {
     };
 
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.isComposing || e.metaKey) return;
+      if (e.isComposing || e.metaKey || isPaneNavigationKey(e)) return;
+      if (e.target instanceof Element && e.target.closest('[data-agent-menu]')) return;
       const vim = useVimStore.getState();
 
       // Second key of a leader sequence, wherever focus is.
@@ -443,6 +445,16 @@ export function VimController() {
       if (editorDom && target instanceof Node && editorDom.contains(target)) return; // editor engine
 
       if (isEditableTarget(target)) {
+        // A Vim composer owns its keys, Escape included. Only its normal mode can leave.
+        if (target.dataset.composerVim) {
+          if (target.dataset.composerVim === 'normal' && e.ctrlKey && (e.key === 'h' || e.key === 'l')) {
+            e.preventDefault();
+            target.blur();
+            if (e.key === 'h') enterExplorer();
+            else focusEditor('normal');
+          }
+          return;
+        }
         if ((e.key === 'Escape' || (e.ctrlKey && e.key === '[')) && target.closest('[data-vim-escape-to-editor]')) {
           e.preventDefault();
           target.blur();

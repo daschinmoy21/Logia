@@ -3,6 +3,7 @@ import Header from "./components/Header.tsx";
 import "./App.css";
 import { Sidebar } from "./components/Sidebar.tsx";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { isTauri } from "@tauri-apps/api/core";
 import useUiStore from "./store/UiStore.ts";
 import { CommandPalette } from "./components/CommandPalette.tsx";
 import Footer from "./components/Footer.tsx";
@@ -17,6 +18,11 @@ import { Toaster } from "react-hot-toast";
 import PreflightModal from "./components/PrereflightModal.tsx";
 import { countWordsInNoteContent } from "./lib/note-utils";
 import { prefersReducedMotion } from "./lib/utils";
+import { createTextNote, openPalette, openToday } from "./components/workspace/actions";
+import { useWorkspaceStore } from "./components/workspace/workspaceStore";
+import { hasMod, isBlockingModalOpen } from "./components/workspace/shortcuts";
+
+import { usePaneNavigation } from "./hooks/usePaneNavigation";
 
 import { AnimatePresence, motion } from "framer-motion";
 
@@ -24,10 +30,14 @@ import { AnimatePresence, motion } from "framer-motion";
 const REVEAL_DELAY_MS = 70;
 /** Grace period after the pointer leaves before the sidebar hides. */
 const HIDE_DELAY_MS = 260;
+/** Under this width there's no room to pin the sidebar, and no hover to reveal it. */
+const NARROW_QUERY = "(max-width: 767px)";
 
 function App() {
-  const { openCommandPalette, isAiSidebarOpen, setIsAiSidebarOpen } = useUiStore();
-  const isSidebarFloating = useSettingsStore((s) => s.sidebarFloating);
+  const { isAiSidebarOpen, setIsAiSidebarOpen } = useUiStore();
+  const sidebarFloatingSetting = useSettingsStore((s) => s.sidebarFloating);
+  const [isNarrow, setIsNarrow] = useState(() => window.matchMedia(NARROW_QUERY).matches);
+  const isSidebarFloating = sidebarFloatingSetting || isNarrow;
   const explorerActive = useVimStore((s) => s.mode === "explorer");
   // Keep the auto-hide sidebar open while something inside it needs it.
   const sidebarBusy = useUiStore(
@@ -38,21 +48,24 @@ function App() {
       !!s.deleteConfirmFolderId ||
       !!s.folderRenameRequest,
   );
-  const { currentNote, saveTimeout } = useNotesStore();
+  const { currentNote, saveTimeout, isSaving } = useNotesStore();
+  const currentNoteId = currentNote?.id;
 
   const wordCount = currentNote
     ? countWordsInNoteContent(currentNote.content)
     : 0;
 
-  const isSaved = !saveTimeout;
+  const isSaved = !saveTimeout && !isSaving;
 
   const [hoverOpen, setHoverOpen] = useState(false);
+  const [treeFocused, setTreeFocused] = useState(false);
+  usePaneNavigation(() => setHoverOpen(true), () => setHoverOpen(false));
   const [edgeHot, setEdgeHot] = useState(false);
   const revealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reduceMotion = prefersReducedMotion();
 
-  const showFloatingSidebar = isSidebarFloating && (hoverOpen || explorerActive || sidebarBusy);
+  const showFloatingSidebar = isSidebarFloating && (hoverOpen || explorerActive || sidebarBusy || treeFocused);
 
   const clearTimers = useCallback(() => {
     if (revealTimerRef.current) clearTimeout(revealTimerRef.current);
@@ -72,16 +85,69 @@ function App() {
   useEffect(() => clearTimers, [clearTimers]);
 
   useEffect(() => {
-    const settings = useSettingsStore.getState();
-    settings.refreshKeyStatus();
-    settings.refreshCliStatus();
+    const query = window.matchMedia(NARROW_QUERY);
+    const onChange = () => setIsNarrow(query.matches);
+    query.addEventListener("change", onChange);
+    return () => query.removeEventListener("change", onChange);
+  }, []);
+
+  // On narrow screens the sidebar covers the note, so opening one dismisses it.
+  useEffect(() => {
+    if (isNarrow) {
+      setHoverOpen(false);
+      setTreeFocused(false);
+      if (useVimStore.getState().mode === 'explorer') useVimStore.getState().setMode('normal');
+      const active = document.activeElement;
+      if (active instanceof HTMLElement && active.closest('[data-workspace-pane="tree"]')) {
+        active.blur();
+        useUiStore.getState().editor?.focus();
+      }
+    }
+  }, [isNarrow, currentNoteId]);
+
+  // Load here, not in the sidebar: an auto-hidden sidebar isn't mounted, and the
+  // home view needs to know what exists.
+  useEffect(() => {
+    const { loadNotes, loadFolders } = useNotesStore.getState();
+    Promise.all([loadNotes(), loadFolders()]).finally(() => useWorkspaceStore.getState().setReady(true));
+  }, []);
+
+  useEffect(() => {
+    if (isTauri()) {
+      const settings = useSettingsStore.getState();
+      settings.refreshKeyStatus();
+      settings.refreshCliStatus();
+    }
 
     const handleKeyDown = (event: KeyboardEvent) => {
+      // Respect shortcuts already handled by the editor or canvas.
+      if (event.defaultPrevented || event.isComposing) return;
+      // Every shortcut below needs a modifier; plain typing skips the modal lookup.
+      if (!event.ctrlKey && !event.metaKey && !event.altKey) return;
+      // The palette handles its own keys; other modals keep theirs to themselves.
+      if (useUiStore.getState().isCommandPaletteOpen || isBlockingModalOpen()) return;
       const key = event.key.toLowerCase();
-      if ((event.metaKey || event.altKey) && key === "p") {
-        event.preventDefault();
-        openCommandPalette();
+
+      const plainMod = hasMod(event) && !event.shiftKey && !event.altKey;
+      let action: (() => void) | null = null;
+      if (plainMod && key === "p") action = () => openPalette("notes");
+      else if (event.altKey && !event.ctrlKey && !event.metaKey && event.code === "KeyP") action = () => openPalette("notes");
+      else if (hasMod(event) && event.shiftKey && !event.altKey && key === "p") action = () => openPalette("commands");
+      else if (plainMod && key === "n") action = () => createTextNote();
+      else if (hasMod(event) && event.shiftKey && !event.altKey && key === "d") action = openToday;
+      else if (plainMod && key === ".") {
+        action = () => {
+          // Only a text note has a context panel to toggle.
+          const note = useNotesStore.getState().currentNote;
+          if (note && note.note_type !== "canvas") useWorkspaceStore.getState().toggleContextPanel();
+        };
       }
+      if (action) {
+        event.preventDefault();
+        if (!event.repeat) action();
+        return;
+      }
+
       // Mod+\ toggles between a pinned and an auto-hiding sidebar
       if ((event.metaKey || event.ctrlKey) && event.key === "\\") {
         event.preventDefault();
@@ -98,7 +164,7 @@ function App() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [openCommandPalette]);
+  }, []);
 
   const onEdgeEnter = () => {
     setEdgeHot(true);
@@ -147,13 +213,17 @@ function App() {
       <Settings />
       <CommandPalette />
       <VimController />
-      <Header />
+      <Header
+        onToggleSidebar={isNarrow ? () => setHoverOpen((open) => !open) : undefined}
+        sidebarOpen={showFloatingSidebar}
+      />
 
       <div className="flex flex-1 overflow-hidden relative">
         <AnimatePresence initial={false}>
           {!isSidebarFloating && (
             <motion.div
               key="pinned-sidebar"
+              data-workspace-pane="tree"
               className="h-full flex-shrink-0 overflow-hidden"
               initial={reduceMotion ? false : { opacity: 0, x: -12 }}
               animate={{ opacity: 1, x: 0 }}
@@ -167,6 +237,13 @@ function App() {
 
         {isSidebarFloating && (
           <>
+            {isNarrow && showFloatingSidebar && (
+              <div
+                className="absolute inset-0 z-[850] bg-black/50"
+                onClick={() => setHoverOpen(false)}
+                aria-hidden="true"
+              />
+            )}
             {/* Invisible hot zone on the left edge, with a soft glow hint */}
             <div
               className="absolute left-0 top-0 bottom-0 w-2.5 z-40"
@@ -186,6 +263,9 @@ function App() {
               {showFloatingSidebar && (
                 <motion.div
                   key="floating-sidebar"
+                  data-workspace-pane="tree"
+                  onFocusCapture={() => setTreeFocused(true)}
+                  onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setTreeFocused(false); }}
                   initial={reduceMotion ? false : { x: "-104%", opacity: 0.6 }}
                   animate={{ x: 0, opacity: 1 }}
                   exit={reduceMotion ? undefined : { x: "-104%", opacity: 0.6 }}
@@ -200,8 +280,8 @@ function App() {
             </AnimatePresence>
           </>
         )}
-        <div className="flex flex-col flex-1 min-w-0">
-          <div className="flex-1 overflow-y-auto">
+        <div className="flex flex-col flex-1 min-w-0" data-workspace-pane="editor" tabIndex={-1}>
+          <div className="min-h-0 flex-1 overflow-hidden">
             <Editor />
           </div>
           <AnimatePresence initial={false}>

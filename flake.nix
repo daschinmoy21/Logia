@@ -35,7 +35,7 @@
         ]);
 
       # Runtime libraries needed by WebKitGTK and Tauri
-      runtimeLibs = with pkgs; [
+      runtimeLibs = pkgs.lib.optionals pkgs.stdenv.isLinux (with pkgs; [
         at-spi2-atk
         atkmm
         cairo
@@ -50,21 +50,59 @@
         openssl
         glib-networking
         gsettings-desktop-schemas
-      ];
+      ]);
 
       # Build-time dependencies
-      nativeBuildDeps = with pkgs; [
-        pkg-config
-        gobject-introspection
-        wrapGAppsHook4
-        ffmpeg
-        pulseaudio
-        cargo-tauri
-        gcc
-      ];
+      nativeBuildDeps =
+        (with pkgs; [pkg-config ffmpeg cargo-tauri])
+        ++ pkgs.lib.optionals pkgs.stdenv.isLinux (with pkgs; [
+          gobject-introspection
+          wrapGAppsHook3
+          pulseaudio
+        ]);
+
+      frontendTools = with pkgs; [bun nodejs_24 git];
+
+      agentCli = pkgs.writeShellApplication {
+        name = "logia-agent";
+        runtimeInputs = [pkgs.nodejs_24];
+        text = ''
+          exec node --experimental-strip-types "${self}/scripts/logia-agent.ts" "$@"
+        '';
+      };
+
+      mkDevShell = withAudio:
+        pkgs.mkShell {
+          nativeBuildInputs =
+            frontendTools
+            ++ nativeBuildDeps
+            ++ (with pkgs; [
+              cargo
+              rustc
+              rustfmt
+              clippy
+              uv
+              python312
+            ])
+            ++ pkgs.lib.optionals pkgs.stdenv.isLinux [pkgs.xdg-utils]
+            ++ pkgs.lib.optional withAudio pythonEnv;
+          buildInputs = runtimeLibs ++ [pkgs.openssl];
+          OPENSSL_NO_VENDOR = 1;
+          CARGO_BUILD_JOBS = "2";
+          shellHook =
+            pkgs.lib.optionalString pkgs.stdenv.isLinux ''
+              export XDG_DATA_DIRS="${pkgs.gsettings-desktop-schemas}/share/gsettings-schemas/${pkgs.gsettings-desktop-schemas.name}:${pkgs.gtk3}/share/gsettings-schemas/${pkgs.gtk3.name}:''${XDG_DATA_DIRS:-}"
+              export GIO_MODULE_DIR="${pkgs.glib-networking}/lib/gio/modules/"
+            ''
+            + pkgs.lib.optionalString withAudio ''
+              export LOGIA_PYTHON_PATH="${pythonEnv}/bin/python"
+            '';
+        };
     in {
-      packages = {
-        logia = pkgs.rustPlatform.buildRustPackage rec {
+      packages =
+        {agent = agentCli;}
+        // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
+          logia = pkgs.rustPlatform.buildRustPackage rec {
             pname = "logia";
             version = "0.10.0";
 
@@ -145,7 +183,7 @@
               wrapProgram $out/bin/logia \
                 --set LOGIA_PYTHON_PATH "${pythonEnv}/bin/python" \
                 --set LOGIA_TRANSCRIBE_SCRIPT "$out/share/logia/transcription/transcribe.py" \
-                --prefix PATH : "${pkgs.lib.makeBinPath [pkgs.ffmpeg pkgs.pulseaudio pkgs.uv]}" \
+                --prefix PATH : "${pkgs.lib.makeBinPath [pkgs.ffmpeg pkgs.pulseaudio pkgs.uv pkgs.git pkgs.openssh]}" \
                 --prefix XDG_DATA_DIRS : "${pkgs.gsettings-desktop-schemas}/share/gsettings-schemas/${pkgs.gsettings-desktop-schemas.name}" \
                 --prefix XDG_DATA_DIRS : "${pkgs.gtk3}/share/gsettings-schemas/${pkgs.gtk3.name}" \
                 --set GIO_MODULE_DIR "${pkgs.glib-networking}/lib/gio/modules/"
@@ -154,51 +192,58 @@
             meta = with pkgs.lib; {
               description = "A modern AI-powered workspace";
               homepage = "https://github.com/daschinmoy21/Logia";
-              license = licenses.mit;
+              license = licenses.agpl3Only;
               maintainers = [];
               platforms = platforms.linux;
               mainProgram = "logia";
             };
           };
 
-        default = self.packages.${system}.logia;
-      };
+          default = self.packages.${system}.logia;
+        };
 
-      # Development shell (still uses bun for live development)
-      devShells.default = pkgs.mkShell {
-        nativeBuildInputs =
-          nativeBuildDeps
-          ++ [
-            pythonEnv
-            pkgs.cargo
-            pkgs.rustc
-            pkgs.bun
-            pkgs.nodejs
-            pkgs.uv
-            pkgs.xdg-utils
-            pkgs.pkg-config
-          ];
+      formatter = pkgs.alejandra;
 
-        buildInputs = runtimeLibs ++ [pkgs.openssl];
-
-        OPENSSL_NO_VENDOR = 1;
-        PKG_CONFIG_PATH = "${pkgs.openssl.dev}/lib/pkgconfig";
-
-        shellHook = ''
-          export XDG_DATA_DIRS=${pkgs.gsettings-desktop-schemas}/share/gsettings-schemas/${pkgs.gsettings-desktop-schemas.name}:${pkgs.gtk3}/share/gsettings-schemas/${pkgs.gtk3.name}:$XDG_DATA_DIRS
-          export LOGIA_PYTHON_PATH="$(which python)"
-          export GIO_MODULE_DIR="${pkgs.glib-networking}/lib/gio/modules/"
-          export XDG_RUNTIME_DIR=''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
-          export DBUS_SESSION_BUS_ADDRESS=''${DBUS_SESSION_BUS_ADDRESS:-unix:path=$XDG_RUNTIME_DIR/bus}
-
-          echo "🚀 Logia development shell loaded!"
-          echo "   Run 'bun install' then 'bun tauri dev' to start development"
-          echo "   Run 'bun run build' to rebuild the frontend (commit dist/ for Nix builds)"
+      checks.workspace =
+        pkgs.runCommand "logia-workspace-contract" {
+          nativeBuildInputs = [pkgs.nodejs_24];
+        } ''
+          node --experimental-strip-types --test \
+            "${self}/src/lib/workspace.test.ts" \
+            "${self}/src/lib/composer-vim.test.ts" \
+            "${self}/src/lib/terminal-links.test.ts" \
+            "${self}/scripts/logia-agent.test.ts"
+          touch "$out"
         '';
-      };
 
-      apps.default = flake-utils.lib.mkApp {
-        drv = self.packages.${system}.default;
-      };
+      devShells =
+        {
+          # UI and agent tools need no GTK, Rust, or transcription model runtime.
+          frontend = pkgs.mkShell {packages = frontendTools;};
+          default = mkDevShell false;
+        }
+        // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
+          audio = mkDevShell true;
+          browser = pkgs.mkShell {
+            packages = frontendTools ++ [pkgs.chromium];
+            PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH = "${pkgs.chromium}/bin/chromium";
+          };
+        };
+
+      apps =
+        {
+          agent =
+            (flake-utils.lib.mkApp {drv = agentCli;})
+            // {
+              meta.description = "Read, search, and export a Logia workspace";
+            };
+        }
+        // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
+          default =
+            (flake-utils.lib.mkApp {
+              drv = self.packages.${system}.default;
+            })
+            // {meta.description = "Logia desktop workspace";};
+        };
     });
 }

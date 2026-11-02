@@ -1,0 +1,12 @@
+[package]
+name = "logia-terminal-tests"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+path = "../src/terminal_process.rs"
+
+[dependencies]
+portable-pty = "0.9"
+libc = "0.2"

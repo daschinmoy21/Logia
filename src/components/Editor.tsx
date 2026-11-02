@@ -4,7 +4,7 @@ import "@blocknote/mantine/style.css";
 import { useNotesStore } from "../store/notesStore";
 import { NoteEditor } from "./NoteEditor";
 import { EditorProvider } from "./EditorProvider";
-import { EmptyState } from "./EmptyState";
+import { WorkspaceHome } from "./workspace/WorkspaceHome";
 import './styles.css';
 import { useEditorAiModel } from '../hooks/useEditorAiModel';
 
@@ -19,9 +19,9 @@ function Editor() {
   } = useNotesStore();
   const { model: aiModel, signature: aiSignature } = useEditorAiModel();
 
-  // Show empty state when no note is selected
+  // Show the workspace home when no note is selected
   if (!currentNote) {
-    return <EmptyState />;
+    return <WorkspaceHome />;
   }
 
   // Conditional rendering based on note_type

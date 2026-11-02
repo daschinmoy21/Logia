@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke, isTauri } from "@tauri-apps/api/core";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   CheckCircle2,
@@ -65,7 +65,8 @@ export default function PreflightModal() {
   };
 
   useEffect(() => {
-    runCheck();
+    // Transcription dependencies only exist in the desktop app.
+    if (isTauri()) runCheck();
   }, []);
 
   const needsAttention = () => checkNeedsAttention(result);

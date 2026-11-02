@@ -132,13 +132,48 @@ Logia uses git for note synchronization. To enable sync:
 
 **Authentication**: Logia uses your system's git credentials — SSH keys, `gh auth`, or git credential helper. No cloud OAuth tokens are stored.
 
-**Development shell:**
+**Pinned development environments:**
 
 ```bash
-nix develop  # Enters a shell with all dependencies
-bun install
-bun tauri dev
+nix develop                  # Desktop: Rust, GTK/WebKit on Linux, Bun/Node, Git, audio tools
+nix develop .#frontend       # Frontend + agent CLI only; no native GUI or ML dependencies
+nix develop .#audio          # Linux desktop plus the faster-whisper Python environment
+nix develop .#browser        # Linux browser tests with a packaged Chromium
+bun install --frozen-lockfile
+bun run tauri dev            # Native desktop application
 ```
+
+The committed `flake.lock` pins the toolchain. Enable `nix-command` and `flakes` in your Nix configuration, or invoke `nix --extra-experimental-features 'nix-command flakes' develop .#frontend`. Optional direnv support is included in `.envrc`; run `direnv allow` yourself if you use it. Entering a shell does not install npm or Python dependencies automatically or alter your desktop session variables.
+
+For browser development on this shared host, use a free port in your own range:
+
+```bash
+bun run dev --host 127.0.0.1 --port 3420
+```
+
+The browser uses a separate localStorage workspace. It cannot access native desktop notes, Git sync, trash, audio capture, or system credentials. The desktop remains the primary application. Tauri desktop development still uses its configured port 1420; to run it on a host with an assigned port range, override both Vite's port and Tauri's `build.devUrl` together.
+
+```bash
+bun run check
+bun run test:unit
+bun run test:agent
+nix develop .#browser --command bun run test:browser
+bun run build
+```
+
+### Workspace and agent tools
+
+The home screen offers note previews, tag discovery, type/star filters, sorting, daily notes, and Markdown import. Use `Ctrl/Cmd+P` to find notes and `Ctrl/Cmd+Shift+P` for commands; `Alt+P` remains available. The note context panel provides headings, tags, outgoing wikilinks, and backlinks. Markdown import copies selected files; YAML is preserved visibly, while vault attachments, folder layouts, and community plugins are not imported.
+
+Agents can read/search/link notes and create portable snapshots without starting the app:
+
+```bash
+nix run .#agent -- --help  # No bun install needed for the read-only CLI
+bun run agent --data-dir "$HOME/Documents/Logia" search '#research'
+bun run agent --data-dir "$HOME/Documents/Logia" export --output /tmp/logia-snapshot
+```
+
+See the [agent interface](docs/agent-interface.md) for the versioned JSON contract and export limits. The [runtime and compatibility decision](docs/architecture-and-compatibility.md) assesses Tauri + CEF, GPUI, and the work required for Obsidian plugin support. Logia does not currently execute Obsidian plugins.
 
 ## Usage
 
@@ -250,3 +285,9 @@ DO NOT MAKE SPAM PRs.
 ## License
 
 This project is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0) - see the [LICENSE](LICENSE) file for details.
+
+### Agent panel
+
+Open the AI sidebar and choose **Logia chat**, **Codex**, **Claude Code**, **Pi**, or **OpenCode**. External agents run interactively in the desktop app’s embedded terminal. Install the CLI separately, refresh detection, and set a custom executable in Settings → AI if needed. **Sign in** launches the CLI’s own login flow; Logia does not import subscription credentials into its API providers. Pi uses `/login` inside its terminal.
+
+Use Ctrl+H/L to focus the pane to the left/right and Ctrl+J/K to cycle between file tree, editor, and AI; this works with Vim off and inside the terminal. Ctrl+Shift+P opens commands. The agent composer has an independent Vim toggle and NORMAL/INSERT indicator. Terminal input keeps the CLI’s own keybindings. See [agent terminal details](docs/agent-terminal.md) for scope and authentication behavior.

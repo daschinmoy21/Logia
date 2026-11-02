@@ -1,18 +1,24 @@
 import { create } from 'zustand';
-import { invoke } from '@tauri-apps/api/core';
-import { Note, Folder } from '../types/Note';
-import { openCreatedNote } from '../lib/note-utils';
+import { notesInvoke as invoke } from '../lib/notes-repository.ts';
+import { dailyNoteTitle } from '../lib/workspace.ts';
+import type { Note, Folder } from '../types/Note.ts';
+import { openCreatedNote } from '../lib/note-utils.ts';
 
 interface NotesState {
   notes: Note[];
   folders: Folder[];
   currentNote: Note | null;
   isLoading: boolean;
+  loadError: string | null;
+  folderLoadError: string | null;
   saveTimeout: NodeJS.Timeout | null;
+  isSaving: boolean;
+  saveError: string | null;
   loadNotes: () => Promise<void>;
   loadFolders: () => Promise<void>;
-  selectNote: (note: Note | null) => void;
-  createNote: (noteType?: 'text' | 'canvas', folderId?: string) => Promise<Note>;
+  selectNote: (note: Note | null) => Promise<void>;
+  createNote: (noteType?: 'text' | 'canvas', folderId?: string, initial?: { title?: string; content?: string }) => Promise<Note>;
+  openDailyNote: () => Promise<Note>;
   createFolder: (name: string, parentId?: string) => Promise<Folder>;
   updateNote: (id: string, updates: Partial<Note>) => Promise<void>;
   updateFolder: (id: string, updates: Partial<Folder>) => Promise<void>;
@@ -24,6 +30,20 @@ interface NotesState {
   saveCurrentNote: () => Promise<void>;
 }
 
+// Serialize writes so older saves cannot land after newer ones.
+let saveQueue: Promise<unknown> = Promise.resolve();
+let activeSaves = 0;
+let openingDaily: Promise<Note> | null = null;
+const starQueues = new Map<string, Promise<void>>();
+function writeNote(note: Note, preferLatest = false): Promise<void> {
+  const next = saveQueue.catch(() => {}).then(() => {
+    const latest = preferLatest ? useNotesStore.getState().notes.find((n) => n.id === note.id) : note;
+    return latest ? invoke<void>('save_note', { note: latest }) : undefined;
+  });
+  saveQueue = next;
+  return next;
+}
+
 // Auto-save on window blur to ensure changes are saved
 if (typeof window !== 'undefined') {
   window.addEventListener('blur', () => {
@@ -31,7 +51,7 @@ if (typeof window !== 'undefined') {
     const timeout = useNotesStore.getState().saveTimeout;
     if (timeout) {
       clearTimeout(timeout);
-      useNotesStore.getState().saveCurrentNote();
+      void useNotesStore.getState().saveCurrentNote().catch(() => {});
     }
   });
 }
@@ -42,62 +62,69 @@ export const useNotesStore = create<NotesState>()(
     folders: [],
     currentNote: null,
     isLoading: false,
+    loadError: null,
+    folderLoadError: null,
     saveTimeout: null,
+    isSaving: false,
+    saveError: null,
 
     loadNotes: async () => {
-      set({ isLoading: true });
+      set({ isLoading: true, loadError: null });
       try {
         // Get notes from Tauri backend
         const notes: Note[] = await invoke('get_all_notes');
         set({ notes, isLoading: false });
       } catch (error) {
         console.error('Failed to load notes:', error);
-        set({ isLoading: false });
+        set({ isLoading: false, loadError: String(error) });
       }
     },
 
     loadFolders: async () => {
+      set({ folderLoadError: null });
       try {
         const folders: Folder[] = await invoke('get_all_folders');
         set({ folders });
       } catch (error) {
         console.error('Failed to load folders:', error);
+        set({ folderLoadError: String(error) });
       }
     },
 
     selectNote: async (note) => {
       // Save current note before switching
       const currentState = get();
-      if (currentState.saveTimeout) {
-        clearTimeout(currentState.saveTimeout);
+      if (currentState.saveTimeout || currentState.saveError || currentState.isSaving) {
+        if (currentState.saveTimeout) clearTimeout(currentState.saveTimeout);
         await get().saveCurrentNote();
       }
-      set({ currentNote: note });
+      set({ currentNote: note ? get().notes.find((n) => n.id === note.id) || note : null });
     },
 
-    createNote: async (noteType = 'text', folderId) => {
+    createNote: async (noteType = 'text', folderId, initial = {}) => {
       try {
         // Flush pending autosave before switching to the new note
         const pending = get().saveTimeout;
-        if (pending) {
-          clearTimeout(pending);
+        if (pending || get().saveError || get().isSaving) {
+          if (pending) clearTimeout(pending);
           await get().saveCurrentNote();
         }
 
         // Create initial content with a Heading 1 "Untitled" in a single backend call
         // (avoids a race between create_note + save_note)
-        const initialContent = JSON.stringify([
+        const title = initial.title || 'Untitled';
+        const initialContent = initial.content ?? JSON.stringify([
           {
             id: crypto.randomUUID(),
             type: "heading",
             props: { level: 1 },
-            content: "Untitled",
+            content: title,
             children: []
           }
         ]);
 
         const newNote: Note = await invoke('create_note', {
-          title: 'Untitled',
+          title,
           noteType,
           folderId,
           content: initialContent,
@@ -139,14 +166,17 @@ export const useNotesStore = create<NotesState>()(
         const updatedNote = { ...noteToUpdate, ...updates, updated_at: new Date().toISOString() };
 
         // Save via Tauri backend
-        await invoke('save_note', { note: updatedNote });
+        await writeNote(updatedNote);
 
-        // Update state
+        // Only merge the requested fields: text typed while this write was in
+        // flight must not be replaced by the older persistence snapshot.
         set((state) => ({
           notes: state.notes.map((note) =>
-            note.id === id ? updatedNote : note
+            note.id === id ? { ...note, ...updates, updated_at: updatedNote.updated_at } : note
           ),
-          currentNote: state.currentNote?.id === id ? updatedNote : state.currentNote,
+          currentNote: state.currentNote?.id === id
+            ? { ...state.currentNote, ...updates, updated_at: updatedNote.updated_at }
+            : state.currentNote,
         }));
       } catch (error) {
         console.error('Failed to update note:', error);
@@ -230,20 +260,18 @@ export const useNotesStore = create<NotesState>()(
     },
 
     toggleStar: async (id) => {
+      // Each click toggles the result of the previous click, even during slow IO.
+      const action = (starQueues.get(id) || Promise.resolve()).catch(() => {}).then(async () => {
+        const note = get().notes.find((n) => n.id === id);
+        if (!note) throw new Error('Note not found');
+        // Metadata writes share the save queue with content writes.
+        await get().updateNote(id, { starred: !note.starred });
+      });
+      starQueues.set(id, action);
       try {
-        const newStarred = await invoke<boolean>('toggle_star_note', { noteId: id });
-
-        set((state) => ({
-          notes: state.notes.map((note) =>
-            note.id === id ? { ...note, starred: newStarred } : note
-          ),
-          currentNote: state.currentNote?.id === id
-            ? { ...state.currentNote, starred: newStarred }
-            : state.currentNote,
-        }));
-      } catch (error) {
-        console.error('Failed to toggle star:', error);
-        throw error;
+        await action;
+      } finally {
+        if (starQueues.get(id) === action) starQueues.delete(id);
       }
     },
 
@@ -257,12 +285,12 @@ export const useNotesStore = create<NotesState>()(
         }
 
         // Update the current note content locally
-        const updatedNote = { ...state.currentNote, content };
+        const updatedNote = { ...state.currentNote, content, updated_at: new Date().toISOString() };
 
         // Longer debounce for canvas notes (1500ms) vs text notes (600ms)
         const debounceMs = state.currentNote.note_type === 'canvas' ? 1500 : 600;
         const newTimeout = setTimeout(() => {
-          get().saveCurrentNote();
+          void get().saveCurrentNote().catch(() => {});
         }, debounceMs);
 
         set((state) => ({
@@ -277,36 +305,57 @@ export const useNotesStore = create<NotesState>()(
 
     updateCurrentNoteTitle: (title: string) => {
       const state = get();
-      if (!state.currentNote) return;
-
-      // Update the current note title locally
-      const updatedNote = { ...state.currentNote, title };
-
-      // We do NOT clear existing timeout here because we want the pending content save (if any) to proceed.
-      // And we do NOT save immediately; we rely on the autosave loop or the content change trigger.
-
+      if (!state.currentNote || state.currentNote.title === title) return;
+      const updatedNote = { ...state.currentNote, title, updated_at: new Date().toISOString() };
+      if (state.saveTimeout) clearTimeout(state.saveTimeout);
+      const saveTimeout = setTimeout(() => { void get().saveCurrentNote().catch(() => {}); }, 600);
       set((state) => ({
         currentNote: updatedNote,
-        notes: state.notes.map((note) =>
-          note.id === updatedNote.id ? updatedNote : note
-        ),
+        notes: state.notes.map((note) => note.id === updatedNote.id ? updatedNote : note),
+        saveTimeout,
       }));
+    },
 
-      // We do NOT save immediately here anymore. 
-      // The EditorProvider will sync the title change, which comes from content change.
-      // The content change triggers the debounced save.
-      // If we save here, we might race with the content save.
+    openDailyNote: () => {
+      if (openingDaily) return openingDaily;
+      openingDaily = (async () => {
+        const title = dailyNoteTitle();
+        const existing = get().notes.find((note) => note.note_type !== 'canvas' && note.title === title);
+        if (existing) {
+          await get().selectNote(existing);
+          return existing;
+        }
+        const block = (type: string, content: string, level?: number) => ({
+          id: crypto.randomUUID(), type, content, props: level ? { level } : {}, children: [],
+        });
+        return get().createNote('text', undefined, {
+          title,
+          content: JSON.stringify([
+            block('heading', title, 1), block('paragraph', '#daily'),
+            block('heading', 'Intentions', 2), block('bulletListItem', ''),
+            block('heading', 'Notes', 2), block('paragraph', ''),
+          ]),
+        });
+      })().finally(() => { openingDaily = null; });
+      return openingDaily;
     },
 
     saveCurrentNote: async () => {
       const state = get();
-      if (state.currentNote) {
-        try {
-          await invoke('save_note', { note: state.currentNote });
-          set({ saveTimeout: null });
-        } catch (error) {
-          console.error('Failed to save note:', error);
-        }
+      const snapshot = state.currentNote;
+      if (!snapshot) return;
+      if (state.saveTimeout) clearTimeout(state.saveTimeout);
+      activeSaves += 1;
+      set({ saveTimeout: null, isSaving: true });
+      try {
+        await writeNote(snapshot, true);
+        set({ saveError: null });
+      } catch (error) {
+        set({ saveError: String(error) });
+        throw error;
+      } finally {
+        activeSaves -= 1;
+        set({ isSaving: activeSaves > 0 });
       }
     },
   })

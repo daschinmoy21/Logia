@@ -48,6 +48,7 @@ fn tool_spec(tool: &str) -> Option<ToolSpec> {
         "claude-code" => Some(ToolSpec { default_binary: "claude", prompt_on_stdin: true }),
         "codex" => Some(ToolSpec { default_binary: "codex", prompt_on_stdin: true }),
         "opencode" => Some(ToolSpec { default_binary: "opencode", prompt_on_stdin: false }),
+        "pi" => Some(ToolSpec { default_binary: "pi", prompt_on_stdin: false }),
         "gemini-cli" => Some(ToolSpec { default_binary: "gemini", prompt_on_stdin: false }),
         _ => None,
     }
@@ -82,6 +83,11 @@ fn build_args(tool: &str, model: Option<&str>, prompt: &str) -> Vec<String> {
             }
             args.push(prompt.to_string());
         }
+        "pi" => {
+            args.push("--print".to_string());
+            if let Some(m) = model { args.extend(["--model".to_string(), m.to_string()]); }
+            args.push(prompt.to_string());
+        }
         "gemini-cli" => {
             if let Some(m) = model {
                 args.extend(["-m".to_string(), m.to_string()]);
@@ -95,7 +101,7 @@ fn build_args(tool: &str, model: Option<&str>, prompt: &str) -> Vec<String> {
 
 /// GUI apps (especially on macOS) don't inherit the login shell PATH, so the
 /// usual install locations of these CLIs are appended.
-fn augmented_path() -> OsString {
+pub(crate) fn augmented_path() -> OsString {
     let mut paths: Vec<PathBuf> = std::env::var_os("PATH")
         .map(|p| std::env::split_paths(&p).collect())
         .unwrap_or_default();
@@ -143,11 +149,20 @@ fn augmented_path() -> OsString {
     std::env::join_paths(paths).unwrap_or_default()
 }
 
-/// Resolve a binary name (or explicit path) to a file on disk.
-fn resolve_binary(binary: &str, path_var: &OsString) -> Option<PathBuf> {
+fn is_executable_file(path: &Path) -> bool {
+    if !path.is_file() { return false; }
+    #[cfg(unix)] {
+        use std::os::unix::fs::PermissionsExt;
+        return path.metadata().map(|m| m.permissions().mode() & 0o111 != 0).unwrap_or(false);
+    }
+    #[cfg(not(unix))] { true }
+}
+
+/// Resolve a binary name (or explicit path) to an executable file on disk.
+pub(crate) fn resolve_binary(binary: &str, path_var: &OsString) -> Option<PathBuf> {
     let candidate = Path::new(binary);
     if candidate.components().count() > 1 || candidate.is_absolute() {
-        return candidate.is_file().then(|| candidate.to_path_buf());
+        return is_executable_file(candidate).then(|| candidate.to_path_buf());
     }
 
     #[cfg(windows)]
@@ -158,7 +173,7 @@ fn resolve_binary(binary: &str, path_var: &OsString) -> Option<PathBuf> {
     for dir in std::env::split_paths(path_var) {
         for ext in exts {
             let full = dir.join(format!("{}{}", binary, ext));
-            if full.is_file() {
+            if is_executable_file(&full) {
                 return Some(full);
             }
         }
@@ -221,7 +236,7 @@ fn workspace_dir(app_handle: &tauri::AppHandle) -> Result<PathBuf, String> {
 pub async fn ai_cli_detect(overrides: Option<HashMap<String, String>>) -> Result<Vec<CliToolInfo>, String> {
     let overrides = overrides.unwrap_or_default();
     let path_var = augmented_path();
-    let tools = ["claude-code", "codex", "opencode", "gemini-cli"];
+    let tools = ["claude-code", "codex", "opencode", "gemini-cli", "pi"];
     Ok(tools
         .iter()
         .map(|id| {

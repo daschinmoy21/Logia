@@ -12,6 +12,8 @@ mod git_sync;
 mod notes;
 mod config_crypto;
 mod ai_cli;
+mod agent_terminal;
+mod terminal_process;
 
 use notes::*;
 use config_crypto::*;
@@ -775,6 +777,7 @@ pub fn run() {
     tauri::Builder::default()
         .manage(git_sync::GitSyncState::new())
         .manage(ai_cli::AiCliState::default())
+        .manage(agent_terminal::AgentTerminalState::default())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_fs::init())
@@ -807,6 +810,10 @@ pub fn run() {
             ai_cli::ai_cli_detect,
             ai_cli::ai_cli_run,
             ai_cli::ai_cli_cancel,
+            agent_terminal::agent_terminal_start,
+            agent_terminal::agent_terminal_write,
+            agent_terminal::agent_terminal_resize,
+            agent_terminal::agent_terminal_close,
             install_transcription_dependencies,
             install_system_dependencies,
             greet,
@@ -823,8 +830,13 @@ pub fn run() {
             git_sync::git_sync_disconnect
         ])
         .plugin(tauri_plugin_opener::init())
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            if matches!(event, tauri::RunEvent::Exit) {
+                app.state::<agent_terminal::AgentTerminalState>().close_all();
+            }
+        });
 }
 
 #[tauri::command]

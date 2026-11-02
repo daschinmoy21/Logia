@@ -190,6 +190,18 @@ export const PROVIDERS: ProviderDef[] = [
     hint: 'Runs `opencode run`. Models use the provider/model form.',
   },
   {
+    id: 'pi',
+    label: 'Pi',
+    kind: 'cli',
+    group: 'cli',
+    needsKey: false,
+    binary: 'pi',
+    defaultModel: '',
+    models: [],
+    installHint: 'npm install -g --ignore-scripts @earendil-works/pi-coding-agent',
+    hint: 'Runs pi --print for chat. Use the agent terminal for interactive sessions and /login.',
+  },
+  {
     id: 'gemini-cli',
     label: 'Gemini CLI',
     kind: 'cli',

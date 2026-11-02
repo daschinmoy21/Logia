@@ -1,0 +1,2 @@
+# Vite output includes third-party template strings with intentional whitespace.
+dist/** -whitespace linguist-generated=true

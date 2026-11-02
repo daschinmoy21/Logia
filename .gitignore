@@ -53,3 +53,9 @@ src-tauri/src/audio/windows/*.wav
 
 # AI Models
 src-tauri/src/audio/transcription/models/
+
+# Browser verification artifacts
+playwright-report/
+test-results/
+.direnv/
+artifacts/

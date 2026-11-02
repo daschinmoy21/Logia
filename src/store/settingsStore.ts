@@ -17,6 +17,8 @@ interface SettingsState {
   baseUrls: Record<string, string>;
   cliBinaries: Record<string, string>;
   vimEnabled: boolean;
+  /** Vim in the agent composer; null follows vimEnabled. */
+  composerVim: boolean | null;
   sidebarFloating: boolean;
 
   // --- runtime status (not persisted) ---
@@ -28,6 +30,7 @@ interface SettingsState {
   setBaseUrl: (providerId: string, url: string) => void;
   setCliBinary: (providerId: string, binary: string) => void;
   setVimEnabled: (enabled: boolean) => void;
+  setComposerVim: (enabled: boolean | null) => void;
   setSidebarFloating: (floating: boolean) => void;
 
   refreshKeyStatus: () => Promise<void>;
@@ -46,6 +49,7 @@ export const useSettingsStore = create<SettingsState>()(
       baseUrls: {},
       cliBinaries: {},
       vimEnabled: false,
+      composerVim: null,
       sidebarFloating: false,
 
       keyStatus: {},
@@ -61,6 +65,7 @@ export const useSettingsStore = create<SettingsState>()(
       setCliBinary: (providerId, binary) =>
         set((s) => ({ cliBinaries: { ...s.cliBinaries, [providerId]: binary } })),
       setVimEnabled: (vimEnabled) => set({ vimEnabled }),
+      setComposerVim: (composerVim) => set({ composerVim }),
       setSidebarFloating: (sidebarFloating) => set({ sidebarFloating }),
 
       refreshKeyStatus: async () => {
@@ -106,6 +111,7 @@ export const useSettingsStore = create<SettingsState>()(
         baseUrls: s.baseUrls,
         cliBinaries: s.cliBinaries,
         vimEnabled: s.vimEnabled,
+        composerVim: s.composerVim,
         sidebarFloating: s.sidebarFloating,
       }),
     },
