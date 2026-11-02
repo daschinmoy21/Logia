@@ -50,6 +50,7 @@ function App() {
   );
   const { currentNote, saveTimeout, isSaving } = useNotesStore();
   const currentNoteId = currentNote?.id;
+  const workspaceReady = useWorkspaceStore((s) => s.ready);
 
   const wordCount = currentNote
     ? countWordsInNoteContent(currentNote.content)
@@ -165,6 +166,16 @@ function App() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
+
+  useEffect(() => {
+    if (!workspaceReady || !isTauri()) return;
+    let disposed = false;
+    let stop: (() => void) | undefined;
+    void import('./lib/cli/bridge').then(module => module.startDesktopCliBridge()).then(cleanup => {
+      if (disposed) cleanup(); else stop = cleanup;
+    }).catch(error => console.error('CLI bridge could not start:', error));
+    return () => { disposed = true; stop?.(); };
+  }, [workspaceReady]);
 
   const onEdgeEnter = () => {
     setEdgeHot(true);

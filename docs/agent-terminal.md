@@ -25,7 +25,7 @@ Each session starts in a new private directory beneath the desktop app’s data 
 
 This folder chooses the initial working directory; it is **not an OS sandbox**. Each CLI retains the user’s normal filesystem access and its own permission/trust settings. Logia does not enable approval bypass flags. CLI settings, extensions, and saved sessions still apply. The scratch directory and any files written there remain on disk after Stop, including an attached snapshot. Remove them when no longer needed. Terminal scrollback is held in memory by Logia, while the CLI may persist its own history.
 
-There is no ACP client, structured tool-call UI, or automatic live-vault editing in this implementation. The existing read-only workspace CLI remains the portable integration for agents working outside the panel.
+Agents can read and edit live notes through `logia-cli`, which routes commands to the running GUI. Sessions receive a generated `AGENTS.md`, the GUI endpoint in `LOGIA_CLI_SOCKET`, and a bundled script location where available. Use `logia-cli help` or `node "$LOGIA_CLI_SCRIPT" help`. See [the GUI/CLI interface](agent-interface.md). There is no ACP client or structured tool-call UI. `logia-agent` remains the offline read-only reader/exporter.
 
 ## Keyboard and lifecycle
 

@@ -14,6 +14,8 @@ mod config_crypto;
 mod ai_cli;
 mod agent_terminal;
 mod terminal_process;
+mod cli_transport;
+mod cli_bridge;
 
 use notes::*;
 use config_crypto::*;
@@ -778,6 +780,8 @@ pub fn run() {
         .manage(git_sync::GitSyncState::new())
         .manage(ai_cli::AiCliState::default())
         .manage(agent_terminal::AgentTerminalState::default())
+        .manage(cli_bridge::CliBridgeState::default())
+        .setup(|app| { cli_bridge::start(app.handle().clone()); Ok(()) })
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_fs::init())
@@ -810,6 +814,8 @@ pub fn run() {
             ai_cli::ai_cli_detect,
             ai_cli::ai_cli_run,
             ai_cli::ai_cli_cancel,
+            cli_bridge::cli_bridge_ready,
+            cli_bridge::cli_bridge_reply,
             agent_terminal::agent_terminal_start,
             agent_terminal::agent_terminal_write,
             agent_terminal::agent_terminal_resize,
@@ -835,6 +841,7 @@ pub fn run() {
         .run(|app, event| {
             if matches!(event, tauri::RunEvent::Exit) {
                 app.state::<agent_terminal::AgentTerminalState>().close_all();
+                app.state::<cli_bridge::CliBridgeState>().shutdown();
             }
         });
 }

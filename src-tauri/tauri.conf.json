@@ -29,7 +29,7 @@
     "active": true,
     "targets": "all",
     "shortDescription": "A modern AI-powered notes app.",
-    "copyright": "Copyright © 2025 Logia",
+    "copyright": "Copyright \u00a9 2025 Logia",
     "category": "Productivity",
     "icon": [
       "icons/32x32.png",
@@ -42,8 +42,9 @@
       "entitlements": "entitlements.plist"
     },
     "externalBin": [],
-    "resources": [
-      "src/audio/transcription/*"
-    ]
+    "resources": {
+      "src/audio/transcription/*": "src/audio/transcription/",
+      "../scripts/logia-cli.mjs": "cli/logia-cli.mjs"
+    }
   }
 }

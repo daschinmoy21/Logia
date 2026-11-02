@@ -45,6 +45,8 @@ jobs:
             patchelf
       - name: Interactive terminal lifecycle tests (no GUI)
         run: cargo test --manifest-path src-tauri/terminal-tests/Cargo.toml --locked
+      - name: Local CLI transport tests (no GUI)
+        run: cargo test --manifest-path src-tauri/cli-tests/Cargo.toml --locked
       - name: Cargo check
         run: cargo check --manifest-path src-tauri/Cargo.toml
       - name: Cargo test

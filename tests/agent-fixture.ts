@@ -3,7 +3,7 @@ import { expect, type Page } from '@playwright/test';
 export async function openAgentWorkspace(page: Page) {
   await page.addInitScript(() => {
     const now = '2026-11-02T12:00:00Z';
-    localStorage.setItem('logia.browser-workspace.v1', JSON.stringify({ folders: [], notes: [{
+    if (!localStorage.getItem('logia.browser-workspace.v1')) localStorage.setItem('logia.browser-workspace.v1', JSON.stringify({ folders: [], notes: [{
       id: 'agent-note', title: 'Agent collaboration', note_type: 'text', starred: false,
       created_at: now, updated_at: now, content: JSON.stringify([
         { id: 'agent-title', type: 'heading', props: { level: 1 }, content: 'Agent collaboration', children: [] },

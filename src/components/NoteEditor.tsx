@@ -36,7 +36,7 @@ const escapeHtml = (text: string) =>
   text.replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]!);
 
 export function NoteEditor() {
-  const { editor, hasAI } = useEditorContext();
+  const { editor, hasAI, noteId } = useEditorContext();
   const { setEditor } = useUiStore();
   const currentNote = useNotesStore((state) => state.currentNote);
   const folders = useNotesStore((state) => state.folders);
@@ -57,12 +57,12 @@ export function NoteEditor() {
 
   useEffect(() => {
     if (editor) {
-      setEditor(editor);
+      setEditor(editor, noteId);
     }
     return () => {
-      setEditor(null);
+      if (useUiStore.getState().editor === editor) setEditor(null);
     };
-  }, [editor, setEditor]);
+  }, [editor, noteId, setEditor]);
 
   // Sized from the pane, not the window: the sidebar and AI panel also take room.
   useEffect(() => {

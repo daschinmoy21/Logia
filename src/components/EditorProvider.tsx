@@ -24,12 +24,12 @@ import {
 } from "@blocknote/react";
 import { Note } from "../types/Note";
 import type { LanguageModel } from 'ai';
-import useUiStore from '../store/UiStore';
 import { useNotesStore } from '../store/notesStore';
 
 
 type EditorContextType = {
   editor: any | null;
+  noteId: string;
   hasAI: boolean;
   updateCurrentNoteTitle: (title: string) => void;
 };
@@ -75,7 +75,6 @@ export function EditorProvider({
   updateCurrentNoteContent: (content: string) => void;
   updateCurrentNoteTitle: (title: string) => void;
 }) {
-  const { setEditor } = useUiStore();
   // The model is fixed for the editor's lifetime; the parent remounts us when it changes.
   const model = aiModel;
 
@@ -113,11 +112,6 @@ export function EditorProvider({
   });
 
   const previousNoteIdRef = useRef<string | null>(null);
-
-  // Set editor in store
-  useEffect(() => {
-    setEditor(editor);
-  }, [editor, setEditor]);
 
   // Sync: Only load content when the NOTE ID changes (switching notes)
   // We do NOT update the editor if `currentNote.content` changes while ID is the same,
@@ -186,7 +180,7 @@ export function EditorProvider({
   }, [editor, noteId, updateCurrentNoteContent, updateCurrentNoteTitle]);
 
   return (
-    <EditorContext.Provider value={{ editor, updateCurrentNoteTitle, hasAI }}>
+    <EditorContext.Provider value={{ editor, noteId: currentNote.id, updateCurrentNoteTitle, hasAI }}>
       {children}
     </EditorContext.Provider>
   );

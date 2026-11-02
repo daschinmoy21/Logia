@@ -271,7 +271,7 @@ function AgentStartScreen({ tool, containerRef }: { tool: AgentTool; containerRe
       </label>
       <p className="mt-2 text-xs text-zinc-500">
         Sessions run in a separate scratch folder, not your vault. An attached note is a copy taken at start. This isn't a
-        sandbox: the CLI keeps its own permissions.
+        sandbox: the CLI keeps its own permissions. Use logia-cli to read and edit live notes through the running app.
       </p>
 
       {session?.status === 'error' && session.error && (

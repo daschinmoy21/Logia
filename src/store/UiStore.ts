@@ -1,6 +1,6 @@
 import { create } from 'zustand';
-import { searchWorkspaceNotes } from '../lib/workspace';
-import { Note, Folder } from '../types/Note';
+import { searchWorkspaceNotes } from '../lib/workspace.ts';
+import type { Note, Folder } from '../types/Note';
 
 export type SettingsTab = 'ai' | 'editor' | 'transcription' | 'sync';
 
@@ -35,6 +35,7 @@ interface UiState {
   isSyncing: boolean; // [NEW]
   lastSyncedAt: Date | null; // [NEW]
   editor: any | null;
+  editorNoteId: string | null;
 
   // AI Chat State (persists across sidebar toggles)
   aiMessages: Array<{ role: "user" | "assistant"; content: string; actionStatus?: "pending" | "approved" | "refused" }>;
@@ -60,7 +61,7 @@ interface UiState {
   setGitSyncConfigured: (configured: boolean) => void;
   setIsSyncing: (isSyncing: boolean) => void; // [NEW]
   setLastSyncedAt: (date: Date | null) => void; // [NEW]
-  setEditor: (editor: any) => void;
+  setEditor: (editor: any, noteId?: string | null) => void;
 
   // AI Chat Actions
   addAiMessage: (message: { role: "user" | "assistant"; content: string }) => void;
@@ -102,6 +103,7 @@ const useUiStore = create<UiState>((set) => ({
   isSyncing: false, // [NEW]
   lastSyncedAt: null, // [NEW]
   editor: null,
+  editorNoteId: null,
 
   // AI Chat State
   aiMessages: [],
@@ -134,7 +136,7 @@ const useUiStore = create<UiState>((set) => ({
   setGitSyncConfigured: (configured) => set({ gitSyncConfigured: configured }),
   setIsSyncing: (isSyncing) => set({ isSyncing }), // [NEW]
   setLastSyncedAt: (date) => set({ lastSyncedAt: date }), // [NEW]
-  setEditor: (editor) => set({ editor }),
+  setEditor: (editor, noteId = null) => set({ editor, editorNoteId: editor ? noteId : null }),
 
   // AI Chat Actions
   addAiMessage: (message) => set((state) => ({

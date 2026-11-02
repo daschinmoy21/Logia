@@ -47,3 +47,8 @@ Full parity needs an explicit plugin compatibility matrix and release gates. The
 ## Current exchange limits
 
 Markdown import copies selected `.md`/`.markdown` files as root notes. It preserves YAML visibly in a code block after the title; basic `tags` and `aliases` are indexed, while arbitrary YAML is preserved without interpretation. Relative attachments, vault folder layouts, embeds, and plugin settings are not imported. Duplicate names remain separate notes; ambiguous wikilinks remain unresolved. The agent snapshot preserves raw JSON alongside best-effort Markdown. These behaviors are migration building blocks, not round-trip vault parity.
+
+
+## GUI-owned live operations
+
+The primary agent interface now follows [Obsidian’s official CLI](https://obsidian.md/help/cli): `logia-cli` is a client of the running GUI. Private local IPC carries semantic note commands into the same editor/store/save queue used by people. Reads observe in-memory notes, appends preserve existing blocks, and full replacements require revisions. `logia-agent` remains a separate offline reader/exporter. This does not add Obsidian plugin APIs, ACP, or an arbitrary-code CLI. See [the command contract](agent-interface.md).

@@ -14,7 +14,8 @@
     "check": "tsc --noEmit",
     "agent": "node --experimental-strip-types scripts/logia-agent.ts",
     "test:agent": "node --experimental-strip-types --test scripts/*.test.ts",
-    "test:browser": "playwright test"
+    "test:browser": "playwright test",
+    "cli": "node scripts/logia-cli.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^2",

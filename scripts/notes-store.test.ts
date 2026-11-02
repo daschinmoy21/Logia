@@ -57,4 +57,17 @@ test('notes save and navigation preserve new edits, failures, and daily-note ide
   // Browser operations must not turn desktop trash into irreversible deletion.
   await assert.rejects(store.getState().deleteNote(original.id), /desktop/);
   assert.ok(store.getState().notes.some((n) => n.id === original.id));
+  const background = await store.getState().createNote('text', undefined, { title: 'Background', content: '[]', open: false });
+  const activeBefore = store.getState().currentNote?.id;
+  assert.notEqual(activeBefore, background.id, 'silent creation must keep the active note');
+  quotaFailure = true;
+  await assert.rejects(store.getState().applyExternalNote(background.id, { content: 'pending background content' }), /Quota/);
+  assert.match(store.getState().externalSaveErrors[background.id], /Quota/);
+  await store.getState().selectNote(background);
+  assert.match(store.getState().saveError || '', /Quota/, 'opening an unsaved background edit must expose its error');
+  quotaFailure = false;
+  await store.getState().saveCurrentNote();
+  assert.equal(store.getState().externalSaveErrors[background.id], undefined);
+  assert.equal(store.getState().saveError, null);
+
 });

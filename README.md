@@ -165,7 +165,21 @@ bun run build
 
 The home screen offers note previews, tag discovery, type/star filters, sorting, daily notes, and Markdown import. Use `Ctrl/Cmd+P` to find notes and `Ctrl/Cmd+Shift+P` for commands; `Alt+P` remains available. The note context panel provides headings, tags, outgoing wikilinks, and backlinks. Markdown import copies selected files; YAML is preserved visibly, while vault attachments, folder layouts, and community plugins are not imported.
 
-Agents can read/search/link notes and create portable snapshots without starting the app:
+The GUI owns live note state. Agents use the separate CLI to read unsaved content and apply edits through the running app, following Obsidian’s GUI/CLI split:
+
+```bash
+nix run .#cli -- help
+logia-cli read
+logia-cli search query="meeting notes"
+logia-cli create path="Projects/Plan.md" content="# Plan" open
+logia-cli append file="Plan" content="- [ ] Review"
+# Full replacement requires the revision returned by read:
+logia-cli write id=NOTE_ID ifRevision=REVISION --stdin < updated.md
+```
+
+`nix develop .#frontend` adds `logia-cli` to PATH. The standalone source client is `node scripts/logia-cli.mjs`. The desktop must be running; `--launch` can start an installed `logia`. Embedded agents receive CLI instructions and the parent GUI endpoint automatically. The GUI applies changes live and rejects stale replacements. There is no TCP server.
+
+Agents can also read/search/link notes and create portable snapshots without starting the app using the separate offline CLI:
 
 ```bash
 nix run .#agent -- --help  # No bun install needed for the read-only CLI

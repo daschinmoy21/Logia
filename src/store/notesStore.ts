@@ -14,13 +14,15 @@ interface NotesState {
   saveTimeout: NodeJS.Timeout | null;
   isSaving: boolean;
   saveError: string | null;
+  externalSaveErrors: Record<string, string>;
   loadNotes: () => Promise<void>;
   loadFolders: () => Promise<void>;
   selectNote: (note: Note | null) => Promise<void>;
-  createNote: (noteType?: 'text' | 'canvas', folderId?: string, initial?: { title?: string; content?: string }) => Promise<Note>;
+  createNote: (noteType?: 'text' | 'canvas', folderId?: string, initial?: { title?: string; content?: string; open?: boolean }) => Promise<Note>;
   openDailyNote: () => Promise<Note>;
   createFolder: (name: string, parentId?: string) => Promise<Folder>;
   updateNote: (id: string, updates: Partial<Note>) => Promise<void>;
+  applyExternalNote: (id: string, updates: { content?: string; title?: string }) => Promise<void>;
   updateFolder: (id: string, updates: Partial<Folder>) => Promise<void>;
   deleteNote: (id: string) => Promise<void>;
   deleteFolder: (id: string) => Promise<void>;
@@ -67,6 +69,7 @@ export const useNotesStore = create<NotesState>()(
     saveTimeout: null,
     isSaving: false,
     saveError: null,
+    externalSaveErrors: {},
 
     loadNotes: async () => {
       set({ isLoading: true, loadError: null });
@@ -98,7 +101,7 @@ export const useNotesStore = create<NotesState>()(
         if (currentState.saveTimeout) clearTimeout(currentState.saveTimeout);
         await get().saveCurrentNote();
       }
-      set({ currentNote: note ? get().notes.find((n) => n.id === note.id) || note : null });
+      set({ currentNote: note ? get().notes.find((n) => n.id === note.id) || note : null, saveError: note ? get().externalSaveErrors[note.id] ?? null : null });
     },
 
     createNote: async (noteType = 'text', folderId, initial = {}) => {
@@ -131,7 +134,7 @@ export const useNotesStore = create<NotesState>()(
         });
 
         // Open the new note immediately so EmptyState / AI capture / sidebar create work
-        set((state) => openCreatedNote(state.notes, newNote));
+        set((state) => initial.open === false ? { notes: [newNote, ...state.notes] } : openCreatedNote(state.notes, newNote));
 
         return newNote;
       } catch (error) {
@@ -180,6 +183,26 @@ export const useNotesStore = create<NotesState>()(
         }));
       } catch (error) {
         console.error('Failed to update note:', error);
+        throw error;
+      }
+    },
+
+    // Live CLI/editor integrations publish before awaiting IO. Human edits made
+    // while persistence is in flight stay in the store and cannot be overwritten.
+    applyExternalNote: async (id, updates) => {
+      const note = get().notes.find(note => note.id === id);
+      if (!note) throw new Error('Note not found');
+      const updated = { ...note, ...updates, updated_at: new Date().toISOString() };
+      set(state => ({
+        notes: state.notes.map(note => note.id === id ? updated : note),
+        currentNote: state.currentNote?.id === id ? updated : state.currentNote,
+      }));
+      try {
+        if (get().currentNote?.id === id) await get().saveCurrentNote();
+        else await writeNote(updated, true);
+        set(state => { const errors = { ...state.externalSaveErrors }; delete errors[id]; return { externalSaveErrors: errors }; });
+      } catch (error) {
+        set(state => ({ externalSaveErrors: { ...state.externalSaveErrors, [id]: String(error) } }));
         throw error;
       }
     },
@@ -349,7 +372,7 @@ export const useNotesStore = create<NotesState>()(
       set({ saveTimeout: null, isSaving: true });
       try {
         await writeNote(snapshot, true);
-        set({ saveError: null });
+        set(state => { const errors = { ...state.externalSaveErrors }; delete errors[snapshot.id]; return { saveError: null, externalSaveErrors: errors }; });
       } catch (error) {
         set({ saveError: String(error) });
         throw error;

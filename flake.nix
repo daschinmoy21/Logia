@@ -61,13 +61,21 @@
           pulseaudio
         ]);
 
-      frontendTools = with pkgs; [bun nodejs_24 git];
+      frontendTools = with pkgs; [bun nodejs_24 git liveCli];
 
       agentCli = pkgs.writeShellApplication {
         name = "logia-agent";
         runtimeInputs = [pkgs.nodejs_24];
         text = ''
           exec node --experimental-strip-types "${self}/scripts/logia-agent.ts" "$@"
+        '';
+      };
+
+      liveCli = pkgs.writeShellApplication {
+        name = "logia-cli";
+        runtimeInputs = [pkgs.nodejs_24];
+        text = ''
+          exec node "${self}/scripts/logia-cli.mjs" "$@"
         '';
       };
 
@@ -100,7 +108,10 @@
         };
     in {
       packages =
-        {agent = agentCli;}
+        {
+          agent = agentCli;
+          cli = liveCli;
+        }
         // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
           logia = pkgs.rustPlatform.buildRustPackage rec {
             pname = "logia";
@@ -183,7 +194,7 @@
               wrapProgram $out/bin/logia \
                 --set LOGIA_PYTHON_PATH "${pythonEnv}/bin/python" \
                 --set LOGIA_TRANSCRIBE_SCRIPT "$out/share/logia/transcription/transcribe.py" \
-                --prefix PATH : "${pkgs.lib.makeBinPath [pkgs.ffmpeg pkgs.pulseaudio pkgs.uv pkgs.git pkgs.openssh]}" \
+                --prefix PATH : "${pkgs.lib.makeBinPath [pkgs.ffmpeg pkgs.pulseaudio pkgs.uv pkgs.git pkgs.openssh liveCli pkgs.nodejs_24]}" \
                 --prefix XDG_DATA_DIRS : "${pkgs.gsettings-desktop-schemas}/share/gsettings-schemas/${pkgs.gsettings-desktop-schemas.name}" \
                 --prefix XDG_DATA_DIRS : "${pkgs.gtk3}/share/gsettings-schemas/${pkgs.gtk3.name}" \
                 --set GIO_MODULE_DIR "${pkgs.glib-networking}/lib/gio/modules/"
@@ -212,7 +223,8 @@
             "${self}/src/lib/workspace.test.ts" \
             "${self}/src/lib/composer-vim.test.ts" \
             "${self}/src/lib/terminal-links.test.ts" \
-            "${self}/scripts/logia-agent.test.ts"
+            "${self}/scripts/logia-agent.test.ts" \
+            "${self}/scripts/logia-cli.test.ts"
           touch "$out"
         '';
 
@@ -232,6 +244,7 @@
 
       apps =
         {
+          cli = (flake-utils.lib.mkApp {drv = liveCli;}) // {meta.description = "Control the running Logia GUI from an agent or terminal";};
           agent =
             (flake-utils.lib.mkApp {drv = agentCli;})
             // {

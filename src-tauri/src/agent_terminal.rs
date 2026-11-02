@@ -88,11 +88,18 @@ pub async fn agent_terminal_start(
             std::fs::write(cwd.join("note-context.md"), format!("<!-- Logia note snapshot: {} -->\n\n{}", context.title.replace("--", "—").replace(['\n', '\r'], " "), context.markdown)).map_err(|e| e.to_string())?;
         }
         let executable = std::fs::canonicalize(executable).map_err(|e| format!("Cannot resolve agent executable: {e}"))?;
+        let mut cli_script = app.path().resolve("cli/logia-cli.mjs", tauri::path::BaseDirectory::Resource).ok().filter(|path| path.is_file());
+        #[cfg(debug_assertions)] if cli_script.is_none() {
+            cli_script = Some(std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../scripts/logia-cli.mjs"));
+        }
+        std::fs::write(cwd.join("AGENTS.md"), "# Logia agent workspace\n\nUse the live Logia CLI for notes. Run `logia-cli help`, or `node \"$LOGIA_CLI_SCRIPT\" help` if the wrapper is not on PATH (PowerShell: `node $env:LOGIA_CLI_SCRIPT help`). LOGIA_CLI_SOCKET targets the parent GUI. Commands include status, active, files, search, read, create, append, prepend, write, rename, open, save, and daily:append. The GUI must be running.\n\nRead a note to get its revision; full replacement requires ifRevision. CLI writes go through the GUI and its save queue. Do not rewrite Logia note JSON directly. After a timeout, read before retrying a write. note-context.md, if attached, is a static snapshot; editing that file does not update the live note.\n").map_err(|error| error.to_string())?;
         let mut command = CommandBuilder::new(executable);
+        if let Some(script) = cli_script { command.env("LOGIA_CLI_SCRIPT", script); }
         command.args(args);
         command.cwd(&cwd);
         command.env("PATH", path);
         command.env("TERM", "xterm-256color");
+        command.env("LOGIA_CLI_SOCKET", crate::cli_transport::endpoint());
         command.env("COLORTERM", "truecolor");
         command.env_remove("NO_COLOR");
         let started = match terminal_process::spawn(command, options.cols, options.rows) {
