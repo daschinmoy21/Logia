@@ -23,6 +23,16 @@ pub struct AiCliState {
     running: Mutex<HashMap<String, oneshot::Sender<()>>>,
 }
 
+struct RunningRequest<'a> {
+    state: &'a AiCliState,
+    id: &'a str,
+}
+impl Drop for RunningRequest<'_> {
+    fn drop(&mut self) {
+        if let Ok(mut running) = self.state.running.lock() { running.remove(self.id); }
+    }
+}
+
 #[derive(Clone, Serialize)]
 struct AiCliEvent {
     request_id: String,
@@ -258,6 +268,9 @@ pub async fn ai_cli_run(
     let resolved = resolve_binary(&binary, &path_var).ok_or_else(|| {
         format!("`{}` was not found. Install it or set its path in Settings → AI.", binary)
     })?;
+    let (cancel_tx, mut cancel_rx) = oneshot::channel::<()>();
+    state.running.lock().map_err(|_| "AI CLI state poisoned")?.insert(request_id.clone(), cancel_tx);
+    let _request = RunningRequest { state: &state, id: &request_id };
 
     let cwd = if let Some(options) = &options {
         let id = uuid::Uuid::parse_str(&options.session_id).map_err(|_| "Invalid agent session ID")?;
@@ -267,15 +280,29 @@ pub async fn ai_cli_run(
             use std::os::unix::fs::PermissionsExt;
             std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).map_err(|e| e.to_string())?;
         }
-        std::fs::write(dir.join("AGENTS.md"), crate::agent_terminal::WORKSPACE_INSTRUCTIONS).map_err(|e| e.to_string())?;
         dir
     } else {
         workspace_dir(&app_handle)?
     };
+    let workspace = if options.is_some() {
+        let node = resolve_binary("node", &path_var).ok_or("Node.js is required for live note tools. Install it and try again.")?;
+        let workspace = crate::agent_workspace::prepare(&cwd, &node, &crate::cli_transport::endpoint())?;
+        tokio::select! {
+            result = crate::agent_workspace::check_connection(&node, &workspace) => result?,
+            _ = &mut cancel_rx => return Err("cancelled".into()),
+        }
+        Some(workspace)
+    } else { None };
+    let prompt = if let Some(workspace) = &workspace {
+        format!("{}\n\n---\n\n{}", workspace.instructions, prompt)
+    } else { prompt };
+    if !spec.prompt_on_stdin && prompt.len() > MAX_ARG_PROMPT_BYTES {
+        return Err("Conversation and live-note instructions exceed the CLI prompt limit. Start a new session.".into());
+    }
     let mut cmd = tokio::process::Command::new(&resolved);
-    if options.is_some() {
+    if let Some(workspace) = workspace {
         cmd.env("LOGIA_CLI_SOCKET", crate::cli_transport::endpoint());
-        if let Some(script) = crate::agent_terminal::cli_script(&app_handle) { cmd.env("LOGIA_CLI_SCRIPT", script); }
+        cmd.env("LOGIA_CLI_SCRIPT", workspace.script);
     }
     cmd.args(build_args(&tool, model.as_deref(), &prompt, options.as_ref()))
         .current_dir(cwd)
@@ -304,13 +331,6 @@ pub async fn ai_cli_run(
             });
         }
     }
-
-    let (cancel_tx, cancel_rx) = oneshot::channel::<()>();
-    state
-        .running
-        .lock()
-        .map_err(|_| "AI CLI state poisoned".to_string())?
-        .insert(request_id.clone(), cancel_tx);
 
     let mut stdout = child.stdout.take().ok_or("Failed to capture stdout")?;
     let mut stderr = child.stderr.take().ok_or("Failed to capture stderr")?;
@@ -366,10 +386,6 @@ pub async fn ai_cli_run(
             Err("cancelled".to_string())
         }
     };
-
-    if let Ok(mut running) = state.running.lock() {
-        running.remove(&request_id);
-    }
 
     let (output, status) = outcome?;
     let status = status?;

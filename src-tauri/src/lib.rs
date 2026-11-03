@@ -14,6 +14,7 @@ mod config_crypto;
 mod ai_cli;
 mod cli_models;
 mod cli_invocation;
+mod agent_workspace;
 mod agent_terminal;
 mod terminal_process;
 mod cli_transport;

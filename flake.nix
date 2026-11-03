@@ -129,6 +129,7 @@
 
             nativeBuildInputs = nativeBuildDeps ++ [pkgs.pkg-config];
             buildInputs = runtimeLibs ++ [pythonEnv pkgs.openssl];
+            nativeCheckInputs = [pkgs.nodejs_24];
 
             # Environment variables for the build
             OPENSSL_NO_VENDOR = 1;

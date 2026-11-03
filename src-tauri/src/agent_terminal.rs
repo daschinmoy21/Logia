@@ -12,16 +12,6 @@ use std::{
 };
 use tauri::{ipc::Channel, Manager};
 
-pub(crate) const WORKSPACE_INSTRUCTIONS: &str = "# Logia agent workspace\n\nUse the live Logia CLI for notes. Run `logia-cli help`, or `node \"$LOGIA_CLI_SCRIPT\" help` if the wrapper is not on PATH (PowerShell: `node $env:LOGIA_CLI_SCRIPT help`). LOGIA_CLI_SOCKET targets the parent GUI. Commands include status, active, files, search, read, create, append, prepend, write, rename, open, save, and daily:append. The GUI must be running.\n\nRead a note to get its revision; full replacement requires ifRevision. CLI writes go through the GUI and its save queue. Do not rewrite Logia note JSON directly. After a timeout, read before retrying a write. note-context.md, if attached, is a static snapshot; editing that file does not update the live note.\n";
-
-pub(crate) fn cli_script(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {
-    let mut script = app.path().resolve("cli/logia-cli.mjs", tauri::path::BaseDirectory::Resource).ok().filter(|path| path.is_file());
-    #[cfg(debug_assertions)] if script.is_none() {
-        script = Some(std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../scripts/logia-cli.mjs"));
-    }
-    script
-}
-
 #[derive(Default)]
 pub struct AgentTerminalState(pub Arc<Mutex<HashMap<String, Arc<TerminalProcess>>>>);
 impl AgentTerminalState {
@@ -100,9 +90,12 @@ pub async fn agent_terminal_start(
             std::fs::write(cwd.join("note-context.md"), format!("<!-- Logia note snapshot: {} -->\n\n{}", context.title.replace("--", "—").replace(['\n', '\r'], " "), context.markdown)).map_err(|e| e.to_string())?;
         }
         let executable = std::fs::canonicalize(executable).map_err(|e| format!("Cannot resolve agent executable: {e}"))?;
-        std::fs::write(cwd.join("AGENTS.md"), WORKSPACE_INSTRUCTIONS).map_err(|error| error.to_string())?;
+        let workspace = if options.login { None } else {
+            let node = resolve_binary("node", &path).ok_or("Node.js is required for live note tools. Install it and try again.")?;
+            Some(crate::agent_workspace::prepare(&cwd, &node, &crate::cli_transport::endpoint())?)
+        };
         let mut command = CommandBuilder::new(executable);
-        if let Some(script) = cli_script(&app) { command.env("LOGIA_CLI_SCRIPT", script); }
+        if let Some(workspace) = workspace { command.env("LOGIA_CLI_SCRIPT", workspace.script); }
         command.args(args);
         command.cwd(&cwd);
         command.env("PATH", path);

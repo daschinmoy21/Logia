@@ -80,7 +80,14 @@ function request(socket, payload, timeout) {
         finish(null, response);
       } catch (error) { finish(Object.assign(error, { code: 'INVALID_RESPONSE' })); }
     });
-    client.on('error', error => finish(Object.assign(new Error(connected ? `Connection lost: ${error.message}. Read before retrying an edit.` : 'Logia is not running, or its CLI bridge is unavailable. Open the desktop app, or use --launch.'), { code: connected ? 'CONNECTION_LOST' : 'GUI_NOT_RUNNING' })));
+    client.on('error', error => {
+      const missing = ['ENOENT', 'ECONNREFUSED'].includes(error.code);
+      const denied = ['EACCES', 'EPERM'].includes(error.code);
+      const message = connected ? `Connection lost: ${error.message}. Read before retrying an edit.`
+        : denied ? `Access to the Logia CLI endpoint ${socket} was denied (${error.code}). The app may be running; check the agent's sandbox permissions.`
+          : `Could not connect to the Logia CLI endpoint ${socket} (${error.code || error.message}). ${missing ? 'The app may be closed or the CLI endpoint may be different.' : 'Check the local CLI connection.'}`;
+      finish(Object.assign(new Error(message), { code: connected ? 'CONNECTION_LOST' : denied ? 'ACCESS_DENIED' : missing ? 'GUI_NOT_RUNNING' : 'CLI_CONNECTION_FAILED' }));
+    });
     client.on('end', () => { if (!buffer.includes('\n')) finish(Object.assign(new Error('GUI closed before replying; an edit may have applied. Read before retrying.'), { code: 'CONNECTION_LOST' })); });
   });
 }

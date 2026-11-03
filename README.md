@@ -28,11 +28,13 @@ Logia blends structured text editing with infinite visual canvases, ensuring you
 
 Open **Settings → AI providers → Add provider** to add a CLI agent, cloud API, or local server. The provider list shows your configured providers and detected CLIs; select one to edit its setup. API keys are stored encrypted in your OS keychain. You can switch providers and models directly in the chat composer, or use `:provider <id>` in Vim mode.
 
-Chat settings groups live models by provider, with search, favorites, refresh, and locally bundled provider logos. Codex uses `app-server` → `model/list`; Claude Code uses its initialization catalog; OpenCode uses `models`; Pi uses `--list-models`; Gemini CLI uses its JSON model listing. Cloud and local API providers query their model-list endpoints, including pagination. No static model suggestions are shown when discovery fails. Custom IDs remain available as an explicit option.
+The model dropdown opens next to the composer, with live models grouped by provider, search, favorites, refresh, and locally bundled provider logos. Selecting a model applies it and closes the dropdown. Codex uses `app-server` → `model/list`; Claude Code uses its initialization catalog; OpenCode uses `models`; Pi uses `--list-models`; Gemini CLI uses its JSON model listing. Cloud and local API providers query their model-list endpoints, including pagination. No static model suggestions are shown when discovery fails. Custom IDs remain available as an explicit option.
 
 Terminal sessions use the model chosen before starting; use the CLI's `/model` command (`/models` in OpenCode) to change it within a running session. API providers without an explicit selection use a default reported by the live catalog, or its first returned model.
 
 Choosing an agent opens a chat transcript with a ready-to-use composer. **New session** immediately clears the conversation and focuses the input. Model selection and note attachment are in the composer; Codex also exposes reasoning efforts reported by its live catalog and an access selector (read-only by default). Follow-ups share a scratch workspace and include the conversation history. The terminal icon opens the CLI for sign-in or direct terminal use.
+
+The active text note, including unsaved edits, is included with each agent message by default; the “Current note” chip shows what is shared and lets you leave it out. Sessions include a local copy of the live-note CLI with an explicit runtime and GUI endpoint, so packaged installs do not rely on the agent shell preserving environment variables. The app checks the live connection before starting an agent turn and reports connection failures directly.
 
 | Kind | Providers | Notes |
 | --- | --- | --- |

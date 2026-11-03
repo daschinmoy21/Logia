@@ -12,7 +12,7 @@ import { ModelPicker } from '../ModelPicker';
 import { ProviderIcon } from '../ProviderIcon';
 import { AgentComposer } from './AgentComposer';
 import { AgentTerminalPane } from './AgentTerminalPane';
-import { newAgentChat, sendAgentChat, setAgentChatOptions, stopAgentChat, useAgentChats } from './agentChats';
+import { newAgentChat, sendAgentChat, setAgentChatIncludeNote, setAgentChatOptions, stopAgentChat, useAgentChats } from './agentChats';
 
 const accessLabels = { 'read-only': 'Read only', 'workspace-write': 'Workspace', 'danger-full-access': 'Full access' };
 const effortLabels: Record<string, string> = { none: 'None', minimal: 'Minimal', low: 'Low', medium: 'Medium', high: 'High', xhigh: 'Extra high', max: 'Max' };
@@ -31,7 +31,8 @@ export function AgentChatPane({ tool }: { tool: AgentTool }) {
     else terminalViews.delete(tool);
     setTerminalOpenState(open);
   };
-  const [attach, setAttach] = useState(false);
+  const attach = chat?.includeNote ?? true;
+  const setAttach = (includeNote: boolean) => setAgentChatIncludeNote(tool, includeNote);
   const [catalog, setCatalog] = useState<CatalogModel[]>([]);
   const effort = chat?.options.reasoningEffort ?? '';
   const access = chat?.options.access ?? 'read-only';
@@ -54,7 +55,6 @@ export function AgentChatPane({ tool }: { tool: AgentTool }) {
     return () => { current = false; };
   }, [tool, binary, desktop, model]);
 
-  useEffect(() => setAttach(false), [note?.id]);
   useEffect(() => {
     const el = transcript.current;
     if (el) el.scrollTop = el.scrollHeight;
@@ -101,17 +101,17 @@ export function AgentChatPane({ tool }: { tool: AgentTool }) {
     {!desktop && <p className="px-4 py-2 text-xs text-zinc-500">Open the desktop app to chat with {def.label}.</p>}
     {desktop && info?.available === false && <p className="px-4 py-2 text-xs text-amber-300">{def.label} wasn’t found. <button type="button" onClick={() => useUiStore.getState().setIsSettingsOpen(true, 'ai')} className="underline underline-offset-2">Set its binary path</button>.</p>}
     <div ref={composer} className="shrink-0">
-      {attach && note && <div className="mx-4 mb-1 flex items-center gap-2 text-xs text-zinc-400"><Paperclip size={12} /><span className="min-w-0 flex-1 truncate">{note.title || 'Untitled'}</span><button type="button" onClick={() => setAttach(false)} aria-label="Remove attached note"><X size={12} /></button></div>}
+      {attach && note && note.note_type !== 'canvas' && <div className="mx-4 mb-1 flex items-center gap-2 text-xs text-zinc-400"><Paperclip size={12} /><span className="min-w-0 flex-1 truncate">Current note: {note.title || 'Untitled'}</span><button type="button" onClick={() => setAttach(false)} aria-label="Remove attached note"><X size={12} /></button></div>}
       <AgentComposer key={chat?.id ?? tool} draftKey={`chat:${tool}:${chat?.id ?? 'new'}`} autoFocus label={`Message ${def.label}`} placeholder="Ask for changes, send follow-ups, or attach a note" busy={running} canSend={desktop && info?.available !== false}
         sendLabel={`Send to ${def.label}`} onStop={() => stopAgentChat(tool)}
-        onSend={(text) => sendAgentChat(tool, text, { access: tool === 'codex' ? access : undefined, reasoningEffort: selectedEffort || undefined }, attach && note ? { title: note.title || 'Untitled', markdown: noteToMarkdown(note.content) } : undefined)}
+        onSend={(text) => sendAgentChat(tool, text, { access: tool === 'codex' ? access : undefined, reasoningEffort: selectedEffort || undefined }, attach && note && note.note_type !== 'canvas' ? { id: note.id, title: note.title || 'Untitled', markdown: noteToMarkdown(note.content) } : undefined)}
         leading={<>
           <ModelPicker providerId={tool} disabled={running} defaultModelLabel={selected?.label} />
           {tool === 'codex' && <>
             <label title="Reasoning effort" className="relative inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs text-zinc-400 hover:bg-zinc-800"><Brain size={13} /><select aria-label="Reasoning effort" value={selectedEffort} disabled={running} onChange={(event) => setAgentChatOptions(tool, { reasoningEffort: event.target.value || undefined })} className="max-w-24 appearance-none bg-transparent pr-3 text-xs focus:outline-none"><option value="">Default</option>{efforts.map((value) => <option key={value} value={value}>{effortLabels[value]}</option>)}</select><ChevronDown size={10} className="pointer-events-none absolute right-1" /></label>
             <label title="Agent access" className="relative inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs text-zinc-400 hover:bg-zinc-800"><LockKeyhole size={13} /><select aria-label="Agent access" value={access} disabled={running} onChange={(event) => setAgentChatOptions(tool, { access: event.target.value as typeof access })} className="max-w-24 appearance-none bg-transparent pr-3 text-xs focus:outline-none">{Object.entries(accessLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><ChevronDown size={10} className="pointer-events-none absolute right-1" /></label>
           </>}
-          <button type="button" disabled={running || !note || note.note_type === 'canvas'} onClick={() => setAttach((value) => !value)} aria-label="Attach current note" aria-pressed={attach} title={note ? 'Attach current note' : 'Open a note to attach it'} className={`rounded-md p-1.5 hover:bg-zinc-800 disabled:opacity-30 ${attach ? 'text-indigo-300' : 'text-zinc-500'}`}><Paperclip size={14} /></button>
+          <button type="button" disabled={running || !note || note.note_type === 'canvas'} onClick={() => setAttach(!attach)} aria-label="Attach current note" aria-pressed={attach && !!note && note.note_type !== 'canvas'} title={note ? 'Include the current note' : 'Open a note to attach it'} className={`rounded-md p-1.5 hover:bg-zinc-800 disabled:opacity-30 ${attach && note && note.note_type !== 'canvas' ? 'text-indigo-300' : 'text-zinc-500'}`}><Paperclip size={14} /></button>
         </>}
       />
     </div>
