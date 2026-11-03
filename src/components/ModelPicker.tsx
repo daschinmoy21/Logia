@@ -12,10 +12,11 @@ interface ModelPickerProps {
   disabled?: boolean;
   scope?: 'provider' | 'chat';
   placement?: 'above' | 'below';
+  defaultModelLabel?: string;
 }
 
 /** One provider/model selection surface, with live catalogs and remembered favorites. */
-export function ModelPicker({ providerId, disabled = false, scope = 'provider' }: ModelPickerProps) {
+export function ModelPicker({ providerId, disabled = false, scope = 'provider', defaultModelLabel }: ModelPickerProps) {
   const settings = useSettingsStore();
   const active = getProvider(providerId) ?? PROVIDERS[0];
   const model = resolveModel(active, settings.models);
@@ -46,7 +47,7 @@ export function ModelPicker({ providerId, disabled = false, scope = 'provider' }
       aria-haspopup="dialog" aria-expanded={open}
       className="flex min-w-0 max-w-full items-center gap-1.5 rounded-md px-2 py-1 text-xs text-zinc-300 transition-colors hover:bg-zinc-800 disabled:opacity-50">
       <ProviderIcon providerId={active.id} size={14} />
-      <span className="truncate">{model || (scope === 'chat' ? 'Choose model' : 'Provider default')}</span>
+      <span className="truncate">{model || defaultModelLabel || (scope === 'chat' ? 'Choose model' : 'Provider default')}</span>
       <ChevronDown size={12} className="shrink-0 text-zinc-500" />
     </button>
     {open && <Dialog open onClose={close} data-agent-menu className="relative z-[1200]">

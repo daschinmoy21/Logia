@@ -15,6 +15,8 @@ pub struct CliModel {
     pub label: String,
     #[serde(rename = "isDefault")]
     pub is_default: bool,
+    #[serde(rename = "reasoningEfforts", skip_serializing_if = "Vec::is_empty")]
+    pub reasoning_efforts: Vec<String>,
 }
 
 fn parse_text_models(tool: &str, output: &str) -> Vec<CliModel> {
@@ -35,6 +37,7 @@ fn parse_text_models(tool: &str, output: &str) -> Vec<CliModel> {
             Some(CliModel {
                 label: id.clone(),
                 is_default: false,
+                reasoning_efforts: Vec::new(),
                 id,
             })
         })
@@ -72,6 +75,7 @@ fn parse_json_models(tool: &str, entries: &[Value]) -> Vec<CliModel> {
                 id: id.into(),
                 label: label.into(),
                 is_default,
+                reasoning_efforts: Vec::new(),
             })
         })
         .collect()
@@ -249,6 +253,7 @@ pub async fn discover(
                         id: id.into(),
                         label: model["displayName"].as_str().unwrap_or(id).into(),
                         is_default: model["isDefault"].as_bool().unwrap_or(false),
+                        reasoning_efforts: model["supportedReasoningEfforts"].as_array().map(|efforts| efforts.iter().filter_map(|e| e["reasoningEffort"].as_str().map(String::from)).collect()).unwrap_or_default(),
                     });
                 }
             }
@@ -295,6 +300,7 @@ mod tests {
                 id: "provider/model".into(),
                 label: "provider/model".into(),
                 is_default: false,
+                reasoning_efforts: Vec::new(),
             }]
         );
         assert_eq!(parse_text_models("pi", "provider model context max-out thinking images\nanthropic claude-example 200K 32K yes yes\n")[0].id, "anthropic/claude-example");
@@ -352,7 +358,7 @@ read -r init
 printf '%s\n' '{"id":0,"result":{}}'
 read -r initialized
 read -r first
-printf '%s\n' '{"id":1,"result":{"data":[{"model":"one","displayName":"First"},{"model":"hidden","hidden":true}],"nextCursor":"next"}}'
+printf '%s\n' '{"id":1,"result":{"data":[{"model":"one","displayName":"First","supportedReasoningEfforts":[{"reasoningEffort":"low"},{"reasoningEffort":"high"}]},{"model":"hidden","hidden":true}],"nextCursor":"next"}}'
 read -r second
 case "$second" in *next*) ;; *) exit 1;; esac
 printf '%s\n' '{"id":2,"result":{"data":[{"model":"two","displayName":"Second"}],"nextCursor":null}}'
@@ -374,11 +380,13 @@ read -r unexpected && exit 1
                     id: "one".into(),
                     label: "First".into(),
                     is_default: false,
+                    reasoning_efforts: vec!["low".into(), "high".into()],
                 },
                 CliModel {
                     id: "two".into(),
                     label: "Second".into(),
                     is_default: false,
+                    reasoning_efforts: Vec::new(),
                 }
             ]
         );

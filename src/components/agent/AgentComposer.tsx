@@ -19,6 +19,7 @@ interface AgentComposerProps {
   onSend: (text: string) => boolean;
   onStop?: () => void;
   leading?: ReactNode;
+  autoFocus?: boolean;
 }
 
 /** The agent bar's text input, with its own Vim mode independent of the note editor's. */
@@ -32,6 +33,7 @@ export function AgentComposer({
   onSend,
   onStop,
   leading,
+  autoFocus = false,
 }: AgentComposerProps) {
   const vimEnabled = useSettingsStore((s) => s.composerVim ?? s.vimEnabled);
   const setComposerVim = useSettingsStore((s) => s.setComposerVim);
@@ -61,33 +63,34 @@ export function AgentComposer({
   const normal = vimEnabled && vim.mode === 'normal';
 
   return (
-    <div className="border-t border-zinc-900/50 bg-zinc-950 p-2" data-vim-escape-to-editor>
+    <div className="shrink-0 bg-zinc-950 px-3 pb-3 pt-2" data-vim-escape-to-editor>
       <div
-        className={`rounded-xl border bg-zinc-900 transition-colors focus-within:border-zinc-600 ${
+        className={`rounded-2xl border bg-zinc-900/80 shadow-lg shadow-black/10 transition-colors focus-within:border-zinc-600 ${
           busy ? 'border-red-500/40' : 'border-zinc-800'
         }`}
       >
         <textarea
           ref={textareaRef}
+          autoFocus={autoFocus}
           data-agent-composer
           value={draft}
-          rows={2}
+          rows={3}
           aria-label={label}
           placeholder={placeholder}
           spellCheck={false}
           onChange={(e) => setDraft(e.target.value)}
-          className={`block w-full resize-none bg-transparent px-3 pt-2.5 pb-1 font-mono text-[13px] leading-5 text-zinc-100 placeholder:text-zinc-500 focus:outline-none ${
+          className={`block w-full resize-none bg-transparent px-4 pt-4 pb-3 text-[13px] leading-6 text-zinc-100 placeholder:text-zinc-500 focus:outline-none ${
             normal ? 'caret-amber-300' : 'caret-zinc-100'
           }`}
           {...vim.textareaProps}
         />
-        <div className="flex items-center justify-between gap-2 px-1.5 pb-1.5">
+        <div className="flex items-end justify-between gap-2 px-2.5 pb-2.5">
           <div className="flex min-w-0 flex-wrap items-center gap-1">{leading}</div>
           {busy && onStop ? (
             <button
               type="button"
               onClick={onStop}
-              className="flex size-7 flex-shrink-0 items-center justify-center rounded-md bg-red-500/20 text-red-300 transition-colors hover:bg-red-500/30"
+              className="flex size-8 flex-shrink-0 items-center justify-center rounded-full bg-red-500/20 text-red-300 transition-colors hover:bg-red-500/30"
               title="Stop generating"
               aria-label="Stop generating"
             >
@@ -98,7 +101,7 @@ export function AgentComposer({
               type="button"
               onClick={submit}
               disabled={busy || !canSend || !hasText}
-              className="flex size-7 flex-shrink-0 items-center justify-center rounded-md bg-zinc-100 text-zinc-900 transition-colors hover:bg-white disabled:bg-zinc-800 disabled:text-zinc-500"
+              className="flex size-8 flex-shrink-0 items-center justify-center rounded-full bg-indigo-500 text-white transition-colors hover:bg-indigo-400 disabled:bg-zinc-800 disabled:text-zinc-500"
               title={sendLabel}
               aria-label={sendLabel}
             >

@@ -22,6 +22,14 @@ export async function installAgentFixture(page: Page) {
     const win = window as any;
     let counter = 0;
     const channels = new Map<string, any>();
+    const callbacks = new Map<number, (event: any) => void>();
+    const listeners = new Map<number, number>();
+    win.__TAURI_EVENT_PLUGIN_INTERNALS__ = { unregisterListener: (_event: string, id: number) => { callbacks.delete(listeners.get(id)!); listeners.delete(id); } };
+    const chatReplies = new Map<string, (text: string) => void>();
+    win.__agentCompleteChat = (id: string, text: string) => { chatReplies.get(id)?.(text); chatReplies.delete(id); };
+    win.__agentChatChunk = (id: string, data: string) => {
+      for (const callback of callbacks.values()) callback({ event: 'ai-cli-event', id: 0, payload: { request_id: id, kind: 'chunk', data } });
+    };
     win.__agentCalls = [];
     win.__agentStartDelay = 25;
     win.__agentFailStart = false;
@@ -30,19 +38,23 @@ export async function installAgentFixture(page: Page) {
     win.__agentEmit = (id: string, event: any) => channels.get(id)?.onmessage(event);
     win.__TAURI_INTERNALS__ = {
       metadata: { currentWebview: { label: 'main' }, currentWindow: { label: 'main' } },
-      transformCallback: () => ++counter,
-      unregisterCallback: () => {},
+      transformCallback: (callback: (event: any) => void) => { const id = ++counter; callbacks.set(id, callback); return id; },
+      unregisterCallback: (id: number) => { callbacks.delete(id); },
       invoke: async (command: string, args: any) => {
         win.__agentCalls.push({ command, args: command === 'agent_terminal_start' ? { options: args.options } : args });
         if (command === 'ai_cli_detect') return (win.__agentInstalledTools ?? ['codex', 'claude-code', 'pi', 'opencode']).map((id: string) => ({ id, binary: id, available: true, path: `/fixture/bin/${id}` }));
         if (command === 'ai_cli_models') {
           if (win.__agentModelError) throw new Error('Fixture: model discovery unavailable');
-          return win.__agentModels?.[args.tool] ?? [{ id: 'fixture-model', label: 'Fixture Model', isDefault: true }, { id: 'provider/second-model', label: 'Second Model' }];
+          return win.__agentModels?.[args.tool] ?? [{ id: 'fixture-model', label: 'Fixture Model', isDefault: true, reasoningEfforts: ['low', 'medium', 'high'] }, { id: 'provider/second-model', label: 'Second Model' }];
         }
         if (command === 'plugin:webview|set_webview_zoom') return;
-        if (command === 'plugin:event|listen') return ++counter;
+        if (command === 'plugin:event|listen') { const id = ++counter; listeners.set(id, args.handler); return id; }
         if (command === 'plugin:event|unlisten') return;
-        if (command === 'ai_cli_run') return 'Fixture chat reply';
+        if (command === 'ai_cli_run') {
+          if (win.__agentHoldChat) return new Promise<string>((resolve) => chatReplies.set(args.requestId, resolve));
+          return 'Fixture chat reply';
+        }
+        if (command === 'ai_cli_cancel') return true;
         if (command === 'agent_terminal_start') {
           if (win.__agentFailStart) throw new Error('Fixture: executable could not be started');
           const id = `fixture-${++counter}`;

@@ -3,6 +3,7 @@
 //! `ai-cli-event` event; the command itself resolves with the full text.
 
 use serde::Serialize;
+use crate::cli_invocation::{build_args, ChatSessionOptions};
 use std::collections::HashMap;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -52,51 +53,6 @@ fn tool_spec(tool: &str) -> Option<ToolSpec> {
         "gemini-cli" => Some(ToolSpec { default_binary: "gemini", prompt_on_stdin: false }),
         _ => None,
     }
-}
-
-/// Build the argument list for a tool invocation.
-fn build_args(tool: &str, model: Option<&str>, prompt: &str) -> Vec<String> {
-    let model = model.map(str::trim).filter(|m| !m.is_empty());
-    let mut args: Vec<String> = Vec::new();
-    match tool {
-        "claude-code" => {
-            args.extend(["-p", "--output-format", "text"].map(String::from));
-            if let Some(m) = model {
-                args.extend(["--model".to_string(), m.to_string()]);
-            }
-        }
-        "codex" => {
-            args.extend(
-                ["exec", "--skip-git-repo-check", "--sandbox", "read-only", "--color", "never"]
-                    .map(String::from),
-            );
-            if let Some(m) = model {
-                args.extend(["-m".to_string(), m.to_string()]);
-            }
-            // "-" makes codex read the prompt from stdin
-            args.push("-".to_string());
-        }
-        "opencode" => {
-            args.push("run".to_string());
-            if let Some(m) = model {
-                args.extend(["-m".to_string(), m.to_string()]);
-            }
-            args.push(prompt.to_string());
-        }
-        "pi" => {
-            args.push("--print".to_string());
-            if let Some(m) = model { args.extend(["--model".to_string(), m.to_string()]); }
-            args.push(prompt.to_string());
-        }
-        "gemini-cli" => {
-            if let Some(m) = model {
-                args.extend(["-m".to_string(), m.to_string()]);
-            }
-            args.extend(["-p".to_string(), prompt.to_string()]);
-        }
-        _ => {}
-    }
-    args
 }
 
 /// GUI apps (especially on macOS) don't inherit the login shell PATH, so the
@@ -276,8 +232,14 @@ pub async fn ai_cli_run(
     prompt: String,
     model: Option<String>,
     binary: Option<String>,
+    options: Option<ChatSessionOptions>,
 ) -> Result<String, String> {
     let spec = tool_spec(&tool).ok_or_else(|| format!("Unknown CLI tool: {}", tool))?;
+    if let Some(effort) = options.as_ref().and_then(|o| o.reasoning_effort.as_deref()) {
+        if !matches!(effort, "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max") {
+            return Err("Unsupported reasoning effort".into());
+        }
+    }
     if !spec.prompt_on_stdin && prompt.len() > MAX_ARG_PROMPT_BYTES {
         return Err(format!(
             "Prompt is too large for {} ({} KB). Try a shorter note or another provider.",
@@ -297,9 +259,26 @@ pub async fn ai_cli_run(
         format!("`{}` was not found. Install it or set its path in Settings → AI.", binary)
     })?;
 
+    let cwd = if let Some(options) = &options {
+        let id = uuid::Uuid::parse_str(&options.session_id).map_err(|_| "Invalid agent session ID")?;
+        let dir = app_handle.path().app_data_dir().map_err(|e| e.to_string())?.join("agent-sessions").join(id.to_string());
+        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+        #[cfg(unix)] {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).map_err(|e| e.to_string())?;
+        }
+        std::fs::write(dir.join("AGENTS.md"), crate::agent_terminal::WORKSPACE_INSTRUCTIONS).map_err(|e| e.to_string())?;
+        dir
+    } else {
+        workspace_dir(&app_handle)?
+    };
     let mut cmd = tokio::process::Command::new(&resolved);
-    cmd.args(build_args(&tool, model.as_deref(), &prompt))
-        .current_dir(workspace_dir(&app_handle)?)
+    if options.is_some() {
+        cmd.env("LOGIA_CLI_SOCKET", crate::cli_transport::endpoint());
+        if let Some(script) = crate::agent_terminal::cli_script(&app_handle) { cmd.env("LOGIA_CLI_SCRIPT", script); }
+    }
+    cmd.args(build_args(&tool, model.as_deref(), &prompt, options.as_ref()))
+        .current_dir(cwd)
         .env("PATH", &path_var)
         .env("NO_COLOR", "1")
         .env("TERM", "dumb")
@@ -433,20 +412,6 @@ mod tests {
         assert_eq!(strip_ansi("\u{1b}[1;32mhello\u{1b}[0m world"), "hello world");
         assert_eq!(strip_ansi("\u{1b}]0;title\u{7}text"), "text");
         assert_eq!(strip_ansi("plain"), "plain");
-    }
-
-    #[test]
-    fn builds_args_per_tool() {
-        assert_eq!(
-            build_args("claude-code", Some("sonnet"), "hi"),
-            vec!["-p", "--output-format", "text", "--model", "sonnet"]
-        );
-        let codex = build_args("codex", None, "hi");
-        assert_eq!(codex.first().map(String::as_str), Some("exec"));
-        assert_eq!(codex.last().map(String::as_str), Some("-"));
-        assert!(codex.contains(&"read-only".to_string()));
-        assert_eq!(build_args("opencode", Some(" "), "hi"), vec!["run", "hi"]);
-        assert_eq!(build_args("gemini-cli", None, "hi"), vec!["-p", "hi"]);
     }
 
     #[test]

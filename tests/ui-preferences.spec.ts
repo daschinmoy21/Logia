@@ -16,6 +16,7 @@ test('chat discovers CLI models, sends the selected model, and shares it with te
   expect((await agentCalls(page)).find((c) => c.command === 'ai_cli_run')?.args.model).toBe('fixture-model');
   await page.getByRole('button', { name: /^Choose agent\. Current:/ }).click();
   await page.getByRole('menuitemradio', { name: /^Codex / }).click();
+  await page.getByRole('button', { name: 'Open agent terminal', exact: true }).click();
   await expect(page.getByRole('button', { name: /^Choose model for Codex CLI/ })).toContainText('fixture-model');
   await page.getByRole('button', { name: 'Start session', exact: true }).click();
   await expect(page.getByRole('textbox', { name: 'Prompt for Codex' })).toBeVisible();
@@ -28,9 +29,8 @@ test('chat discovers CLI models, sends the selected model, and shares it with te
   await expect.poll(async () => (await agentCalls(page)).filter((c) => c.command === 'plugin:webview|set_webview_zoom').at(-1)?.args.value).toBe(1.1);
   await page.getByRole('button', { name: 'Stop', exact: true }).click();
   await page.getByRole('button', { name: 'New session', exact: true }).click();
-  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await expect.poll(async () => (await agentCalls(page)).filter((c) => c.command === 'agent_terminal_start').length).toBe(2);
-  expect((await agentCalls(page)).filter((c) => c.command === 'agent_terminal_start')[1].args.options.model).toBeUndefined();
+  expect((await agentCalls(page)).filter((c) => c.command === 'agent_terminal_start')[1].args.options.model).toBe('fixture-model');
 });
 
 test('failed discovery allows custom model IDs and remembers them across reload', async ({ page }) => {

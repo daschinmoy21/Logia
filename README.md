@@ -32,6 +32,8 @@ Chat settings groups live models by provider, with search, favorites, refresh, a
 
 Terminal sessions use the model chosen before starting; use the CLI's `/model` command (`/models` in OpenCode) to change it within a running session. API providers without an explicit selection use a default reported by the live catalog, or its first returned model.
 
+Choosing an agent opens a chat transcript with a ready-to-use composer. **New session** immediately clears the conversation and focuses the input. Model selection and note attachment are in the composer; Codex also exposes reasoning efforts reported by its live catalog and an access selector (read-only by default). Follow-ups share a scratch workspace and include the conversation history. The terminal icon opens the CLI for sign-in or direct terminal use.
+
 | Kind | Providers | Notes |
 | --- | --- | --- |
 | Cloud APIs | Google Gemini, OpenAI, Anthropic, OpenRouter, Groq, DeepSeek, Mistral | Need an API key |

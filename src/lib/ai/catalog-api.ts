@@ -2,6 +2,7 @@ export interface CatalogModel {
   id: string;
   label: string;
   isDefault?: boolean;
+  reasoningEfforts?: string[];
 }
 
 export interface CatalogRequest {

@@ -213,7 +213,7 @@ export interface ChatTurn {
  * CLI agents take a single prompt, so the system prompt and conversation are
  * flattened into one transcript ending with the latest user message.
  */
-export function flattenConversation(system: string, turns: ChatTurn[]): string {
+export function flattenConversation(system: string, turns: ChatTurn[], allowTools = false): string {
   const parts: string[] = [];
   if (system.trim()) parts.push(system.trim());
   const history = turns.slice(0, -1);
@@ -227,6 +227,8 @@ export function flattenConversation(system: string, turns: ChatTurn[]): string {
   if (last) {
     parts.push(`## Latest user message\n\n${last.content}`);
   }
-  parts.push('Reply directly to the latest user message. Do not run tools or modify files.');
+  parts.push(allowTools
+    ? 'Respond to the latest user message. Use tools and the live Logia CLI when needed to carry out the request.'
+    : 'Reply directly to the latest user message. Do not run tools or modify files.');
   return parts.join('\n\n');
 }

@@ -13,7 +13,6 @@ import {
   AVAILABILITY_LABELS,
   agentAvailability,
   attachAgentSession,
-  dismissAgentSession,
   isLiveSession,
   refreshAgentDetection,
   scheduleAgentFit,
@@ -47,6 +46,17 @@ export const AgentTerminalPane = memo(function AgentTerminalPane({ tool }: { too
   const live = isLiveSession(session);
   const containerRef = useRef<HTMLDivElement>(null);
   const [composerOpen, setComposerOpen] = useState(true);
+
+  const newSession = () => {
+    const container = containerRef.current;
+    if (!container) return;
+    const settings = useSettingsStore.getState();
+    void startAgentSession(tool, {
+      container,
+      binary: settings.cliBinaries[tool]?.trim() || undefined,
+      model: settings.models[tool]?.trim() || undefined,
+    });
+  };
 
   useEffect(() => {
     const container = containerRef.current;
@@ -102,7 +112,7 @@ export const AgentTerminalPane = memo(function AgentTerminalPane({ tool }: { too
             ) : (
               <button
                 type="button"
-                onClick={() => dismissAgentSession(tool)}
+                onClick={newSession}
                 className="rounded-md border border-zinc-800 px-2 py-0.5 text-zinc-300 transition-colors hover:border-zinc-600 hover:text-zinc-100"
               >
                 New session

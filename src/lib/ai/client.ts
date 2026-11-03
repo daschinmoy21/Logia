@@ -79,6 +79,13 @@ interface ChatOptions {
   messages: ChatTurn[];
   signal?: AbortSignal;
   provider?: ProviderDef;
+  cliOptions?: CliChatOptions;
+}
+
+export interface CliChatOptions {
+  sessionId: string;
+  reasoningEffort?: string;
+  access?: 'read-only' | 'workspace-write' | 'danger-full-access';
 }
 
 let cliRequestCounter = 0;
@@ -89,7 +96,9 @@ async function runCli(
   prompt: string,
   onChunk: (text: string) => void,
   signal?: AbortSignal,
+  options?: CliChatOptions,
 ): Promise<string> {
+  signal?.throwIfAborted();
   const state = useSettingsStore.getState();
   const requestId = `cli-${Date.now()}-${++cliRequestCounter}`;
   const unlisten = await listen<{ request_id: string; kind: string; data: string }>(
@@ -105,16 +114,18 @@ async function runCli(
   };
   signal?.addEventListener('abort', onAbort);
   try {
+    signal?.throwIfAborted();
     return await invoke<string>('ai_cli_run', {
       requestId,
       tool: provider.id,
       prompt,
       model: resolveModel(provider, state.models) || null,
       binary: state.cliBinaries[provider.id]?.trim() || null,
+      options: options ?? null,
     });
   } finally {
     signal?.removeEventListener('abort', onAbort);
-    unlisten();
+    await unlisten();
   }
 }
 
@@ -122,7 +133,7 @@ async function runCli(
  * Stream a chat reply from the active provider. Yields the accumulated text
  * after every chunk.
  */
-export async function* streamChat({ system, messages, signal, provider = activeProvider() }: ChatOptions) {
+export async function* streamChat({ system, messages, signal, provider = activeProvider(), cliOptions }: ChatOptions) {
   if (provider.kind === 'cli') {
     let text = '';
     let done = false;
@@ -135,14 +146,17 @@ export async function* streamChat({ system, messages, signal, provider = activeP
 
     runCli(
       provider,
-      flattenConversation(system, messages),
+      flattenConversation(system, messages, !!cliOptions),
       (chunk) => {
+        if (signal?.aborted) return;
         text += chunk;
         notify();
       },
       signal,
+      cliOptions,
     )
       .then((full) => {
+        if (signal?.aborted) return;
         // Some CLIs only print once finished; prefer the final output.
         if (full && full.length >= text.trim().length) text = full;
       })

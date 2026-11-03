@@ -11,7 +11,8 @@ import { ModelPicker } from "./ModelPicker";
 import { useSettingsStore } from "../store/settingsStore";
 import { AgentChooser, type AgentSelection } from "./agent/AgentChooser";
 import { AgentComposer } from "./agent/AgentComposer";
-import { AgentTerminalPane } from "./agent/AgentTerminalPane";
+import { AgentChatPane } from "./agent/AgentChatPane";
+import { closeAllAgentChats } from "./agent/agentChats";
 import { closeAllAgentSessions, refreshAgentDetection } from "./agent/agentSessions";
 import { AGENT_TOOLS } from "../lib/ai/agent-terminal";
 import Markdown from "react-markdown";
@@ -99,10 +100,11 @@ const AiSidebar = ({ isOpen, onClose }: AiSidebarProps) => {
 
   // Sessions outlive the panel's visibility, but not the panel itself or the window.
   useEffect(() => {
-    window.addEventListener("beforeunload", closeAllAgentSessions);
+    const closeAgents = () => { closeAllAgentSessions(); closeAllAgentChats(); };
+    window.addEventListener("beforeunload", closeAgents);
     return () => {
-      window.removeEventListener("beforeunload", closeAllAgentSessions);
-      closeAllAgentSessions();
+      window.removeEventListener("beforeunload", closeAgents);
+      closeAgents();
     };
   }, []);
 
@@ -387,7 +389,7 @@ TO REPLACE CONTENT:
               <div className="flex-1 overflow-hidden relative flex flex-col bg-zinc-950">
                 {/* --- CHAT VIEW --- */}
                 {activeTab === "chat" && activeAgent !== "logia" && (
-                  <AgentTerminalPane key={activeAgent} tool={activeAgent} />
+                  <AgentChatPane key={activeAgent} tool={activeAgent} />
                 )}
                 {activeTab === "chat" && activeAgent === "logia" && (
                   <>

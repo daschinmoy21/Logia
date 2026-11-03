@@ -4,6 +4,7 @@ import { openAgentWorkspace, installAgentFixture, agentCalls } from './agent-fix
 async function choose(page: Page, name: string) {
   await page.getByRole('button', { name: /^Choose agent\. Current:/ }).click();
   await page.getByRole('menuitemradio', { name: new RegExp(`^${name}( |$)`) }).click();
+  await page.getByRole('button', { name: 'Open agent terminal', exact: true }).click();
 }
 
 async function openPanel(page: Page) {
@@ -84,9 +85,8 @@ test('login launches explicitly without attaching note context, and startup fail
   expect(start.args.options.context).toBeUndefined();
   await expect(page.getByRole('textbox', { name: 'Prompt for Claude Code' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Stop', exact: true }).click();
-  await page.getByRole('button', { name: 'New session', exact: true }).click();
   await page.evaluate(() => { (window as any).__agentFailStart = true; });
-  await page.getByRole('button', { name: 'Start session', exact: true }).click();
+  await page.getByRole('button', { name: 'New session', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('executable could not be started');
   await expect(page.getByRole('button', { name: 'Start session', exact: true })).toBeEnabled();
 });
@@ -119,9 +119,8 @@ test('raw terminal keys reach the CLI and Stop during spawn closes the eventual 
   await expect(page.locator('.xterm-helper-textarea')).toBeAttached();
   await page.getByRole('button', { name: 'Stop', exact: true }).click();
   await expect.poll(async () => (await agentCalls(page)).filter(c => c.command === 'agent_terminal_close').length).toBe(1);
-  await page.getByRole('button', { name: 'New session', exact: true }).click();
   await page.evaluate(() => { (window as any).__agentStartDelay = 25; });
-  await page.getByRole('button', { name: 'Start session', exact: true }).click();
+  await page.getByRole('button', { name: 'New session', exact: true }).click();
   await expect(page.getByRole('textbox', { name: 'Prompt for Pi', exact: true })).toBeVisible();
   const input = page.locator('.xterm-helper-textarea');
   await input.focus();
@@ -162,9 +161,8 @@ test('early channel errors and failed writes close their native processes', asyn
   await page.getByRole('button', { name: 'Start session', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('early channel error');
   await expect.poll(async () => (await agentCalls(page)).filter(c => c.command === 'agent_terminal_close').length).toBe(1);
-  await page.getByRole('button', { name: 'New session', exact: true }).click();
   await page.evaluate(() => { (window as any).__agentEarlyError = false; (window as any).__agentFailWrite = true; });
-  await page.getByRole('button', { name: 'Start session', exact: true }).click();
+  await page.getByRole('button', { name: 'New session', exact: true }).click();
   const composer = page.getByRole('textbox', { name: 'Prompt for OpenCode', exact: true });
   await expect(composer).toBeVisible();
   await composer.fill('hello');
