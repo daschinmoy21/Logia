@@ -1,12 +1,12 @@
 import { useEffect, useMemo, type ReactNode } from 'react';
-import { AlertTriangle, ArrowUpRight, FileText, FilePlus2, Hash, Link2, ListTree, X, type LucideIcon } from 'lucide-react';
+import { AlertTriangle, ArrowUpRight, ChevronRight, FileText, FilePlus2, X } from 'lucide-react';
 import { findWikiLinkCandidates, getBacklinks, getNoteHeadings, getNoteTags, getWikiLinks, notePreview, resolveWikiLink } from '../../lib/workspace';
 import type { Folder, Note } from '../../types/Note';
 import { createNoteFromLink, folderPath, openNote, openPalette, revealBlock } from './actions';
-import { shortcutAria, shortcutText, SHORTCUTS } from './shortcuts';
+import { shortcutAria, SHORTCUTS } from './shortcuts';
+import { IconButton } from '../ui/kit';
 
-const focusRing = 'outline-none focus-visible:ring-2 focus-visible:ring-blue-500/70';
-const rowClass = `flex w-full min-w-0 items-start gap-2 rounded-md px-2 py-1.5 text-left text-[13px] leading-5 text-zinc-300 transition-colors hover:bg-zinc-800/70 hover:text-zinc-100 ${focusRing}`;
+const rowClass = 'flex w-full min-w-0 items-start gap-2 rounded-[5px] px-2 py-1 text-left text-[13px] leading-5 text-zinc-300 hover:bg-white/[0.07] hover:text-zinc-100';
 
 let backlinkCache: { noteId: string; notes: Note[] | null; folders: Folder[] | null; value: Note[] } = {
   noteId: '',
@@ -25,26 +25,23 @@ export function cachedBacklinks(note: Note, notes: Note[], folders: Folder[]): N
 
 function Section({
   id,
-  icon: Icon,
   title,
   count,
   children,
 }: {
   id?: string;
-  icon: LucideIcon;
   title: string;
   count?: number;
   children: ReactNode;
 }) {
   return (
-    <details id={id} open className="group/section border-b border-zinc-900 last:border-b-0">
-      <summary className={`flex cursor-pointer select-none list-none items-center gap-2 px-3 py-2 text-xs font-semibold text-zinc-400 hover:text-zinc-200 [&::-webkit-details-marker]:hidden ${focusRing} focus-visible:ring-inset`}>
-        <Icon size={13} className="text-zinc-500" aria-hidden="true" />
+    <details id={id} open className="group/section">
+      <summary className="flex h-7 cursor-default select-none list-none items-center gap-1 px-3 font-mono text-[11px] text-zinc-500 hover:text-zinc-300 [&::-webkit-details-marker]:hidden">
+        <ChevronRight size={11} aria-hidden="true" className="group-open/section:rotate-90" />
         <span>{title}</span>
-        {count !== undefined && count > 0 && <span className="tabular-nums font-normal text-zinc-500">{count}</span>}
-        <span aria-hidden="true" className="ml-auto text-zinc-600 transition-transform group-open/section:rotate-90 motion-reduce:transition-none">›</span>
+        {count !== undefined && count > 0 && <span className="ml-auto tabular-nums font-normal text-zinc-500">{count}</span>}
       </summary>
-      <div className="px-1.5 pb-2.5">{children}</div>
+      <div className="px-1.5 pb-3">{children}</div>
     </details>
   );
 }
@@ -66,7 +63,7 @@ function NoteLinkRow({ note, folders, heading, onNavigate }: { note: Note; folde
         openNote(note, heading);
       }}
     >
-      <FileText size={13} className="mt-1 flex-shrink-0 text-zinc-600" aria-hidden="true" />
+      <FileText size={13} className="mt-1 flex-shrink-0 text-zinc-500" aria-hidden="true" />
       <span className="min-w-0 flex-1">
         <span className="block truncate">{noteTitle(note)}</span>
         {path && <span className="block truncate text-xs text-zinc-500">{path}</span>}
@@ -102,7 +99,7 @@ function OutgoingLink({
             openNote(resolved, link.heading);
           }}
         >
-          <ArrowUpRight size={13} className="mt-1 flex-shrink-0 text-blue-400/80" aria-hidden="true" />
+          <ArrowUpRight size={13} className="mt-1 flex-shrink-0 text-zinc-500" aria-hidden="true" />
           <span className="min-w-0 flex-1">
             <span className="block truncate">{label}</span>
             {(headingLabel || label !== noteTitle(resolved)) && (
@@ -147,7 +144,7 @@ function OutgoingLink({
           createNoteFromLink(link.target);
         }}
         aria-label={`Create note ${link.target}`}
-        className={`inline-flex flex-shrink-0 items-center gap-1 rounded border border-zinc-800 px-1.5 py-0.5 text-xs text-zinc-300 transition-colors hover:border-zinc-700 hover:bg-zinc-800 ${focusRing}`}
+        className={`inline-flex flex-shrink-0 items-center gap-1 rounded border border-zinc-800 px-1.5 py-0.5 text-xs text-zinc-300 hover:border-zinc-700 hover:bg-zinc-800`}
       >
         <FilePlus2 size={12} aria-hidden="true" />
         Create
@@ -196,28 +193,21 @@ export function NoteContextPanel({
     <aside
       data-note-context-panel
       aria-label="Note context"
-      className={`flex h-full flex-shrink-0 flex-col border-l bg-zinc-950 ${
-        compact
-          ? 'absolute right-0 top-0 z-30 w-[min(20rem,88%)] border-zinc-800 shadow-[-16px_0_40px_-16px_rgba(0,0,0,0.8)]'
-          : 'w-64 border-zinc-900'
+      className={`flex h-full flex-shrink-0 flex-col border-l border-zinc-800 bg-zinc-950 ${
+        compact ? 'absolute right-0 top-0 z-30 w-[min(20rem,88%)] shadow-2xl shadow-black/60' : 'w-60'
       }`}
     >
-      <div className="flex h-11 flex-shrink-0 items-center justify-between border-b border-zinc-900 pl-3 pr-1.5">
-        <h2 className="text-xs font-semibold text-zinc-300">Note context</h2>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close note context"
-          aria-keyshortcuts={shortcutAria(SHORTCUTS.contextPanel)}
-          title={`Close (${shortcutText(SHORTCUTS.contextPanel)})`}
-          className={`rounded-md p-1 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-200 ${focusRing}`}
-        >
-          <X size={15} />
-        </button>
-      </div>
+      {compact && (
+        <div className="flex h-9 flex-shrink-0 items-center justify-between pl-3 pr-1.5">
+          <h2 className="text-xs font-medium text-zinc-300">Note context</h2>
+          <IconButton label="Close note context" hint="Close" shortcut={SHORTCUTS.contextPanel} aria-keyshortcuts={shortcutAria(SHORTCUTS.contextPanel)} onClick={onClose}>
+            <X size={14} />
+          </IconButton>
+        </div>
+      )}
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <Section icon={ListTree} title="Outline" count={headings.length}>
+      <div className={`min-h-0 flex-1 overflow-y-auto ${compact ? '' : 'pt-1.5'}`}>
+        <Section title="Outline" count={headings.length}>
           {headings.length === 0 ? (
             <Hint>Headings you add will appear here so you can jump between them.</Hint>
           ) : (
@@ -233,7 +223,7 @@ export function NoteContextPanel({
                       }}
                       style={{ paddingLeft: `${0.5 + (heading.level - minLevel) * 0.75}rem` }}
                       title={heading.text}
-                      className={`block w-full truncate rounded-md py-1 pr-2 text-left text-[13px] text-zinc-300 transition-colors hover:bg-zinc-800/70 hover:text-zinc-100 ${focusRing}`}
+                      className={`block w-full truncate rounded-[5px] py-1 pr-2 text-left text-[13px] text-zinc-400 hover:bg-white/[0.07] hover:text-zinc-100`}
                     >
                       {heading.text}
                     </button>
@@ -244,7 +234,7 @@ export function NoteContextPanel({
           )}
         </Section>
 
-        <Section icon={Hash} title="Tags" count={tags.length}>
+        <Section title="Tags" count={tags.length}>
           {tags.length === 0 ? (
             <Hint>Type #topic in this note to tag it.</Hint>
           ) : (
@@ -255,7 +245,7 @@ export function NoteContextPanel({
                   type="button"
                   onClick={() => openPalette('notes', `#${tag}`)}
                   title={`Find notes tagged #${tag}`}
-                  className={`max-w-full truncate rounded-full border border-zinc-800 px-2 py-px text-xs text-blue-200/80 transition-colors hover:border-zinc-700 hover:bg-zinc-800 hover:text-blue-100 ${focusRing}`}
+                  className={`max-w-full truncate rounded-[5px] bg-white/[0.06] px-1.5 py-0.5 text-xs text-zinc-300 hover:bg-white/10 hover:text-zinc-100`}
                 >
                   #{tag}
                 </button>
@@ -264,7 +254,7 @@ export function NoteContextPanel({
           )}
         </Section>
 
-        <Section icon={ArrowUpRight} title="Links" count={links.length}>
+        <Section title="Links" count={links.length}>
           {links.length === 0 ? (
             <Hint>Type [[Note title]] to link to another note. Links to notes that don't exist yet can be created here.</Hint>
           ) : (
@@ -282,7 +272,7 @@ export function NoteContextPanel({
           )}
         </Section>
 
-        <Section id="note-context-backlinks" icon={Link2} title="Backlinks" count={backlinks.length}>
+        <Section id="note-context-backlinks" title="Backlinks" count={backlinks.length}>
           {backlinks.length === 0 ? (
             <Hint>Notes that link here with [[{noteTitle(note)}]] will appear here.</Hint>
           ) : (
@@ -299,7 +289,7 @@ export function NoteContextPanel({
                         openNote(source);
                       }}
                     >
-                      <FileText size={13} className="mt-1 flex-shrink-0 text-zinc-600" aria-hidden="true" />
+                      <FileText size={13} className="mt-1 flex-shrink-0 text-zinc-500" aria-hidden="true" />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate">{noteTitle(source)}</span>
                         {preview && <span className="line-clamp-2 block text-xs leading-4 text-zinc-500">{preview}</span>}

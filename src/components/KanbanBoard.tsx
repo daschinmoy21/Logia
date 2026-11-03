@@ -14,7 +14,6 @@ import {
   ListTodo,
   Clock,
   CheckCircle,
-  Layout,
   X,
   MoreHorizontal,
 } from "lucide-react";
@@ -40,7 +39,6 @@ export default function KanbanBoardContainer({
   const [kanbanData, setKanbanData] = useState<KanbanTask[]>([]);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [editingTaskName, setEditingTaskName] = useState("");
-  const [activeTab, setActiveTab] = useState<"kanban" | "table">("kanban");
   const [completingTaskId, setCompletingTaskId] = useState<string | null>(null);
   const [fadingTaskId, setFadingTaskId] = useState<string | null>(null);
 
@@ -157,12 +155,8 @@ export default function KanbanBoardContainer({
 
   const getCardBackground = (columnId: string) => {
     switch (columnId) {
-      case "in-progress":
-        return "bg-gradient-to-br from-zinc-950 to-blue-900/40 border-blue-900/30";
-      case "done":
-        return "bg-gradient-to-br from-zinc-950 to-green-900/40 border-green-900/30";
       default:
-        return "bg-zinc-950 border-zinc-800/60";
+        return "bg-zinc-950 border-zinc-800";
     }
   };
 
@@ -170,60 +164,42 @@ export default function KanbanBoardContainer({
 
   return (
     <Dialog open={isOpen} onClose={onClose} className="relative z-[99999]">
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" />
+      <div className="fixed inset-0 bg-black/50" />
       <div
         className="fixed inset-0 flex items-center justify-center p-4"
         onClick={onClose}
       >
         <DialogPanel
-          className="bg-zinc-900/70 backdrop-blur-xl border border-zinc-500/50 rounded-xl w-full max-w-6xl h-[85vh] overflow-hidden flex flex-col shadow-2xl"
+          className="flex h-[85dvh] w-full max-w-6xl flex-col overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950 shadow-2xl shadow-black/60"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header Section with Tabs */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-200/20">
-            <div className="flex items-center space-x-6">
-              <div className="flex items-center space-x-1">
-                <button
-                  onClick={() => setActiveTab("kanban")}
-                  className={`flex items-center px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${activeTab === "kanban"
-                      ? "bg-zinc-800 text-zinc-100"
-                      : "text-zinc-500 hover:text-zinc-300"
-                    }`}
-                >
-                  <Layout size={16} className="mr-2" />
-                  Kanban View
-                </button>
-              </div>
-            </div>
+          <div className="flex h-11 flex-shrink-0 items-center justify-between border-b border-zinc-800 pl-4 pr-2">
+            <h2 className="text-[13px] font-medium text-zinc-100">Tasks</h2>
 
             {/* Close Button */}
             <button
               onClick={onClose}
-              className="text-zinc-500 hover:text-zinc-300 transition-colors p-2 hover:bg-zinc-800 rounded-md"
+              aria-label="Close tasks"
+              className="flex size-7 items-center justify-center rounded-md text-zinc-400 hover:bg-white/[0.07] hover:text-zinc-100"
             >
-              <X size={20} />
+              <X size={15} />
             </button>
           </div>
 
           {/* Kanban Content */}
-          <div className="flex-1 overflow-x-auto p-6">
-            {activeTab === "kanban" ? (
-              <div className="flex h-full gap-4">
+          <div className="flex-1 overflow-x-auto p-3">
+              <div className="flex h-full gap-2">
                 {kanbanColumns.map((column) => (
                   <div
                     key={column.id}
-                    className="flex-1 min-w-[300px] flex flex-col h-full rounded-lg bg-zinc-900/40 border border-blue-300/10"
+                    className="flex h-full min-w-[260px] flex-1 flex-col rounded-lg bg-zinc-925"
                   >
                     {/* Column Header */}
-                    <div className="flex items-center justify-between p-3 mb-2">
+                    <div className="flex items-center justify-between px-2.5 py-2">
                       <div className="flex items-center gap-2">
                         <div
-                          className={`px-2 py-0.5 rounded text-xs font-medium flex items-center ${column.id === "todo"
-                              ? "bg-zinc-800 text-zinc-400"
-                              : column.id === "in-progress"
-                                ? "bg-blue-900/30 text-blue-400"
-                                : "bg-green-900/30 text-green-400"
-                            }`}
+                          className="flex items-center text-xs font-medium text-zinc-300"
                         >
                           {column.id === "todo" && (
                             <ListTodo size={12} className="mr-1.5" />
@@ -236,7 +212,7 @@ export default function KanbanBoardContainer({
                           )}
                           {column.name}
                         </div>
-                        <span className="text-zinc-600 text-xs font-medium px-1.5 bg-zinc-800/50 rounded-sm">
+                        <span className="text-xs tabular-nums text-zinc-500">
                           {getColumnTaskCount(column.id)}
                         </span>
 
@@ -298,7 +274,7 @@ export default function KanbanBoardContainer({
                                     {/* Action Menu (Left) */}
                                     <div className="pt-0.5">
                                       <Menu as="div" className="relative">
-                                        <MenuButton className="flex items-center justify-center p-1 rounded hover:bg-zinc-800 text-zinc-600 hover:text-zinc-300 transition-colors">
+                                        <MenuButton className="flex items-center justify-center p-1 rounded hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 transition-colors">
                                           <MoreHorizontal size={14} />
                                         </MenuButton>
                                         <Transition
@@ -396,7 +372,7 @@ export default function KanbanBoardContainer({
                                     {/* Content */}
                                     <div className="flex-1 min-w-0">
                                       <p
-                                        className={`m-0 font-medium text-sm cursor-pointer text-zinc-300 line-clamp-2 transition-all duration-300 ${completingTaskId === task.id || task.column === "done" ? "line-through text-zinc-500 opacity-60" : ""}`}
+                                        className={`m-0 cursor-default text-[13px] text-zinc-200 line-clamp-2 transition-all duration-300 ${completingTaskId === task.id || task.column === "done" ? "line-through text-zinc-500 opacity-60" : ""}`}
                                         onDoubleClick={() =>
                                           startEditingTask(task.id, task.name)
                                         }
@@ -404,29 +380,7 @@ export default function KanbanBoardContainer({
                                         {task.name}
                                       </p>
 
-                                      <div className="flex items-center mt-2.5">
-                                        <div className="w-5 h-5 flex items-center justify-center rounded bg-zinc-900 border border-zinc-800 text-zinc-600 mr-2">
-                                          <span className="text-[10px] font-serif">
-                                            T
-                                          </span>
-                                        </div>
-
-                                        <div
-                                          className={`px-1.5 py-0.5 rounded text-[10px] font-medium border ${task.column === "todo"
-                                              ? "border-zinc-800 text-zinc-500"
-                                              : task.column === "in-progress"
-                                                ? "border-blue-900/30 text-blue-500 bg-blue-900/10"
-                                                : "border-green-900/30 text-green-500 bg-green-900/10"
-                                            }`}
-                                        >
-                                          {task.column === "todo"
-                                            ? "Todo"
-                                            : task.column === "in-progress"
-                                              ? "Doing"
-                                              : "Done"}
-                                        </div>
-                                      </div>
-                                    </div>
+                                                                          </div>
                                   </div>
                                 )}
                               </div>
@@ -437,11 +391,6 @@ export default function KanbanBoardContainer({
                   </div>
                 ))}
               </div>
-            ) : (
-              <div className="flex items-center justify-center h-full text-zinc-500">
-                Table view coming soon
-              </div>
-            )}
           </div>
         </DialogPanel>
       </div>

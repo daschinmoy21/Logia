@@ -91,11 +91,11 @@ export function AgentChooser({ selected, title, onSelect }: AgentChooserProps) {
     e.stopPropagation();
   };
 
-  const itemClass = 'flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors focus:outline-none';
+  const itemClass = 'flex h-7 w-full items-center gap-2 rounded-[5px] px-2 text-left text-[13px] focus:outline-none';
   const itemTone = (active: boolean) =>
     active
-      ? 'bg-zinc-800/70 text-zinc-100 focus:bg-zinc-700/70'
-      : 'text-zinc-300 hover:bg-zinc-800/60 hover:text-zinc-100 focus:bg-zinc-800/60 focus:text-zinc-100';
+      ? 'text-zinc-100 hover:bg-white/[0.07] focus:bg-white/[0.07]'
+      : 'text-zinc-200 hover:bg-white/[0.07] focus:bg-white/[0.07]';
   const selectedTool = AGENT_TOOLS.find((tool) => tool.id === selected);
 
   return (
@@ -107,15 +107,15 @@ export function AgentChooser({ selected, title, onSelect }: AgentChooserProps) {
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={`Choose agent. Current: ${selectedTool?.label ?? 'Logia'}, ${title}`}
-        className="flex w-full min-w-0 items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-sm text-zinc-200 transition-colors hover:bg-zinc-900"
+        className="flex h-7 w-full min-w-0 items-center gap-1.5 rounded-md px-1.5 text-left text-xs font-medium text-zinc-200 hover:bg-white/[0.07]"
       >
         {selectedTool ? (
           <ProviderIcon providerId={selectedTool.id} size={16} />
         ) : (
-          <Sparkles size={14} className="flex-shrink-0 text-blue-400" />
+          <Sparkles size={14} className="flex-shrink-0 text-zinc-400" />
         )}
         <span className="truncate">{title}</span>
-        <ChevronDown size={13} className={`flex-shrink-0 text-zinc-500 transition-transform ${open ? 'rotate-180' : ''}`} />
+        <ChevronDown size={12} className="flex-shrink-0 text-zinc-500" />
       </button>
 
       {open && (
@@ -124,7 +124,7 @@ export function AgentChooser({ selected, title, onSelect }: AgentChooserProps) {
           role="menu"
           aria-label="Agents"
           onKeyDown={onMenuKeyDown}
-          className="absolute left-0 top-full z-50 mt-1 w-64 rounded-lg border border-zinc-800 bg-zinc-900/95 py-1 shadow-2xl backdrop-blur-xl"
+          className="menu-surface absolute left-0 top-full z-50 mt-1 w-64 rounded-lg border border-zinc-800 bg-zinc-900 p-1 shadow-xl shadow-black/50"
         >
           <button
             type="button"
@@ -133,13 +133,13 @@ export function AgentChooser({ selected, title, onSelect }: AgentChooserProps) {
             onClick={() => choose('logia')}
             className={`${itemClass} ${itemTone(selected === 'logia')}`}
           >
-            <Sparkles size={14} className="flex-shrink-0 text-blue-400" />
+            <Sparkles size={14} className="flex-shrink-0 text-zinc-400" />
             <span className="flex-1 truncate">Logia</span>
-            {selected === 'logia' && <Check size={13} className="text-blue-400" />}
+            {selected === 'logia' && <Check size={13} className="text-zinc-300" />}
           </button>
 
-          <div className="my-1 h-px bg-zinc-800" />
-          <p className="px-3 pt-1 pb-1 text-[11px] font-medium text-zinc-500">External agents</p>
+          <div className="-mx-1 my-1 h-px bg-zinc-800" />
+          <p className="px-2 pb-1 pt-1 text-[11px] font-medium text-zinc-500">External agents</p>
           {AGENT_TOOLS.map((tool) => {
             const live = isLiveSession(sessions[tool.id]);
             const availability = agentAvailability(cliStatus[tool.id], detecting);
@@ -154,15 +154,15 @@ export function AgentChooser({ selected, title, onSelect }: AgentChooserProps) {
               >
                 <ProviderIcon providerId={tool.id} size={16} />
                 <span className="flex-1 truncate">{tool.label}</span>
-                <span className={`flex-shrink-0 text-[11px] ${live ? 'text-blue-300' : AVAILABILITY_TONE[availability]}`}>
+                <span className={`flex-shrink-0 text-[11px] ${live ? 'text-zinc-200' : AVAILABILITY_TONE[availability]}`}>
                   {live ? 'Running' : AVAILABILITY_LABELS[availability]}
                 </span>
-                {selected === tool.id && <Check size={13} className="flex-shrink-0 text-blue-400" />}
+                {selected === tool.id && <Check size={13} className="flex-shrink-0 text-zinc-300" />}
               </button>
             );
           })}
 
-          <div className="my-1 h-px bg-zinc-800" />
+          <div className="-mx-1 my-1 h-px bg-zinc-800" />
           <button
             type="button"
             role="menuitem"

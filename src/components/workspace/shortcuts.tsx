@@ -10,6 +10,7 @@ export const SHORTCUTS = {
   toggleAi: ['Mod', 'Shift', 'L'],
   contextPanel: ['Mod', '.'],
   sidebar: ['Mod', '\\'],
+  closeTab: ['Mod', 'W'],
 } satisfies Record<string, Shortcut>;
 
 export function isMac(): boolean {
@@ -47,7 +48,7 @@ export function Kbd({ keys, className = '' }: { keys: Shortcut; className?: stri
       {keys.map((key) => (
         <kbd
           key={key}
-          className="rounded border border-zinc-700/80 bg-zinc-800/70 px-1 py-px font-mono text-[10px] leading-4 text-zinc-400"
+          className="min-w-4 rounded-[4px] bg-white/[0.07] px-1 text-center font-mono text-[10px] leading-4 text-zinc-400"
         >
           {keyLabel(key)}
         </kbd>

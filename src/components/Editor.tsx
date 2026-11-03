@@ -30,7 +30,7 @@ function Editor() {
       <div className="h-full w-full">
         <Suspense fallback={
           <div className="h-full w-full flex items-center justify-center bg-zinc-950">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+            <div className="size-5 animate-spin rounded-full border-2 border-zinc-700 border-t-zinc-300"></div>
           </div>
         }>
           <Canvas />

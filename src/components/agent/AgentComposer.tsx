@@ -63,34 +63,32 @@ export function AgentComposer({
   const normal = vimEnabled && vim.mode === 'normal';
 
   return (
-    <div className="shrink-0 bg-zinc-950 px-3 pb-3 pt-2" data-vim-escape-to-editor>
+    <div className="shrink-0 px-2.5 pb-2 pt-1.5" data-vim-escape-to-editor>
       <div
-        className={`rounded-2xl border bg-zinc-900/80 shadow-lg shadow-black/10 transition-colors focus-within:border-zinc-600 ${
-          busy ? 'border-red-500/40' : 'border-zinc-800'
-        }`}
+        className="rounded-[10px] border border-zinc-800 bg-zinc-925 focus-within:border-zinc-700"
       >
         <textarea
           ref={textareaRef}
           autoFocus={autoFocus}
           data-agent-composer
           value={draft}
-          rows={3}
+          rows={2}
           aria-label={label}
           placeholder={placeholder}
           spellCheck={false}
           onChange={(e) => setDraft(e.target.value)}
-          className={`block w-full resize-none bg-transparent px-4 pt-4 pb-3 text-[13px] leading-6 text-zinc-100 placeholder:text-zinc-500 focus:outline-none ${
+          className={`block w-full resize-none bg-transparent px-3 pb-1 pt-2.5 text-[13px] leading-5 text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus-visible:outline-none ${
             normal ? 'caret-amber-300' : 'caret-zinc-100'
           }`}
           {...vim.textareaProps}
         />
-        <div className="flex items-end justify-between gap-2 px-2.5 pb-2.5">
+        <div className="flex items-end justify-between gap-2 px-1.5 pb-1.5">
           <div className="flex min-w-0 flex-wrap items-center gap-1">{leading}</div>
           {busy && onStop ? (
             <button
               type="button"
               onClick={onStop}
-              className="flex size-8 flex-shrink-0 items-center justify-center rounded-full bg-red-500/20 text-red-300 transition-colors hover:bg-red-500/30"
+              className="flex size-7 flex-shrink-0 items-center justify-center rounded-md bg-blue-500 text-zinc-925 hover:bg-blue-400"
               title="Stop generating"
               aria-label="Stop generating"
             >
@@ -101,7 +99,7 @@ export function AgentComposer({
               type="button"
               onClick={submit}
               disabled={busy || !canSend || !hasText}
-              className="flex size-8 flex-shrink-0 items-center justify-center rounded-full bg-indigo-500 text-white transition-colors hover:bg-indigo-400 disabled:bg-zinc-800 disabled:text-zinc-500"
+              className="flex size-7 flex-shrink-0 items-center justify-center rounded-md bg-blue-500 text-zinc-925 hover:bg-blue-400 disabled:bg-white/[0.06] disabled:text-zinc-600"
               title={sendLabel}
               aria-label={sendLabel}
             >
@@ -110,9 +108,9 @@ export function AgentComposer({
           )}
         </div>
       </div>
-      <div className="mt-1 flex items-center justify-between gap-2 px-1 font-mono text-[10px] text-zinc-500">
+      <div className="mt-1 flex items-center justify-between gap-2 px-1 text-[10px] text-zinc-500">
         {vimEnabled ? (
-          <span className="flex min-w-0 items-center gap-2">
+          <span className="flex min-w-0 items-center gap-2 font-mono">
             <span
               role="status"
               data-testid="composer-vim-mode"
@@ -133,7 +131,7 @@ export function AgentComposer({
           onClick={() => setComposerVim(!vimEnabled)}
           aria-pressed={vimEnabled}
           title={vimEnabled ? 'Turn off Vim keys in this composer' : 'Use Vim keys in this composer'}
-          className={`flex-shrink-0 rounded px-1.5 py-0.5 transition-colors hover:bg-zinc-900 hover:text-zinc-200 ${
+          className={`flex-shrink-0 rounded px-1 hover:text-zinc-200 ${
             vimEnabled ? 'text-blue-300' : 'text-zinc-500'
           }`}
         >

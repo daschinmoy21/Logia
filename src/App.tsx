@@ -1,12 +1,11 @@
 import Editor from "./components/Editor.tsx";
-import Header from "./components/Header.tsx";
 import "./App.css";
 import { Sidebar } from "./components/Sidebar.tsx";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
+import { Tooltip } from "radix-ui";
 import useUiStore from "./store/UiStore.ts";
 import { CommandPalette } from "./components/CommandPalette.tsx";
-import Footer from "./components/Footer.tsx";
 import AiSidebar from "./components/AiSidebar.tsx";
 import { Settings } from "./components/Settings.tsx";
 import { VimController } from "./components/vim/VimController.tsx";
@@ -16,27 +15,33 @@ import { useSettingsStore } from "./store/settingsStore";
 import { useVimStore } from "./store/vimStore";
 import { Toaster } from "react-hot-toast";
 import PreflightModal from "./components/PrereflightModal.tsx";
-import { countWordsInNoteContent } from "./lib/note-utils";
 import { prefersReducedMotion } from "./lib/utils";
-import { createTextNote, openPalette, openToday } from "./components/workspace/actions";
+import { closeTabs, createTextNote, cycleTab, openPalette, openToday } from "./components/workspace/actions";
 import { useWorkspaceStore } from "./components/workspace/workspaceStore";
 import { hasMod, isBlockingModalOpen } from "./components/workspace/shortcuts";
+import { TabBar } from "./components/workspace/TabBar";
+import { StatusBar } from "./components/workspace/StatusBar";
+import { WorkspaceMenus } from "./components/workspace/WorkspaceMenus";
 
 import { usePaneNavigation } from "./hooks/usePaneNavigation";
 import { useUiScale } from "./hooks/useUiScale";
+import { useEdgeReveal } from "./hooks/useEdgeReveal";
 
 import { AnimatePresence, motion } from "framer-motion";
 
-/** How long the pointer must rest on the left edge before the sidebar opens. */
-const REVEAL_DELAY_MS = 70;
-/** Grace period after the pointer leaves before the sidebar hides. */
-const HIDE_DELAY_MS = 260;
 /** Under this width there's no room to pin the sidebar, and no hover to reveal it. */
 const NARROW_QUERY = "(max-width: 767px)";
 
+/** The panel stays while it's being used: typing in it, or with one of its menus open. */
+const aiPanelIdle = () => {
+  const panel = document.querySelector('[data-workspace-pane="ai"]');
+  return !panel?.contains(document.activeElement) && !document.querySelector('[role="menu"]');
+};
+
 function App() {
   useUiScale();
-  const { isAiSidebarOpen, setIsAiSidebarOpen } = useUiStore();
+  const isAiSidebarOpen = useUiStore((s) => s.isAiSidebarOpen);
+  const setIsAiSidebarOpen = useUiStore((s) => s.setIsAiSidebarOpen);
   const sidebarFloatingSetting = useSettingsStore((s) => s.sidebarFloating);
   const [isNarrow, setIsNarrow] = useState(() => window.matchMedia(NARROW_QUERY).matches);
   const isSidebarFloating = sidebarFloatingSetting || isNarrow;
@@ -50,32 +55,17 @@ function App() {
       !!s.deleteConfirmFolderId ||
       !!s.folderRenameRequest,
   );
-  const { currentNote, saveTimeout, isSaving } = useNotesStore();
-  const currentNoteId = currentNote?.id;
+  const currentNoteId = useNotesStore((s) => s.currentNote?.id);
   const workspaceReady = useWorkspaceStore((s) => s.ready);
 
-  const wordCount = currentNote
-    ? countWordsInNoteContent(currentNote.content)
-    : 0;
-
-  const isSaved = !saveTimeout && !isSaving;
-
-  const [hoverOpen, setHoverOpen] = useState(false);
+  const sidebarReveal = useEdgeReveal();
+  const { open: hoverOpen, setOpen: setHoverOpen, clearTimers } = sidebarReveal;
+  const aiReveal = useEdgeReveal(aiPanelIdle);
   const [treeFocused, setTreeFocused] = useState(false);
   usePaneNavigation(() => setHoverOpen(true), () => setHoverOpen(false));
-  const [edgeHot, setEdgeHot] = useState(false);
-  const revealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reduceMotion = prefersReducedMotion();
 
   const showFloatingSidebar = isSidebarFloating && (hoverOpen || explorerActive || sidebarBusy || treeFocused);
-
-  const clearTimers = useCallback(() => {
-    if (revealTimerRef.current) clearTimeout(revealTimerRef.current);
-    if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
-    revealTimerRef.current = null;
-    hideTimerRef.current = null;
-  }, []);
 
   // Reset hover state when pinning the sidebar again
   useEffect(() => {
@@ -83,9 +73,15 @@ function App() {
       setHoverOpen(false);
       clearTimers();
     }
-  }, [isSidebarFloating, clearTimers]);
+  }, [isSidebarFloating, clearTimers, setHoverOpen]);
 
-  useEffect(() => clearTimers, [clearTimers]);
+  // Pinning replaces the hover panel; there's nothing left to hide.
+  useEffect(() => {
+    if (isAiSidebarOpen) {
+      aiReveal.setOpen(false);
+      aiReveal.clearTimers();
+    }
+  }, [isAiSidebarOpen, aiReveal.setOpen, aiReveal.clearTimers]);
 
   useEffect(() => {
     const query = window.matchMedia(NARROW_QUERY);
@@ -106,7 +102,7 @@ function App() {
         useUiStore.getState().editor?.focus();
       }
     }
-  }, [isNarrow, currentNoteId]);
+  }, [isNarrow, currentNoteId, setHoverOpen]);
 
   // Load here, not in the sidebar: an auto-hidden sidebar isn't mounted, and the
   // home view needs to know what exists.
@@ -138,7 +134,13 @@ function App() {
       else if (hasMod(event) && event.shiftKey && !event.altKey && key === "p") action = () => openPalette("commands");
       else if (plainMod && key === "n") action = () => createTextNote();
       else if (hasMod(event) && event.shiftKey && !event.altKey && key === "d") action = openToday;
-      else if (plainMod && key === ".") {
+      else if (event.ctrlKey && !event.altKey && event.key === "Tab") action = () => cycleTab(event.shiftKey ? -1 : 1);
+      else if (plainMod && key === "w") {
+        action = () => {
+          const id = useNotesStore.getState().currentNote?.id;
+          if (id) void closeTabs([id]);
+        };
+      } else if (plainMod && key === ".") {
         action = () => {
           // Only a text note has a context panel to toggle.
           const note = useNotesStore.getState().currentNote;
@@ -179,162 +181,117 @@ function App() {
     return () => { disposed = true; stop?.(); };
   }, [workspaceReady]);
 
-  const onEdgeEnter = () => {
-    setEdgeHot(true);
-    if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
-    hideTimerRef.current = null;
-    if (hoverOpen || revealTimerRef.current) return;
-    revealTimerRef.current = setTimeout(() => {
-      revealTimerRef.current = null;
-      setHoverOpen(true);
-    }, REVEAL_DELAY_MS);
-  };
-
-  const onEdgeLeave = () => {
-    setEdgeHot(false);
-    // Pointer only brushed the edge: cancel the pending reveal.
-    if (revealTimerRef.current) {
-      clearTimeout(revealTimerRef.current);
-      revealTimerRef.current = null;
-    }
-    // If the panel opened under a still pointer and the pointer then flicked
-    // away, the panel never saw mouseenter/leave — hide it unless it's entered.
-    if (hoverOpen) scheduleHide();
-  };
-
-  const keepOpen = () => {
-    if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
-    hideTimerRef.current = null;
-    setHoverOpen(true);
-  };
-
-  const scheduleHide = () => {
-    if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
-    hideTimerRef.current = setTimeout(() => {
-      setHoverOpen(false);
-      hideTimerRef.current = null;
-    }, HIDE_DELAY_MS);
-  };
-
-  const panelTransition = reduceMotion
-    ? { duration: 0.01 }
-    : { type: "spring" as const, stiffness: 420, damping: 38, mass: 0.8 };
-
   return (
-    <div className="bg-zinc-950 flex flex-col h-full overflow-hidden">
-      <PreflightModal />
-      <Settings />
-      <CommandPalette />
-      <VimController />
-      <Header
-        onToggleSidebar={isNarrow ? () => setHoverOpen((open) => !open) : undefined}
-        sidebarOpen={showFloatingSidebar}
-      />
+    <Tooltip.Provider delayDuration={400} skipDelayDuration={250}>
+      <div className="flex h-full flex-col overflow-hidden bg-zinc-950">
+        <PreflightModal />
+        <Settings />
+        <CommandPalette />
+        <VimController />
+        <WorkspaceMenus />
 
-      <div className="flex flex-1 overflow-hidden relative">
-        <AnimatePresence initial={false}>
+        <div className="relative flex min-h-0 flex-1 overflow-hidden">
           {!isSidebarFloating && (
-            <motion.div
-              key="pinned-sidebar"
-              data-workspace-pane="tree"
-              className="h-full flex-shrink-0 overflow-hidden"
-              initial={reduceMotion ? false : { opacity: 0, x: -12 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={reduceMotion ? undefined : { opacity: 0, x: -12 }}
-              transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-            >
+            <div data-workspace-pane="tree" className="h-full flex-shrink-0 overflow-clip">
               <Sidebar />
-            </motion.div>
+            </div>
           )}
-        </AnimatePresence>
 
-        {isSidebarFloating && (
-          <>
-            {isNarrow && showFloatingSidebar && (
+          {isSidebarFloating && (
+            <>
+              {isNarrow && showFloatingSidebar && (
+                <div
+                  className="absolute inset-0 z-[850] bg-black/50"
+                  onClick={() => setHoverOpen(false)}
+                  aria-hidden="true"
+                />
+              )}
+              {/* Invisible hot zone on the left edge */}
               <div
-                className="absolute inset-0 z-[850] bg-black/50"
-                onClick={() => setHoverOpen(false)}
+                className="absolute bottom-0 left-0 top-0 z-40 w-2"
+                onMouseEnter={sidebarReveal.onEdgeEnter}
+                onMouseLeave={sidebarReveal.onEdgeLeave}
+                onClick={() => setHoverOpen(true)}
                 aria-hidden="true"
               />
-            )}
-            {/* Invisible hot zone on the left edge, with a soft glow hint */}
-            <div
-              className="absolute left-0 top-0 bottom-0 w-2.5 z-40"
-              onMouseEnter={onEdgeEnter}
-              onMouseLeave={onEdgeLeave}
-              onClick={() => setHoverOpen(true)}
-              aria-hidden="true"
-            >
-              <div
-                className={`absolute left-0 top-1/2 -translate-y-1/2 h-24 w-[3px] rounded-r-full bg-blue-400/70 shadow-[0_0_14px_2px_rgba(96,165,250,0.35)] transition-all duration-200 ${
-                  edgeHot && !showFloatingSidebar ? "opacity-100 scale-y-100" : "opacity-0 scale-y-50"
-                }`}
+
+              <AnimatePresence>
+                {showFloatingSidebar && (
+                  <motion.div
+                    key="floating-sidebar"
+                    data-workspace-pane="tree"
+                    onFocusCapture={() => setTreeFocused(true)}
+                    onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setTreeFocused(false); }}
+                    initial={reduceMotion ? false : { x: -24, opacity: 0 }}
+                    animate={{ x: 0, opacity: 1 }}
+                    exit={reduceMotion ? undefined : { x: -24, opacity: 0 }}
+                    transition={{ duration: 0.1, ease: "easeOut" }}
+                    className="floating-sidebar absolute bottom-1.5 left-1.5 top-1.5 z-[900] overflow-clip rounded-lg border border-zinc-800 shadow-2xl shadow-black/60"
+                    onMouseEnter={sidebarReveal.keepOpen}
+                    onMouseLeave={sidebarReveal.scheduleHide}
+                  >
+                    <Sidebar />
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </>
+          )}
+
+          <div className="flex min-w-0 flex-1 flex-col">
+            <TabBar
+              onToggleSidebar={isNarrow ? () => setHoverOpen((open) => !open) : undefined}
+              sidebarOpen={showFloatingSidebar}
+            />
+            <div className="relative flex min-h-0 flex-1 overflow-hidden">
+              <div className="min-w-0 flex-1 overflow-hidden" data-workspace-pane="editor" tabIndex={-1}>
+                <Editor />
+              </div>
+              {!isAiSidebarOpen && !isNarrow && (
+                <div
+                  className="absolute bottom-0 right-0 top-0 z-40 w-1"
+                  // A held button means a scrollbar drag that ran into the edge.
+                  onMouseEnter={(event) => { if (event.buttons === 0) aiReveal.onEdgeEnter(); }}
+                  onMouseLeave={aiReveal.onEdgeLeave}
+                  aria-hidden="true"
+                />
+              )}
+              <AiSidebar
+                isOpen={isAiSidebarOpen || aiReveal.open}
+                peek={!isAiSidebarOpen && aiReveal.open && !isNarrow}
+                onPeekEnter={aiReveal.keepOpen}
+                onPeekLeave={aiReveal.scheduleHide}
+                onClose={() => {
+                  setIsAiSidebarOpen(false);
+                  aiReveal.clearTimers();
+                  aiReveal.setOpen(false);
+                }}
               />
             </div>
-
-            <AnimatePresence>
-              {showFloatingSidebar && (
-                <motion.div
-                  key="floating-sidebar"
-                  data-workspace-pane="tree"
-                  onFocusCapture={() => setTreeFocused(true)}
-                  onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setTreeFocused(false); }}
-                  initial={reduceMotion ? false : { x: "-104%", opacity: 0.6 }}
-                  animate={{ x: 0, opacity: 1 }}
-                  exit={reduceMotion ? undefined : { x: "-104%", opacity: 0.6 }}
-                  transition={panelTransition}
-                  className="floating-sidebar absolute left-1.5 top-1.5 bottom-1.5 z-[900] rounded-xl overflow-hidden border border-zinc-800/80 shadow-[0_24px_60px_-12px_rgba(0,0,0,0.75)]"
-                  onMouseEnter={keepOpen}
-                  onMouseLeave={scheduleHide}
-                >
-                  <Sidebar />
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </>
-        )}
-        <div className="flex flex-col flex-1 min-w-0" data-workspace-pane="editor" tabIndex={-1}>
-          <div className="min-h-0 flex-1 overflow-hidden">
-            <Editor />
           </div>
-          <AnimatePresence initial={false}>
-            {currentNote && currentNote.note_type !== "canvas" && (
-              <motion.div
-                key="editor-footer"
-                initial={reduceMotion ? false : { height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
-                exit={reduceMotion ? undefined : { height: 0, opacity: 0 }}
-                transition={{ duration: 0.18, ease: "easeOut" }}
-                className="overflow-hidden flex-shrink-0"
-              >
-                <Footer wordCount={wordCount} isSaved={isSaved} />
-              </motion.div>
-            )}
-          </AnimatePresence>
         </div>
-        <AiSidebar
-          isOpen={isAiSidebarOpen}
-          onClose={() => setIsAiSidebarOpen(false)}
+        <StatusBar />
+        <Toaster
+          containerStyle={{
+            zIndex: 99999,
+            bottom: 34,
+          }}
+          position="bottom-center"
+          reverseOrder={false}
+          toastOptions={{
+            duration: 3000,
+            style: {
+              background: "var(--color-zinc-900)",
+              color: "var(--color-zinc-100)",
+              border: "1px solid var(--color-zinc-800)",
+              borderRadius: "8px",
+              fontSize: "13px",
+              padding: "6px 10px",
+              boxShadow: "0 8px 24px rgb(0 0 0 / 0.5)",
+            },
+          }}
         />
       </div>
-      <Toaster
-        containerStyle={{
-          zIndex: 99999,
-        }}
-        position="bottom-center"
-        reverseOrder={false}
-        toastOptions={{
-          style: {
-            background: "rgba(24, 24, 27, 0.92)",
-            color: "#f4f4f5",
-            border: "1px solid rgba(63, 63, 70, 0.6)",
-            backdropFilter: "blur(12px)",
-            borderRadius: "10px",
-            fontSize: "13px",
-          },
-        }}
-      />
-    </div>
+    </Tooltip.Provider>
   );
 }
 

@@ -21,10 +21,9 @@ import { AGENT_TOOLS } from "../lib/ai/agent-terminal";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
-  User,
   Sparkles,
   Calendar as CalendarIcon,
-  Hash,
+  Info,
   AlignLeft,
   ChevronLeft,
   ChevronRight,
@@ -34,12 +33,19 @@ import {
   Clock,
   Folder as FolderIcon,
   Type,
+  X,
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
+import { prefersReducedMotion } from "../lib/utils";
+import { IconButton } from "./ui/kit";
 import toast from "react-hot-toast";
 
 interface AiSidebarProps {
   isOpen: boolean;
+  /** Open only while hovered, floating over the note instead of docked beside it. */
+  peek?: boolean;
+  onPeekEnter?: () => void;
+  onPeekLeave?: () => void;
   onClose: () => void;
 }
 
@@ -63,12 +69,13 @@ const TERMINAL_WIDTH = 480;
 
 const noNotes: Note[] = [];
 
-const AiSidebar = ({ isOpen, onClose }: AiSidebarProps) => {
+const AiSidebar = ({ isOpen, peek = false, onPeekEnter, onPeekLeave, onClose }: AiSidebarProps) => {
   const providerId = useSettingsStore((s) => s.activeProvider);
+  const reduceMotion = prefersReducedMotion();
   const [activeTab, setActiveTab] = useState<Tab>("chat");
   const [activeAgent, setActiveAgent] = useState<AgentSelection>("logia");
   const [includeNote, setIncludeNote] = useState(true);
-  const [panelWidth, setPanelWidth] = useState(320);
+  const [panelWidth, setPanelWidth] = useState(360);
   // A closed panel stays mounted to keep its chats, but shouldn't react to every keystroke.
   const currentNote = useNotesStore((s) => (isOpen ? s.currentNote : null));
   const notes = useNotesStore((s) => (isOpen && activeTab === "calendar" ? s.notes : noNotes));
@@ -351,12 +358,22 @@ TO REPLACE CONTENT:
     <AnimatePresence>
       {isOpen && (
         <motion.div
-          initial={isCompact ? { x: "100%", opacity: 0 } : { width: 0, opacity: 0 }}
-          animate={isCompact ? { x: 0, opacity: 1 } : { width: "auto", opacity: 1 }}
-          exit={isCompact ? { x: "100%", opacity: 0 } : { width: 0, opacity: 0 }}
-          transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-          style={{ height: "100%", minWidth: 0, maxWidth: isCompact ? "100%" : undefined }}
-          className={isCompact ? "absolute inset-y-0 right-0 z-[800] w-[min(100%,28rem)]" : undefined}
+          key="ai-panel"
+          data-ai-peek={peek || undefined}
+          initial={peek && !reduceMotion ? { x: 24, opacity: 0 } : false}
+          animate={{ x: 0, opacity: 1 }}
+          exit={peek && !reduceMotion ? { x: 24, opacity: 0 } : undefined}
+          transition={{ duration: 0.1, ease: "easeOut" }}
+          onMouseEnter={peek ? onPeekEnter : undefined}
+          onMouseLeave={peek ? onPeekLeave : undefined}
+          style={{ height: peek ? undefined : "100%", minWidth: 0, maxWidth: isCompact ? "100%" : undefined }}
+          className={
+            peek
+              ? "absolute bottom-1.5 right-1.5 top-1.5 z-[900] overflow-clip rounded-lg border border-zinc-800 shadow-2xl shadow-black/70"
+              : isCompact
+                ? "absolute inset-y-0 right-0 z-[800] w-[min(100%,28rem)]"
+                : "flex-shrink-0"
+          }
         >
           <Resizable
             size={{ width: isCompact ? "100%" : panelWidth, height: "100%" }}
@@ -364,68 +381,38 @@ TO REPLACE CONTENT:
             enable={{ left: !isCompact }}
             minWidth={isCompact ? undefined : 300}
             maxWidth={isCompact ? undefined : 900}
-            handleClasses={{
-              left: "w-1 bg-zinc-800 hover:bg-zinc-600 transition-colors",
-            }}
+            handleStyles={{ left: { width: 7, left: -4 } }}
+            handleClasses={{ left: "z-10 resize-handle" }}
           >
-            <div data-workspace-pane="ai" className="h-full bg-zinc-950 border-l border-zinc-800 flex flex-col shadow-2xl">
-              {/* Top Tabs Bar */}
-              <div className="flex items-center justify-between gap-1 px-2 py-2 border-b border-zinc-900 bg-zinc-950 sticky top-0 z-10">
+            <div data-workspace-pane="ai" className="flex h-full flex-col border-l border-zinc-800 bg-zinc-950">
+              <div className="flex h-9 flex-shrink-0 items-center gap-0.5 pl-1.5 pr-1">
                 <AgentChooser selected={activeAgent} title={threadTitle} onSelect={selectAgent} />
                 {activeAgent === "logia" && (
-                  <button
-                    type="button"
-                    onClick={clearChat}
+                  <IconButton
+                    label="New thread"
+                    hint="New thread (clears this note's chat)"
                     disabled={isLoading || messages.length === 0}
-                    className="p-1.5 rounded-md text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-zinc-500 transition-colors"
-                    title="New thread (clears this note's chat)"
-                    aria-label="New thread"
+                    onClick={clearChat}
                   >
-                    <Plus size={16} />
-                  </button>
+                    <Plus size={15} />
+                  </IconButton>
                 )}
-                <div className="flex flex-shrink-0 items-center gap-1 bg-zinc-900/50 p-1 rounded-lg">
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab("chat")}
-                    className={`p-1.5 rounded-md transition-all ${activeTab === "chat" ? "bg-zinc-800 text-zinc-100 shadow-sm" : "text-zinc-500 hover:text-zinc-300"}`}
-                    title="AI Chat"
-                    aria-pressed={activeTab === "chat"}
-                  >
-                    <Sparkles size={16} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab("calendar")}
-                    className={`p-1.5 rounded-md transition-all ${activeTab === "calendar" ? "bg-zinc-800 text-zinc-100 shadow-sm" : "text-zinc-500 hover:text-zinc-300"}`}
-                    title="Calendar"
-                    aria-pressed={activeTab === "calendar"}
-                  >
-                    <CalendarIcon size={16} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab("info")}
-                    className={`p-1.5 rounded-md transition-all ${activeTab === "info" ? "bg-zinc-800 text-zinc-100 shadow-sm" : "text-zinc-500 hover:text-zinc-300"}`}
-                    title="Note info"
-                    aria-pressed={activeTab === "info"}
-                  >
-                    <Hash size={16} />
-                  </button>
-                </div>
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="p-1.5 rounded-md text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
-                  title="Close AI sidebar"
-                  aria-label="Close AI sidebar"
-                >
-                  <ChevronRight size={16} />
-                </button>
+                <IconButton label="AI Chat" hint="Chat" active={activeTab === "chat"} aria-pressed={activeTab === "chat"} onClick={() => setActiveTab("chat")}>
+                  <Sparkles size={14} />
+                </IconButton>
+                <IconButton label="Calendar" active={activeTab === "calendar"} aria-pressed={activeTab === "calendar"} onClick={() => setActiveTab("calendar")}>
+                  <CalendarIcon size={14} />
+                </IconButton>
+                <IconButton label="Note info" active={activeTab === "info"} aria-pressed={activeTab === "info"} onClick={() => setActiveTab("info")}>
+                  <Info size={14} />
+                </IconButton>
+                <IconButton label="Close AI sidebar" hint="Close" onClick={onClose}>
+                  <X size={15} />
+                </IconButton>
               </div>
 
               {/* Content Area */}
-              <div className="flex-1 overflow-hidden relative flex flex-col bg-zinc-950">
+              <div className="relative flex flex-1 flex-col overflow-hidden">
                 {/* --- CHAT VIEW --- */}
                 {activeTab === "chat" && activeAgent !== "logia" && (
                   <AgentChatPane key={activeAgent} tool={activeAgent} />
@@ -434,58 +421,32 @@ TO REPLACE CONTENT:
                   <>
                     <div
                       ref={scrollableContainerRef}
-                      className="flex-1 overflow-y-auto p-4 space-y-6 scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent"
+                      className="flex-1 space-y-5 overflow-y-auto px-4 py-3"
                     >
                       {!currentNote ? (
-                        <div className="h-full flex flex-col items-center justify-center text-center p-6 mt-10">
-                          <div className="relative bg-zinc-900 p-4 rounded-xl border border-zinc-800 shadow-lg mb-4">
-                            <FileText size={28} className="text-zinc-400" />
-                          </div>
-                          <h3 className="text-zinc-100 text-base font-semibold mb-1">
-                            Open a note to chat
-                          </h3>
-                          <p className="text-zinc-500 text-sm max-w-[220px]">
-                            AI chat is tied to the active note. Create or select one from the sidebar.
-                          </p>
+                        <div className="flex h-full flex-col justify-center px-2 text-center">
+                          <h3 className="text-[13px] font-medium text-zinc-200">Open a note to chat</h3>
+                          <p className="mt-1 text-xs leading-5 text-zinc-500">Logia's chat is tied to the active note.</p>
                         </div>
                       ) : messages.length === 0 ? (
-                        <div className="h-full flex flex-col items-center justify-center text-center p-6 mt-10">
-                          <div className="mb-6 relative">
-                            <div className="absolute inset-0 bg-blue-500/20 blur-xl rounded-full"></div>
-                            <div className="relative bg-zinc-900 p-4 rounded-xl border border-zinc-800 shadow-lg">
-                              <Sparkles size={32} className="text-blue-400" />
-                            </div>
-                          </div>
-                          <h3 className="text-zinc-100 text-lg font-semibold mb-2">
-                            What can I help you with?
-                          </h3>
-                          <div className="flex flex-col gap-2 mt-6 w-full max-w-xs">
-                            <button
-                              type="button"
-                              disabled={isLoading}
-                              onClick={() => handleSendMessage("Summarize this note")}
-                              className="flex items-center gap-3 w-full p-3 rounded-lg bg-zinc-900/40 hover:bg-zinc-900 border border-zinc-800/50 hover:border-zinc-700 transition-all group text-left disabled:opacity-50"
-                            >
-                              <span className="text-zinc-500 group-hover:text-blue-400 transition-colors">
-                                <AlignLeft size={16} />
-                              </span>
-                              <span className="text-zinc-400 text-sm group-hover:text-zinc-200">
-                                Summarize this note
-                              </span>
-                            </button>
-                            <button
-                              type="button"
-                              disabled={isLoading}
-                              onClick={() => handleSendMessage("Brainstorm ideas related to this note")}
-                              className="flex items-center gap-3 w-full p-3 rounded-lg bg-zinc-900/40 hover:bg-zinc-900 border border-zinc-800/50 hover:border-zinc-700 transition-all group text-left disabled:opacity-50"
-                            >
-                              <span className="text-zinc-500 group-hover:text-blue-400 transition-colors">
-                                <Sparkles size={16} />
-                              </span>
-                              <span className="text-zinc-400 text-sm group-hover:text-zinc-200">
-                                Brainstorm ideas
-                              </span>
-                            </button>
+                        <div className="flex h-full flex-col justify-end pb-2">
+                          <h3 className="px-1 text-[13px] font-medium text-zinc-200">Ask about this note</h3>
+                          <div className="mt-2 flex flex-col">
+                            {[
+                              { icon: <AlignLeft size={14} />, label: "Summarize this note", prompt: "Summarize this note" },
+                              { icon: <Sparkles size={14} />, label: "Brainstorm ideas", prompt: "Brainstorm ideas related to this note" },
+                            ].map((item) => (
+                              <button
+                                key={item.label}
+                                type="button"
+                                disabled={isLoading}
+                                onClick={() => handleSendMessage(item.prompt)}
+                                className="flex h-8 w-full items-center gap-2 rounded-md px-1 text-left text-[13px] text-zinc-400 hover:bg-white/[0.07] hover:text-zinc-100 disabled:opacity-50"
+                              >
+                                <span aria-hidden="true">{item.icon}</span>
+                                {item.label}
+                              </button>
+                            ))}
                           </div>
                         </div>
                       ) : (
@@ -494,76 +455,45 @@ TO REPLACE CONTENT:
                             ? parseEditorActions(msg.content) : { actions: [], text: msg.content };
 
                           return (
-                            <div
-                              key={msg.id}
-                              className={`flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}
-                            >
-                              <div
-                                className={`flex-shrink-0 mt-1 size-7 rounded-sm flex items-center justify-center ${msg.role === "user" ? "bg-zinc-800" : "bg-transparent"}`}
-                              >
-                                {msg.role === "user" ? (
-                                  <User size={14} className="text-zinc-400" />
-                                ) : (
-                                  <Sparkles size={16} className="text-blue-400" />
-                                )}
-                              </div>
-                              <div
-                                className={`flex-1 text-sm leading-relaxed ${msg.role === "user" ? "bg-zinc-800 text-zinc-100 px-3 py-2 rounded-lg" : "text-zinc-300"}`}
-                              >
-                                {textContent && (
-                                  <div className={actionDataList.length > 0 ? "mb-3" : ""}>
-                                    <Markdown remarkPlugins={[remarkGfm]}>
-                                      {textContent}
-                                    </Markdown>
-                                  </div>
-                                )}
-                                {actionDataList.length > 0 && (
-                                  <SuggestionCard
-                                    actionDataList={actionDataList}
-                                    status={msg.actionStatus || "pending"}
-                                    appliedCount={msg.appliedCount ?? 0}
-                                    isProcessing={!!msg.applying}
-                                    error={msg.actionError}
-                                    onApprove={() => void applyMessageActions(currentNote.id, msg)}
-                                    onRefuse={() => patchMessage(currentNote.id, msg.id, { actionStatus: "refused" })}
-                                  />
-                                )}
-                              </div>
+                            <div key={msg.id} className={msg.role === "user" ? "ml-8 rounded-lg bg-white/[0.06] px-3 py-2" : ""}>
+                              {textContent && (
+                                <div className={`chat-prose ${actionDataList.length > 0 ? "mb-3" : ""}`}>
+                                  <Markdown remarkPlugins={[remarkGfm]}>
+                                    {textContent}
+                                  </Markdown>
+                                </div>
+                              )}
+                              {actionDataList.length > 0 && (
+                                <SuggestionCard
+                                  actionDataList={actionDataList}
+                                  status={msg.actionStatus || "pending"}
+                                  appliedCount={msg.appliedCount ?? 0}
+                                  isProcessing={!!msg.applying}
+                                  error={msg.actionError}
+                                  onApprove={() => void applyMessageActions(currentNote.id, msg)}
+                                  onRefuse={() => patchMessage(currentNote.id, msg.id, { actionStatus: "refused" })}
+                                />
+                              )}
                             </div>
                           );
                         })
                       )}
 
                       {isLoading && (
-                        <div className="flex gap-3">
-                          <div className="mt-1">
-                            <Sparkles
-                              size={16}
-                              className="text-blue-400 animate-pulse"
-                            />
-                          </div>
-                          <div className="flex-1 text-sm text-zinc-300">
-                            {streamingMessage ? (
-                              // Check if streaming content looks like an action JSON
-                              streamingMessage.includes('"type": "editor_action"') ||
-                                streamingMessage.includes('"type":"editor_action"') ? (
-                                <div className="flex items-center gap-2">
-                                  <div className="size-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
-                                  <span className="text-zinc-400 italic">
-                                    Evaluating action...
-                                  </span>
-                                </div>
-                              ) : (
-                                <Markdown remarkPlugins={[remarkGfm]}>
-                                  {streamingMessage}
-                                </Markdown>
-                              )
+                        <div className="chat-prose">
+                          {streamingMessage ? (
+                            // Check if streaming content looks like an action JSON
+                            streamingMessage.includes('"type": "editor_action"') ||
+                              streamingMessage.includes('"type":"editor_action"') ? (
+                              <span className="text-zinc-500 motion-safe:animate-pulse">Preparing edits…</span>
                             ) : (
-                              <span className="text-zinc-500 italic animate-pulse">
-                                Thinking...
-                              </span>
-                            )}
-                          </div>
+                              <Markdown remarkPlugins={[remarkGfm]}>
+                                {streamingMessage}
+                              </Markdown>
+                            )
+                          ) : (
+                            <span className="text-zinc-500 motion-safe:animate-pulse">Thinking…</span>
+                          )}
                         </div>
                       )}
                     </div>
@@ -586,7 +516,7 @@ TO REPLACE CONTENT:
                               onClick={() => setIncludeNote((on) => !on)}
                               aria-pressed={includeNote}
                               title={includeNote ? "This note is sent as context. Click to leave it out." : "This note isn't sent. Click to include it."}
-                              className={`flex max-w-[7rem] items-center gap-1 rounded-md px-1.5 py-1 text-xs transition-colors hover:bg-zinc-800 ${includeNote ? "text-zinc-200" : "text-zinc-600 line-through"}`}
+                              className={`flex h-7 max-w-[7rem] items-center gap-1 rounded-md px-1.5 text-xs hover:bg-white/[0.07] ${includeNote ? "text-zinc-300" : "text-zinc-500 line-through"}`}
                             >
                               <FileText size={12} className="flex-shrink-0" />
                               <span className="truncate">{currentNote.title || "Untitled"}</span>
@@ -602,9 +532,9 @@ TO REPLACE CONTENT:
 
                 {/* --- CALENDAR VIEW --- */}
                 {activeTab === "calendar" && (
-                  <div className="flex flex-col h-full bg-zinc-950 p-4">
-                    <div className="flex items-center justify-between mb-6">
-                      <h2 className="text-zinc-100 font-semibold text-lg">
+                  <div className="flex h-full flex-col px-3 pb-3 pt-1">
+                    <div className="mb-3 flex items-center justify-between">
+                      <h2 className="text-[13px] font-medium text-zinc-100">
                         {currentDate.toLocaleString("default", {
                           month: "short",
                         })}{" "}
@@ -621,9 +551,9 @@ TO REPLACE CONTENT:
                         </button>
                         <button
                           onClick={() => setCurrentDate(new Date())}
-                          className="text-xs font-medium text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900 px-2 rounded"
+                          className="rounded px-1.5 text-xs text-zinc-500 hover:bg-white/[0.06] hover:text-zinc-200"
                         >
-                          TODAY
+                          Today
                         </button>
                         <button
                           onClick={nextMonth}
@@ -638,7 +568,7 @@ TO REPLACE CONTENT:
                       {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((day) => (
                         <div
                           key={day}
-                          className="text-xs font-medium text-zinc-600 py-1"
+                          className="text-xs font-medium text-zinc-500 py-1"
                         >
                           {day}
                         </div>
@@ -655,27 +585,27 @@ TO REPLACE CONTENT:
                             type="button"
                             key={i}
                             onClick={() => setSelectedDay(date)}
-                            className={`relative aspect-square flex items-center justify-center text-sm rounded-md transition-colors
-                              ${isToday ? "bg-blue-600 text-white font-medium shadow-lg shadow-blue-500/20" : isSelected ? "bg-zinc-800 text-zinc-100" : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100"}
+                            className={`relative flex aspect-square items-center justify-center rounded-md text-xs
+                              ${isToday ? "bg-zinc-100 font-medium text-zinc-950" : isSelected ? "bg-white/[0.1] text-zinc-100" : "text-zinc-400 hover:bg-white/[0.07] hover:text-zinc-100"}
                             `}
                             aria-label={`${date.toDateString()}${count ? `, ${count} notes updated` : ""}`}
                             aria-pressed={isSelected}
                           >
                             {date.getDate()}
                             {count > 0 && (
-                              <span className={`absolute bottom-1 size-1 rounded-full ${isToday ? "bg-white" : "bg-blue-400"}`} />
+                              <span className={`absolute bottom-1 size-1 rounded-full ${isToday ? "bg-zinc-950" : "bg-zinc-400"}`} />
                             )}
                           </button>
                         );
                       })}
                     </div>
 
-                    <div className="mt-5 border-t border-zinc-900 pt-4 min-h-0 flex-1 overflow-y-auto">
+                    <div className="mt-5 border-t border-zinc-800 pt-3 min-h-0 flex-1 overflow-y-auto">
                       <p className="text-xs font-medium text-zinc-500 mb-2 px-1">
                         {selectedDay.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}
                       </p>
                       {selectedDayNotes.length === 0 ? (
-                        <p className="text-xs text-zinc-600 px-1">No notes updated this day.</p>
+                        <p className="text-xs text-zinc-500 px-1">No notes updated this day.</p>
                       ) : (
                         <ul className="space-y-0.5">
                           {selectedDayNotes.map((note) => (
@@ -683,7 +613,7 @@ TO REPLACE CONTENT:
                               <button
                                 type="button"
                                 onClick={() => selectNote(note)}
-                                className={`w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded-md text-left transition-colors ${currentNote?.id === note.id ? "bg-zinc-800 text-zinc-100" : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"}`}
+                                className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-[5px] text-left text-[13px] ${currentNote?.id === note.id ? "bg-white/[0.13] text-zinc-100" : "text-zinc-400 hover:bg-white/[0.07] hover:text-zinc-200"}`}
                               >
                                 <FileText size={13} className="flex-shrink-0 text-zinc-500" />
                                 <span className="truncate">{note.title || "Untitled"}</span>
@@ -698,7 +628,7 @@ TO REPLACE CONTENT:
 
                 {/* --- NOTE INFO VIEW --- */}
                 {activeTab === "info" && (
-                  <div className="flex flex-col h-full bg-zinc-950 overflow-y-auto p-4">
+                  <div className="flex h-full flex-col overflow-y-auto px-3 pb-3 pt-1">
                     {!currentNote ? (
                       <p className="text-sm text-zinc-500 text-center mt-10">
                         Open a note to see its details.

@@ -133,7 +133,7 @@ export default function PreflightModal() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+          className="absolute inset-0 bg-black/50"
           onClick={() => !needsAttention() && setVisible(false)}
         />
 
@@ -162,8 +162,7 @@ export default function PreflightModal() {
             {loading ? (
               <div className="flex flex-col items-center justify-center py-16 gap-3">
                 <div className="relative">
-                  <div className="absolute inset-0 bg-blue-500/20 blur-xl rounded-full"></div>
-                  <Loader2 className="relative animate-spin text-blue-400" size={28} />
+                                    <Loader2 className="relative animate-spin text-blue-400" size={28} />
                 </div>
                 <p className="text-zinc-500 text-sm">Scanning system...</p>
               </div>
@@ -171,7 +170,7 @@ export default function PreflightModal() {
               <div className="p-4 space-y-4">
                 {/* Platform Badge */}
                 <div className="flex items-center justify-between text-xs px-1">
-                  <span className="text-zinc-600 uppercase tracking-wide font-medium">
+                  <span className="text-zinc-500 uppercase tracking-wide font-medium">
                     Platform: <span className="text-zinc-400">{result.platform}</span>
                   </span>
                   <span className={clsx("flex items-center gap-1.5 font-medium", {
@@ -269,19 +268,19 @@ export default function PreflightModal() {
                             <ul className="space-y-2">
                               {!result.python_found && (
                                 <li className="flex items-start gap-2">
-                                  <span className="text-zinc-600 mt-1">•</span>
+                                  <span className="text-zinc-500 mt-1">•</span>
                                   <span>Install <b className="text-zinc-300">Python 3.12+</b> from python.org</span>
                                 </li>
                               )}
                               {result.platform === 'linux' && !result.ffmpeg_available && (
                                 <li className="flex items-start gap-2">
-                                  <span className="text-zinc-600 mt-1">•</span>
+                                  <span className="text-zinc-500 mt-1">•</span>
                                   <span>Install <b className="text-zinc-300">FFmpeg</b> via package manager</span>
                                 </li>
                               )}
                               {typeof result.vcruntime_found !== 'undefined' && !result.vcruntime_found && (
                                 <li className="flex items-start gap-2">
-                                  <span className="text-zinc-600 mt-1">•</span>
+                                  <span className="text-zinc-500 mt-1">•</span>
                                   <span>
                                     Install{" "}
                                     <a

@@ -1,10 +1,8 @@
 .command-palette-overlay {
   position: fixed;
   inset: 0;
-  background-color: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(3px);
-  -webkit-backdrop-filter: blur(3px);
-  display: flex;
+  background-color: rgb(0 0 0 / 0.45);
+    display: flex;
   justify-content: center;
   align-items: flex-start;
   z-index: 1000;
@@ -12,14 +10,14 @@
 }
 
 .command-palette-container {
-  width: 620px;
+  width: 640px;
   max-width: 100%;
   max-height: min(70vh, 560px);
-  background-color: #18181b;
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  border-radius: 12px;
+  background-color: var(--color-zinc-900);
+  border: 1px solid var(--color-zinc-800);
+  border-radius: 10px;
   overflow: hidden;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+  box-shadow: 0 24px 60px rgb(0 0 0 / 0.6);
   display: flex;
   flex-direction: column;
 }
@@ -29,36 +27,37 @@
   display: flex;
   align-items: center;
   flex-shrink: 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  border-bottom: 1px solid var(--color-zinc-800);
 }
 
 .command-palette-input-icon {
   position: absolute;
   left: 15px;
-  color: #71717a;
+  color: var(--color-zinc-500);
   pointer-events: none;
 }
 
 .command-palette-input-row input {
   width: 100%;
   background: transparent;
-  color: #f4f4f5;
+  color: var(--color-zinc-100);
   border: 0;
-  padding: 13px 16px 13px 40px;
-  font-size: 15px;
+  padding: 12px 16px 12px 38px;
+  font-size: 14px;
   outline: none;
 }
 
 .command-palette-input-row input::placeholder {
-  color: #71717a;
+  color: var(--color-zinc-500);
 }
 
 .command-palette-group-label {
+  font-family: var(--font-mono);
   flex-shrink: 0;
   padding: 9px 15px 3px;
   font-size: 11px;
   font-weight: 600;
-  color: #71717a;
+  color: var(--color-zinc-500);
 }
 
 .command-palette-results {
@@ -78,30 +77,30 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  min-height: 36px;
-  padding: 6px 9px;
-  border-radius: 7px;
-  color: #e4e4e7;
+  min-height: 32px;
+  padding: 4px 8px;
+  border-radius: 5px;
+  color: var(--color-zinc-200);
   cursor: pointer;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .command-palette-results li.selected {
-  background-color: rgba(255, 255, 255, 0.09);
+  background-color: var(--color-zinc-800);
 }
 
 .command-palette-icon {
   flex-shrink: 0;
-  color: #71717a;
+  color: var(--color-zinc-500);
 }
 
 .command-palette-results li.selected .command-palette-icon {
-  color: #a1a1aa;
+  color: var(--color-zinc-400);
 }
 
 .command-palette-icon--canvas,
 .command-palette-results li.selected .command-palette-icon--canvas {
-  color: #c084fc;
+  color: var(--color-zinc-400);
 }
 
 .command-palette-note {
@@ -125,10 +124,11 @@
   white-space: nowrap;
   font-size: 12px;
   line-height: 1.4;
-  color: #8b8b94;
+  color: var(--color-zinc-500);
 }
 
 .command-palette-meta {
+  font-family: var(--font-mono);
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -136,7 +136,7 @@
   max-width: 34%;
   font-size: 11px;
   line-height: 1.5;
-  color: #71717a;
+  color: var(--color-zinc-500);
 }
 
 .command-palette-path {
@@ -156,13 +156,13 @@
   padding: 18px 16px 20px;
   text-align: center;
   font-size: 13px;
-  color: #a1a1aa;
+  color: var(--color-zinc-400);
 }
 
 .command-palette-more {
   padding: 4px 16px 8px;
   font-size: 12px;
-  color: #71717a;
+  color: var(--color-zinc-500);
 }
 
 .command-palette-footer {
@@ -172,9 +172,9 @@
   justify-content: space-between;
   gap: 12px;
   padding: 6px 8px;
-  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  border-top: 1px solid var(--color-zinc-800);
   font-size: 11px;
-  color: #71717a;
+  color: var(--color-zinc-500);
 }
 
 .command-palette-modes {
@@ -188,17 +188,17 @@
   gap: 6px;
   padding: 3px 7px;
   border-radius: 5px;
-  color: #8b8b94;
+  color: var(--color-zinc-500);
   cursor: pointer;
 }
 
 .command-palette-modes button:hover {
-  color: #e4e4e7;
+  color: var(--color-zinc-200);
 }
 
 .command-palette-modes button[aria-pressed='true'] {
-  background-color: rgba(255, 255, 255, 0.07);
-  color: #e4e4e7;
+  background-color: var(--color-zinc-800);
+  color: var(--color-zinc-200);
 }
 
 .command-palette-hints {
@@ -208,8 +208,8 @@
 }
 
 .command-palette-hints kbd {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  color: #a1a1aa;
+  font-family: var(--font-mono);
+  color: var(--color-zinc-400);
 }
 
 @media (max-width: 560px) {

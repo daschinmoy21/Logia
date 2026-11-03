@@ -41,12 +41,29 @@ test('home searches human text and combines type, star, tag and sort controls', 
   await page.getByRole('group', { name: 'Filter by tag' }).getByRole('button', { name: /#research/ }).click();
   await expect(homeRows(page)).toHaveCount(1);
   await page.getByRole('group', { name: 'Filter by tag' }).getByRole('button', { name: /#research/ }).click();
-  await page.getByRole('combobox', { name: 'Sort' }).selectOption('title');
+  await page.getByRole('button', { name: /^Sort:/ }).click();
+  await page.getByRole('menuitemradio', { name: 'Title A–Z' }).click();
   await expect(homeRows(page).first()).toContainText('Concept map');
   await page.getByRole('searchbox', { name: 'Search notes' }).fill('no-such-note');
   await expect(page.getByText('Nothing found for “no-such-note”')).toBeVisible();
   await page.getByRole('button', { name: 'Clear search and filters' }).click();
   await expect(homeRows(page)).toHaveCount(3);
+});
+
+test('the home scene animates, holds still for reduced motion, and stops with Home', async ({ page }) => {
+  await seed(page);
+  const scene = page.locator('canvas').first();
+  const pixels = () => scene.evaluate((canvas: HTMLCanvasElement) => canvas.toDataURL());
+  const first = await pixels();
+  await page.waitForTimeout(500);
+  expect(await pixels()).not.toBe(first);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.reload();
+  await expect(homeRows(page)).toHaveCount(3);
+  await page.waitForTimeout(200);
+  const still = await pixels();
+  await page.waitForTimeout(500);
+  expect(await pixels()).toBe(still);
 });
 
 test('keyboard palette opens notes and command mode creates only one daily note', async ({ page }) => {
@@ -95,7 +112,7 @@ test('Markdown import keeps YAML metadata and export works in a browser', async 
   await expect(page.getByRole('complementary', { name: 'Note context' })).toContainText('#migration');
   await page.getByRole('button', { name: /Export/ }).click();
   const download = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Markdown (.md)', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Markdown (.md)', exact: true }).click();
   expect((await download).suggestedFilename()).toBe('Imported.md');
   await page.reload();
   await expect(homeRows(page).filter({ hasText: 'Imported' })).toBeVisible();

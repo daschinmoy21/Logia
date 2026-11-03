@@ -2,10 +2,14 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path"
 import tailwindcss from "@tailwindcss/vite"
+import { version } from "./package.json"
 const host = process.env.TAURI_DEV_HOST;
 
 // https://vite.dev/config/
 export default defineConfig(async () => ({
+  define: {
+    __APP_VERSION__: JSON.stringify(version),
+  },
   plugins: [react({
     babel: {
       plugins: [[

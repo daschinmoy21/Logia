@@ -12,6 +12,8 @@ import {
   resolveBaseUrl,
 } from '../lib/ai/providers';
 import { complete, friendlyAiError } from '../lib/ai/client';
+import { Button, IconButton } from './ui/kit';
+import { ConfirmDialog } from './workspace/WorkspaceMenus';
 import { ModelPicker } from './ModelPicker';
 import { ProviderIcon } from './ProviderIcon';
 import { openExternal } from '../lib/utils';
@@ -29,6 +31,8 @@ import {
   Link2,
   Unlink,
   Sparkles,
+  SlidersHorizontal,
+  Info,
   Keyboard,
   AudioLines,
   ExternalLink,
@@ -57,13 +61,30 @@ interface GitSyncResult {
 
 const TABS: Array<{ id: SettingsTab; label: string; icon: ReactNode }> = [
   { id: 'ai', label: 'AI providers', icon: <Sparkles size={15} /> },
+  { id: 'general', label: 'General', icon: <SlidersHorizontal size={15} /> },
   { id: 'editor', label: 'Editor & Vim', icon: <Keyboard size={15} /> },
   { id: 'transcription', label: 'Transcription', icon: <AudioLines size={15} /> },
   { id: 'sync', label: 'Git sync', icon: <GitBranch size={15} /> },
+  { id: 'about', label: 'About', icon: <Info size={15} /> },
 ];
 
 const inputClass =
-  'w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 transition-colors';
+  'h-8 w-full rounded-md border border-zinc-800 bg-zinc-925 px-2.5 text-[13px] text-zinc-200 placeholder-zinc-600 focus:border-zinc-600 focus:outline-none focus-visible:outline-none';
+
+/** A label on the left and its control on the right, in a bordered group. */
+function SettingRow({ title, description, children }: { title: string; description?: ReactNode; children: ReactNode }) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 px-3.5 py-3">
+      <div className="min-w-48 flex-1">
+        <h3 className="text-[13px] font-medium text-zinc-100">{title}</h3>
+        {description && <p className="mt-0.5 text-xs leading-5 text-zinc-500">{description}</p>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+const settingGroup = 'divide-y divide-zinc-800/70 rounded-lg border border-zinc-800 bg-zinc-925';
 
 
 export const Settings = () => {
@@ -78,20 +99,19 @@ export const Settings = () => {
 
   return (
     <Dialog open={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} className="relative z-[1000]">
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" aria-hidden="true" />
+      <div className="fixed inset-0 bg-black/50" aria-hidden="true" />
 
-      <div className="fixed inset-0 flex items-center justify-center p-4">
-        <DialogPanel className="w-full max-w-6xl h-[min(800px,90dvh)] rounded-xl bg-zinc-950 border border-zinc-800 shadow-2xl flex flex-col sm:flex-row overflow-hidden">
-          {/* Tab rail */}
-          <nav className="w-full sm:w-44 flex-shrink-0 border-b sm:border-b-0 sm:border-r border-zinc-800 bg-zinc-900/40 p-3 flex sm:flex-col gap-0.5 overflow-x-auto">
-            <DialogTitle className="hidden sm:block px-2 pb-3 text-sm font-semibold text-zinc-200">Settings</DialogTitle>
+      <div className="fixed inset-0 flex items-center justify-center p-3 sm:p-6">
+        <DialogPanel className="flex h-[min(720px,92dvh)] w-full max-w-4xl flex-col overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950 shadow-2xl shadow-black/60 sm:flex-row">
+          <nav className="flex w-full flex-shrink-0 gap-0.5 overflow-x-auto border-b border-zinc-800 bg-zinc-925 p-1.5 sm:w-48 sm:flex-col sm:border-b-0 sm:border-r">
+            <DialogTitle className="hidden px-2 pb-2 pt-1.5 text-xs font-medium text-zinc-500 sm:block">Settings</DialogTitle>
             {TABS.map((t) => (
               <button
                 key={t.id}
                 type="button"
                 onClick={() => setTab(t.id)}
-                className={`flex shrink-0 items-center gap-2.5 whitespace-nowrap rounded-md px-2 py-1.5 text-sm transition-colors ${
-                  tab === t.id ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200'
+                className={`flex h-7 shrink-0 items-center gap-2 whitespace-nowrap rounded-[5px] px-2 text-[13px] ${
+                  tab === t.id ? 'bg-white/[0.13] text-zinc-50' : 'text-zinc-400 hover:bg-white/[0.07] hover:text-zinc-100'
                 }`}
                 aria-current={tab === t.id ? 'page' : undefined}
               >
@@ -101,23 +121,20 @@ export const Settings = () => {
             ))}
           </nav>
 
-          <div className="flex-1 min-h-0 min-w-0 flex flex-col">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800">
-              <h2 className="text-base font-medium text-white">{TABS.find((t) => t.id === tab)?.label}</h2>
-              <button
-                type="button"
-                onClick={() => setIsSettingsOpen(false)}
-                className="p-1 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
-                aria-label="Close settings"
-              >
-                <X size={18} />
-              </button>
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+            <div className="flex h-11 flex-shrink-0 items-center justify-between pl-5 pr-2">
+              <h2 className="text-[13px] font-medium text-zinc-100">{TABS.find((t) => t.id === tab)?.label}</h2>
+              <IconButton label="Close settings" hint="Close" onClick={() => setIsSettingsOpen(false)}>
+                <X size={15} />
+              </IconButton>
             </div>
-            <div className="flex-1 overflow-y-auto px-6 py-5">
+            <div className="flex-1 overflow-y-auto px-5 pb-6 pt-1">
               {tab === 'ai' && <AiSettings />}
+              {tab === 'general' && <GeneralSettings />}
               {tab === 'editor' && <EditorSettings />}
               {tab === 'transcription' && (isTauri() ? <TranscriptionSettings /> : <DesktopOnly feature="Audio transcription" />)}
               {tab === 'sync' && (isTauri() ? <SyncSettings /> : <DesktopOnly feature="Git sync" />)}
+              {tab === 'about' && <AboutSettings />}
             </div>
           </div>
         </DialogPanel>
@@ -128,9 +145,9 @@ export const Settings = () => {
 
 function DesktopOnly({ feature }: { feature: string }) {
   return (
-    <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
-      <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-400" />
-      <p className="text-sm text-amber-200/90">
+    <div className="flex items-start gap-2 rounded-lg border border-zinc-800 bg-zinc-925 p-3">
+      <AlertTriangle size={14} className="mt-0.5 flex-shrink-0 text-amber-300/80" />
+      <p className="text-[13px] text-zinc-300">
         {feature} needs the Logia desktop app. This browser workspace can't reach it.
       </p>
     </div>
@@ -162,38 +179,38 @@ function AiSettings() {
     : p.needsKey ? settings.keyStatus[p.id] ? 'API key saved' : 'Add an API key' : 'Local endpoint';
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-3">
       <div className="flex items-center justify-between gap-4">
-        <p className="text-sm text-zinc-400">Your AI providers</p>
-        <button type="button" onClick={() => { setAdding(true); setSearch(''); }} className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-800"><Plus size={14} /> Add provider</button>
+        <p className="text-xs text-zinc-500">Choose what powers chat and note edits.</p>
+        <Button size="sm" onClick={() => { setAdding(true); setSearch(''); }}><Plus size={13} /> Add provider</Button>
       </div>
-      <div className="grid min-w-0 overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950 md:grid-cols-[13rem_minmax(0,1fr)]">
-        <div aria-label="Your providers" className="max-h-52 overflow-y-auto border-b border-zinc-800 md:max-h-none md:border-b-0 md:border-r">
+      <div className="grid min-w-0 overflow-hidden rounded-lg border border-zinc-800 md:grid-cols-[12rem_minmax(0,1fr)]">
+        <div aria-label="Your providers" className="max-h-52 overflow-y-auto border-b border-zinc-800 bg-zinc-925 p-1 md:max-h-none md:border-b-0 md:border-r">
           {configured.map((p) => <button key={p.id} type="button" onClick={() => setSelectedId(p.id)} aria-pressed={selectedId === p.id}
-            className={`flex w-full items-start gap-3 border-b border-zinc-800/70 px-4 py-4 text-left transition-colors ${selectedId === p.id ? 'bg-zinc-800/70 text-zinc-100' : 'text-zinc-400 hover:bg-zinc-900'}`}>
-            <ProviderIcon providerId={p.id} size={19} className="mt-0.5" />
-            <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{p.label}</span><span className="mt-1 block text-[11px] text-zinc-500">{status(p)}</span></span>
-            {settings.activeProvider === p.id && <Check size={13} className="mt-1 shrink-0 text-blue-400" aria-label="Active provider" />}
+            className={`flex w-full items-start gap-2.5 rounded-[5px] px-2 py-2 text-left ${selectedId === p.id ? 'bg-white/[0.13] text-zinc-50' : 'text-zinc-300 hover:bg-white/[0.07]'}`}>
+            <ProviderIcon providerId={p.id} size={16} className="mt-px" />
+            <span className="min-w-0 flex-1"><span className="block truncate text-[13px]">{p.label}</span><span className="mt-0.5 block truncate text-[11px] text-zinc-500">{status(p)}</span></span>
+            {settings.activeProvider === p.id && <Check size={13} className="mt-0.5 shrink-0 text-blue-400" aria-label="Active provider" />}
           </button>)}
         </div>
         <div className="min-w-0 p-4 sm:p-5"><ProviderDetails key={provider.id} provider={provider} /></div>
       </div>
       {adding && <Dialog open onClose={() => setAdding(false)} className="relative z-[1100]">
-        <div className="fixed inset-0 bg-black/70" aria-hidden="true" />
+        <div className="fixed inset-0 bg-black/50" aria-hidden="true" />
         <div className="fixed inset-0 flex items-center justify-center p-4">
-          <DialogPanel className="flex max-h-[85dvh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-zinc-700 bg-zinc-950 shadow-2xl">
-            <div className="flex items-start justify-between border-b border-zinc-800 p-5">
-              <div><DialogTitle className="text-lg font-semibold text-zinc-100">Add provider</DialogTitle><p className="mt-1 text-sm text-zinc-500">Choose a CLI agent, cloud API, or local server.</p></div>
-              <button type="button" aria-label="Close add provider" onClick={() => setAdding(false)} className="rounded p-1 text-zinc-400 hover:bg-zinc-800"><X size={18} /></button>
+          <DialogPanel className="flex max-h-[85dvh] w-full max-w-xl flex-col overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900 shadow-2xl shadow-black/60">
+            <div className="flex items-start justify-between border-b border-zinc-800 px-4 py-3">
+              <div><DialogTitle className="text-sm font-semibold text-zinc-100">Add provider</DialogTitle><p className="mt-0.5 text-xs text-zinc-500">Choose a CLI agent, cloud API, or local server.</p></div>
+              <button type="button" aria-label="Close add provider" onClick={() => setAdding(false)} className="rounded p-1 text-zinc-400 hover:bg-white/[0.07]"><X size={15} /></button>
             </div>
-            <div className="overflow-y-auto p-5">
+            <div className="overflow-y-auto p-4">
               <input autoFocus aria-label="Search providers" placeholder="Search providers…" value={search} onChange={(e) => setSearch(e.target.value)} className={inputClass} />
-              {groups.map((group) => <div key={group} className="mt-5">
+              {groups.map((group) => <div key={group} className="mt-4">
                 <p className="mb-2 text-xs font-medium text-zinc-500">{GROUP_LABELS[group]}</p>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
                   {PROVIDERS.filter((p) => p.group === group && p.label.toLowerCase().includes(search.toLowerCase())).map((p) => <button key={p.id} type="button" onClick={() => { settings.addProvider(p.id); setSelectedId(p.id); setAdding(false); }}
-                    className="flex items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-left text-sm text-zinc-200 hover:border-blue-500 hover:bg-zinc-800">
-                    <ProviderIcon providerId={p.id} size={20} /><span className="flex-1">{p.label}</span>{configured.some((item) => item.id === p.id) && <Check size={14} className="text-blue-400" />}
+                    className="flex h-9 items-center gap-2.5 rounded-md border border-zinc-800 px-2.5 text-left text-[13px] text-zinc-200 hover:border-zinc-700 hover:bg-white/[0.07]">
+                    <ProviderIcon providerId={p.id} size={16} /><span className="flex-1">{p.label}</span>{configured.some((item) => item.id === p.id) && <Check size={14} className="text-blue-400" />}
                   </button>)}
                 </div>
               </div>)}
@@ -264,24 +281,18 @@ function ProviderDetails({ provider }: { provider: ProviderDef }) {
     <section className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
-          <h3 className="flex items-center gap-2 text-sm font-semibold text-zinc-100">
-            <ProviderIcon providerId={provider.id} size={20} />
+          <h3 className="flex items-center gap-2 text-[13px] font-medium text-zinc-100">
+            <ProviderIcon providerId={provider.id} size={16} />
             {provider.label}
           </h3>
           {provider.hint && <p className="mt-1 text-xs text-zinc-500">{provider.hint}</p>}
         </div>
         {isActive ? (
-          <span className="flex-shrink-0 inline-flex items-center gap-1 rounded-md bg-blue-500/15 px-2 py-1 text-xs text-blue-300">
+          <span className="inline-flex h-7 flex-shrink-0 items-center gap-1 px-1 text-xs text-zinc-400">
             <Check size={12} /> Active
           </span>
         ) : (
-          <button
-            type="button"
-            onClick={() => settings.setActiveProvider(provider.id)}
-            className="flex-shrink-0 rounded-md bg-zinc-100 px-3 py-1.5 text-xs font-medium text-zinc-900 hover:bg-white transition-colors"
-          >
-            Use this provider
-          </button>
+          <Button variant="primary" size="sm" onClick={() => settings.setActiveProvider(provider.id)}>Use this provider</Button>
         )}
       </div>
 
@@ -289,7 +300,7 @@ function ProviderDetails({ provider }: { provider: ProviderDef }) {
         <div className="space-y-3">
           <div
             className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs ${
-              cli?.available ? 'bg-emerald-500/10 text-emerald-300' : !isTauri() || !cli ? 'bg-zinc-900 text-zinc-400' : 'bg-amber-500/10 text-amber-300'
+              cli?.available ? 'bg-emerald-500/10 text-emerald-300' : !isTauri() || !cli ? 'bg-white/[0.04] text-zinc-400' : 'bg-amber-500/10 text-amber-300'
             }`}
           >
             {cli?.available ? <Check size={14} /> : !isTauri() || !cli ? <Terminal size={14} /> : <AlertTriangle size={14} />}
@@ -345,23 +356,9 @@ function ProviderDetails({ provider }: { provider: ProviderDef }) {
               placeholder={hasKey ? '•••••••• saved — paste a new key to replace' : 'Paste your API key'}
               autoComplete="off"
             />
-            <button
-              type="button"
-              onClick={saveKey}
-              disabled={busy || !keyInput.trim()}
-              className="rounded-lg bg-zinc-100 px-3 text-sm font-medium text-zinc-900 hover:bg-white disabled:opacity-40 transition-colors"
-            >
-              Save
-            </button>
+            <Button variant="primary" onClick={saveKey} disabled={busy || !keyInput.trim()}>Save</Button>
             {hasKey && (
-              <button
-                type="button"
-                onClick={removeKey}
-                disabled={busy}
-                className="rounded-lg px-3 text-sm text-zinc-400 hover:text-red-400 hover:bg-red-500/10 disabled:opacity-40 transition-colors"
-              >
-                Remove
-              </button>
+              <Button variant="danger-ghost" onClick={removeKey} disabled={busy}>Remove</Button>
             )}
           </div>
         </Field>
@@ -379,23 +376,22 @@ function ProviderDetails({ provider }: { provider: ProviderDef }) {
       )}
 
       <Field label="Default model" hint="Also available directly in chat.">
-        <div className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900 px-2 py-2">
-          <span className="pl-1 text-xs text-zinc-500">Model</span>
+        <div className="flex h-9 items-center justify-between rounded-md border border-zinc-800 bg-zinc-925 pl-2.5 pr-1">
+          <span className="text-xs text-zinc-500">Model</span>
           <ModelPicker key={provider.id} providerId={provider.id} placement="below" />
         </div>
       </Field>
 
       <div className="flex items-center gap-3 pt-1">
-        <button
-          type="button"
+        <Button
+          size="sm"
           onClick={runTest}
           disabled={!ready || test.state === 'running'}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:border-zinc-500 hover:text-white disabled:opacity-40 transition-colors"
           title={ready ? 'Send a tiny test request' : 'Finish setup first'}
         >
           {test.state === 'running' ? <Loader2 size={12} className="animate-spin" /> : <Zap size={12} />}
           Test connection
-        </button>
+        </Button>
         {test.state === 'ok' && <span className="text-xs text-emerald-400 truncate">✓ {test.message}</span>}
         {test.state === 'error' && <span className="text-xs text-red-400 line-clamp-2">{test.message}</span>}
         {!ready && test.state === 'idle' && provider.kind === 'api' && (
@@ -430,13 +426,13 @@ function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: 
       aria-checked={checked}
       aria-label={label}
       onClick={() => onChange(!checked)}
-      className={`relative inline-flex h-5 w-9 flex-shrink-0 items-center rounded-full transition-colors ${
+      className={`relative inline-flex h-[18px] w-8 flex-shrink-0 items-center rounded-full ${
         checked ? 'bg-blue-500' : 'bg-zinc-700'
       }`}
     >
       <span
-        className={`inline-block size-4 rounded-full bg-white shadow transition-transform duration-200 ${
-          checked ? 'translate-x-[18px]' : 'translate-x-0.5'
+        className={`inline-block size-3.5 rounded-full transition-transform duration-100 ${
+          checked ? 'translate-x-4 bg-zinc-950' : 'translate-x-0.5 bg-zinc-300'
         }`}
       />
     </button>
@@ -446,11 +442,11 @@ function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: 
 function KeyTable({ title, rows }: { title: string; rows: KeyDoc[] }) {
   return (
     <div>
-      <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 mb-2">{title}</p>
-      <div className="rounded-lg border border-zinc-800 divide-y divide-zinc-800/70">
+      <p className="mb-1.5 text-xs font-medium text-zinc-500">{title}</p>
+      <div className="divide-y divide-zinc-800/70 rounded-lg border border-zinc-800 bg-zinc-925">
         {rows.map((r) => (
           <div key={r.keys + r.label} className="flex items-center gap-4 px-3 py-1.5">
-            <code className="w-36 flex-shrink-0 font-mono text-xs text-blue-300">{r.keys}</code>
+            <code className="w-36 flex-shrink-0 font-mono text-xs text-zinc-200">{r.keys}</code>
             <span className="text-xs text-zinc-400">{r.label}</span>
           </div>
         ))}
@@ -459,13 +455,49 @@ function KeyTable({ title, rows }: { title: string; rows: KeyDoc[] }) {
   );
 }
 
-function EditorSettings() {
+function GeneralSettings() {
   const uiScale = useSettingsStore((s) => s.uiScale);
   const setUiScale = useSettingsStore((s) => s.setUiScale);
-  const vimEnabled = useSettingsStore((s) => s.vimEnabled);
-  const setVimEnabled = useSettingsStore((s) => s.setVimEnabled);
   const sidebarFloating = useSettingsStore((s) => s.sidebarFloating);
   const setSidebarFloating = useSettingsStore((s) => s.setSidebarFloating);
+
+  return (
+    <div className={settingGroup}>
+      <SettingRow title="UI scale" description="Ctrl/Cmd +/− changes the whole interface. Ctrl/Cmd+0 resets it.">
+        <div className="flex items-center gap-1 text-[13px] text-zinc-300">
+          <Button size="sm" aria-label="Zoom out" disabled={uiScale <= 0.5} onClick={() => setUiScale(uiScale - 0.1)}>−</Button>
+          <output aria-label="UI scale" className="w-11 text-center tabular-nums">{Math.round(uiScale * 100)}%</output>
+          <Button size="sm" aria-label="Zoom in" disabled={uiScale >= 2} onClick={() => setUiScale(uiScale + 0.1)}>+</Button>
+          <Button size="sm" variant="ghost" onClick={() => setUiScale(1)}>Reset</Button>
+        </div>
+      </SettingRow>
+      <SettingRow title="Sidebar" description="Auto-hide keeps it out of the way; move the pointer to the left edge to reveal it.">
+        <div className="flex h-7 items-center rounded-md border border-zinc-800 p-0.5 text-xs">
+          {[
+            { v: false, label: 'Pinned' },
+            { v: true, label: 'Auto-hide' },
+          ].map((o) => (
+            <button
+              key={o.label}
+              type="button"
+              onClick={() => setSidebarFloating(o.v)}
+              className={`h-full whitespace-nowrap rounded-[4px] px-2 ${
+                sidebarFloating === o.v ? 'bg-white/[0.13] text-zinc-100' : 'text-zinc-500 hover:text-zinc-200'
+              }`}
+              aria-pressed={sidebarFloating === o.v}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      </SettingRow>
+    </div>
+  );
+}
+
+function EditorSettings() {
+  const vimEnabled = useSettingsStore((s) => s.vimEnabled);
+  const setVimEnabled = useSettingsStore((s) => s.setVimEnabled);
 
   const leaderRows: KeyDoc[] = LEADER_BINDINGS.filter((b) => b.key !== ' ').map((b) => ({
     keys: `Space ${b.key}`,
@@ -473,66 +505,37 @@ function EditorSettings() {
   }));
 
   return (
-    <div className="space-y-6">
-      <section className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-5 space-y-3">
-        <h3 className="text-sm font-semibold text-zinc-100">UI scale</h3>
-        <p className="text-xs text-zinc-500">Ctrl/Cmd +/− changes the whole interface. Ctrl/Cmd+0 resets to 100%.</p>
-        <div className="flex items-center gap-3 text-sm text-zinc-300">
-          <button type="button" aria-label="Zoom out" disabled={uiScale <= 0.5} onClick={() => setUiScale(uiScale - 0.1)} className="rounded border border-zinc-700 px-3 py-1 disabled:opacity-40">−</button>
-          <output aria-label="UI scale">{Math.round(uiScale * 100)}%</output>
-          <button type="button" aria-label="Zoom in" disabled={uiScale >= 2} onClick={() => setUiScale(uiScale + 0.1)} className="rounded border border-zinc-700 px-3 py-1 disabled:opacity-40">+</button>
-          <button type="button" onClick={() => setUiScale(1)} className="text-xs text-zinc-400 hover:text-zinc-100">Reset</button>
-        </div>
-      </section>
-      <section className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-5 space-y-4">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h3 className="text-sm font-semibold text-zinc-100">Sidebar</h3>
-            <p className="mt-1 text-xs text-zinc-500">
-              Auto-hide keeps the sidebar out of the way; move the pointer to the left edge to reveal it.
-            </p>
-          </div>
-          <div className="flex flex-shrink-0 rounded-lg border border-zinc-800 p-0.5 text-xs">
-            {[
-              { v: false, label: 'Pinned' },
-              { v: true, label: 'Auto-hide' },
-            ].map((o) => (
-              <button
-                key={o.label}
-                type="button"
-                onClick={() => setSidebarFloating(o.v)}
-                className={`whitespace-nowrap rounded-md px-3 py-1 transition-colors ${
-                  sidebarFloating === o.v ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'
-                }`}
-                aria-pressed={sidebarFloating === o.v}
-              >
-                {o.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="space-y-5">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h3 className="text-sm font-semibold text-zinc-100">Vim mode</h3>
-            <p className="mt-1 text-xs text-zinc-500">
-              Modal editing in notes plus keyboard navigation for the whole app. Toggle anytime from the
-              mode badge in the header or with <code className="text-zinc-300">:set novim</code>.
-            </p>
-          </div>
+    <div className="space-y-5">
+      <div className={settingGroup}>
+        <SettingRow
+          title="Vim mode"
+          description={<>Modal editing in notes plus keyboard navigation for the whole app. Toggle anytime from the status bar or with <code className="text-zinc-300">:set novim</code>.</>}
+        >
           <Toggle checked={vimEnabled} onChange={setVimEnabled} label="Vim mode" />
-        </div>
+        </SettingRow>
+      </div>
+      <div className={`space-y-5 ${vimEnabled ? '' : 'opacity-50'}`}>
+        <KeyTable title="Anywhere" rows={GLOBAL_KEYS} />
+        <KeyTable title="Leader (Space)" rows={leaderRows} />
+        <KeyTable title="Editor — normal mode" rows={EDITOR_KEYS} />
+        <KeyTable title="File explorer (Space e)" rows={EXPLORER_KEYS} />
+        <KeyTable title="Command line (:)" rows={EX_COMMANDS} />
+      </div>
+    </div>
+  );
+}
 
-        <div className={`space-y-5 transition-opacity ${vimEnabled ? '' : 'opacity-50'}`}>
-          <KeyTable title="Anywhere" rows={GLOBAL_KEYS} />
-          <KeyTable title="Leader (Space)" rows={leaderRows} />
-          <KeyTable title="Editor — normal mode" rows={EDITOR_KEYS} />
-          <KeyTable title="File explorer (Space e)" rows={EXPLORER_KEYS} />
-          <KeyTable title="Command line (:)" rows={EX_COMMANDS} />
-        </div>
-      </section>
+function AboutSettings() {
+  return (
+    <div className={settingGroup}>
+      <SettingRow title="Logia" description={`Version ${__APP_VERSION__}`}>
+        <img src="/logo.png" alt="" className="size-7 rounded-md" />
+      </SettingRow>
+      <SettingRow title="Source code" description="Logia is open source under the AGPL-3.0.">
+        <Button size="sm" onClick={() => void openExternal('https://github.com/daschinmoy21/Logia')}>
+          <ExternalLink size={12} /> GitHub
+        </Button>
+      </SettingRow>
     </div>
   );
 }
@@ -582,35 +585,24 @@ function TranscriptionSettings() {
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-zinc-400">
+      <p className="text-[13px] leading-5 text-zinc-400">
         Install the Python dependencies used for local audio transcription (faster-whisper and friends).
         Transcripts are structured into notes by your active AI provider.
       </p>
       <div className="flex items-center gap-3">
-        <button
-          type="button"
-          onClick={handleInstallTranscriptionDeps}
-          disabled={isInstallingDeps}
-          className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-            installStatus === 'installed'
-              ? 'bg-green-600 text-white hover:bg-green-700'
-              : installStatus === 'error'
-                ? 'bg-red-600 text-white hover:bg-red-700'
-                : 'bg-zinc-100 text-zinc-900 hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed'
-          }`}
-        >
-          {isInstallingDeps && <Loader2 size={14} className="animate-spin" />}
+        <Button variant="primary" onClick={handleInstallTranscriptionDeps} disabled={isInstallingDeps}>
+          {isInstallingDeps && <Loader2 size={13} className="animate-spin" />}
           {isInstallingDeps
             ? 'Installing…'
             : installStatus === 'installed'
-              ? 'Installed ✓'
+              ? 'Installed'
               : installStatus === 'error'
-                ? 'Error — retry'
+                ? 'Failed. Retry'
                 : 'Install dependencies'}
-        </button>
+        </Button>
       </div>
       {installLog && (
-        <pre className="max-h-72 overflow-auto text-xs bg-zinc-950 border border-zinc-800 p-3 rounded-lg text-zinc-400 whitespace-pre-wrap">
+        <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-lg border border-zinc-800 bg-zinc-925 p-3 text-xs text-zinc-400">
           {installLog}
         </pre>
       )}
@@ -626,6 +618,7 @@ function SyncSettings() {
   const [remoteUrl, setRemoteUrl] = useState('');
   const [branchName, setBranchName] = useState('main');
   const [gitStatus, setGitStatus] = useState<GitSyncStatus | null>(null);
+  const [confirmForce, setConfirmForce] = useState<'pull' | 'push' | null>(null);
 
   const checkGitStatus = async () => {
     try {
@@ -688,7 +681,6 @@ function SyncSettings() {
   };
 
   const handleGitForcePull = async () => {
-    if (!confirm('This will discard ALL local changes and replace them with the remote state. Continue?')) return;
     setIsSyncing(true);
     try {
       const result = await invoke<GitSyncResult>('git_sync_force_pull');
@@ -704,7 +696,6 @@ function SyncSettings() {
   };
 
   const handleGitForcePush = async () => {
-    if (!confirm('This will force-push your local state to the remote, overwriting remote changes. Continue?')) return;
     setIsSyncing(true);
     try {
       const result = await invoke<GitSyncResult>('git_sync_force_push');
@@ -736,7 +727,7 @@ function SyncSettings() {
 
   return (
     <div className="space-y-5">
-      <p className="text-sm text-zinc-400">
+      <p className="text-[13px] text-zinc-400">
         {gitSyncConfigured ? 'Notes are synced via git.' : 'Back up and sync your notes to any git remote.'}
       </p>
 
@@ -769,12 +760,12 @@ function SyncSettings() {
       </div>
 
       {gitSyncConfigured && gitStatus && (
-        <div className="flex items-center justify-between px-3 py-2 bg-zinc-800/50 rounded-lg">
+        <div className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-925 px-3 py-2">
           <div className="flex items-center gap-2">
             <Check className="w-4 h-4 text-green-400" />
             <span className="text-xs text-zinc-300">
               {gitStatus.branch}
-              {gitStatus.ahead > 0 && <span className="text-blue-400 ml-1">↑{gitStatus.ahead}</span>}
+              {gitStatus.ahead > 0 && <span className="ml-1 text-zinc-300">↑{gitStatus.ahead}</span>}
               {gitStatus.behind > 0 && <span className="text-amber-400 ml-1">↓{gitStatus.behind}</span>}
               {gitStatus.dirty && <span className="text-yellow-400 ml-1">•</span>}
             </span>
@@ -785,83 +776,49 @@ function SyncSettings() {
         </div>
       )}
 
-      <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-1.5">
         {!gitSyncConfigured ? (
-          <button
-            type="button"
-            onClick={handleGitConfigure}
-            disabled={isSyncing || !remoteUrl.trim()}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-all"
-          >
-            {isSyncing ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" /> Configuring...
-              </>
-            ) : (
-              <>
-                <Link2 className="w-4 h-4" /> Connect Remote
-              </>
-            )}
-          </button>
+          <Button variant="primary" onClick={handleGitConfigure} disabled={isSyncing || !remoteUrl.trim()}>
+            {isSyncing ? <Loader2 size={13} className="animate-spin" /> : <Link2 size={13} />}
+            {isSyncing ? 'Connecting…' : 'Connect remote'}
+          </Button>
         ) : (
           <>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={handleGitSyncNow}
-                disabled={isSyncing}
-                className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-zinc-100 text-zinc-900 hover:bg-white disabled:opacity-50 transition-all"
-              >
-                <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
-                {isSyncing ? 'Syncing...' : 'Sync Now'}
-              </button>
-              <button
-                type="button"
-                onClick={handleGitConfigure}
-                disabled={isSyncing}
-                className="px-4 py-2 rounded-lg text-sm font-medium bg-zinc-700 text-zinc-200 hover:bg-zinc-600 disabled:opacity-50 transition-all"
-                title="Update remote URL"
-                aria-label="Update remote URL"
-              >
-                <Link2 className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={handleGitForcePull}
-                disabled={isSyncing}
-                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-amber-600 text-white hover:bg-amber-500 disabled:opacity-50 transition-all"
-                title="Discard local changes, use remote"
-              >
-                <Download className="w-3 h-3" />
-                Use Remote
-              </button>
-              <button
-                type="button"
-                onClick={handleGitForcePush}
-                disabled={isSyncing}
-                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-zinc-600 text-white hover:bg-zinc-500 disabled:opacity-50 transition-all"
-                title="Overwrite remote with local"
-              >
-                <Upload className="w-3 h-3" />
-                Use Local
-              </button>
-            </div>
-
-            <button
-              type="button"
-              onClick={handleGitDisconnect}
-              disabled={isSyncing}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-medium text-zinc-400 hover:text-red-400 hover:bg-red-500/10 transition-all"
-            >
-              <Unlink className="w-3 h-3" />
-              Disconnect Remote
-            </button>
+            <Button variant="primary" onClick={handleGitSyncNow} disabled={isSyncing}>
+              <RefreshCw size={13} className={isSyncing ? 'animate-spin' : ''} />
+              {isSyncing ? 'Syncing…' : 'Sync now'}
+            </Button>
+            <Button onClick={handleGitConfigure} disabled={isSyncing} title="Save this remote URL and branch">
+              <Link2 size={13} /> Update remote
+            </Button>
+            <Button onClick={() => setConfirmForce('pull')} disabled={isSyncing} title="Discard local changes, use remote">
+              <Download size={13} /> Use remote
+            </Button>
+            <Button onClick={() => setConfirmForce('push')} disabled={isSyncing} title="Overwrite remote with local">
+              <Upload size={13} /> Use local
+            </Button>
+            <Button variant="danger-ghost" onClick={handleGitDisconnect} disabled={isSyncing}>
+              <Unlink size={13} /> Disconnect
+            </Button>
           </>
         )}
       </div>
+      <ConfirmDialog
+        open={confirmForce === 'pull'}
+        title="Replace local notes with the remote?"
+        body="All local changes are discarded and replaced with the remote state."
+        confirmLabel="Use remote"
+        onConfirm={() => { setConfirmForce(null); void handleGitForcePull(); }}
+        onClose={() => setConfirmForce(null)}
+      />
+      <ConfirmDialog
+        open={confirmForce === 'push'}
+        title="Overwrite the remote?"
+        body="This force-pushes your local notes, replacing whatever is on the remote."
+        confirmLabel="Use local"
+        onConfirm={() => { setConfirmForce(null); void handleGitForcePush(); }}
+        onClose={() => setConfirmForce(null)}
+      />
     </div>
   );
 }

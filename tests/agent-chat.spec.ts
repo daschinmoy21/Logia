@@ -6,6 +6,11 @@ async function choose(page: Page, name: string) {
   await page.getByRole('menuitemradio', { name: new RegExp(`^${name}( |$)`) }).click();
 }
 
+async function pick(page: Page, label: string, option: string) {
+  await page.getByRole('button', { name: new RegExp(`^${label}:`) }).click();
+  await page.getByRole('menuitemradio', { name: option, exact: true }).click();
+}
+
 async function openChat(page: Page) {
   await openAgentWorkspace(page);
   await installAgentFixture(page);
@@ -25,9 +30,8 @@ test('new sessions open directly into a composer and send real model, effort, ac
   await page.getByRole('button', { name: /^Choose model for Codex CLI/ }).click();
   await page.getByRole('menuitemradio', { name: 'Codex CLI: Fixture Model', exact: true }).click();
   await expect(page.getByTestId('model-dropdown')).toHaveCount(0);
-  await expect(page.getByRole('combobox', { name: 'Reasoning effort', exact: true }).locator('option[value="high"]')).toHaveCount(1);
-  await page.getByRole('combobox', { name: 'Reasoning effort', exact: true }).selectOption('high');
-  await page.getByRole('combobox', { name: 'Agent access', exact: true }).selectOption('workspace-write');
+  await pick(page, 'Reasoning effort', 'High');
+  await pick(page, 'Agent access', 'Workspace');
   await expect(page.getByRole('button', { name: 'Attach current note', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await page.screenshot({ path: testInfo.outputPath('agent-chat.png') });
   await composer.fill('Summarize the attached note');
@@ -53,14 +57,14 @@ test('new sessions open directly into a composer and send real model, effort, ac
 
 test('follow-ups and agent switching keep the conversation, while closing the panel leaves it intact', async ({ page }) => {
   await openChat(page);
-  await page.getByRole('combobox', { name: 'Agent access', exact: true }).selectOption('workspace-write');
+  await pick(page, 'Agent access', 'Workspace');
   await page.getByRole('textbox', { name: 'Message Codex', exact: true }).fill('First question');
   await page.getByRole('button', { name: 'Send to Codex', exact: true }).click();
   await expect(page.getByRole('log')).toContainText('Fixture chat reply');
   await choose(page, 'Pi');
   await expect(page.getByRole('textbox', { name: 'Message Pi', exact: true })).toBeVisible();
   await choose(page, 'Codex');
-  await expect(page.getByRole('combobox', { name: 'Agent access', exact: true })).toHaveValue('workspace-write');
+  await expect(page.getByRole('button', { name: 'Agent access: Workspace', exact: true })).toBeVisible();
   await expect(page.getByRole('log')).toContainText('First question');
   await page.getByRole('button', { name: 'Close AI sidebar', exact: true }).first().click();
   await page.getByRole('button', { name: 'Open AI sidebar', exact: true }).click();
@@ -103,7 +107,7 @@ test('composer controls and transcript fit a mobile viewport', async ({ page }, 
   await page.setViewportSize({ width: 390, height: 844 });
   await openChat(page);
   await expect.poll(async () => page.getByTestId('agent-chat').evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
-  await expect(page.getByRole('combobox', { name: 'Agent access', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^Agent access:/ })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Send to Codex', exact: true })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('agent-chat-mobile.png') });
   await page.getByRole('textbox', { name: 'Message Codex', exact: true }).fill('Hello on mobile');

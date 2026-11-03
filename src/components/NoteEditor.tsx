@@ -1,5 +1,5 @@
 import { BlockNoteView } from "@blocknote/mantine";
-import { Fragment, useEffect, useState, useRef } from "react";
+import { Fragment, useEffect, useRef } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import {
   useEditorContext,
@@ -10,24 +10,18 @@ import {
 import { AIMenuController } from "@blocknote/xl-ai";
 import useUiStore from "../store/UiStore";
 import { useNotesStore } from "../store/notesStore";
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
-import { Slash, Star, Download, FileText, FileType, Link2, PanelRightDashed } from "lucide-react";
+import { Star, Download, FileText, FileType, Link2, PanelRightDashed } from "lucide-react";
 import { save } from "@tauri-apps/plugin-dialog";
 import { writeTextFile } from "@tauri-apps/plugin-fs";
 import toast from "react-hot-toast";
 import { useVimEditor } from "../hooks/useVimEditor";
 import { cachedBacklinks, NoteContextPanel } from "./workspace/NoteContextPanel";
-import { goHome, revealBacklinks } from "./workspace/actions";
+import { revealBacklinks } from "./workspace/actions";
+import { IconButton, Tip } from "./ui/kit";
+import { Menu, MenuContent, MenuItem, MenuTrigger } from "./ui/menu";
 import { useLinkNotes } from "./workspace/noteMeta";
 import { useWorkspaceStore } from "./workspace/workspaceStore";
-import { SHORTCUTS, shortcutAria, shortcutText } from "./workspace/shortcuts";
+import { SHORTCUTS, shortcutAria } from "./workspace/shortcuts";
 
 /** Below this pane width the context panel floats over the text instead of squeezing it. */
 const COMPACT_PANE_WIDTH = 760;
@@ -52,9 +46,6 @@ export function NoteEditor() {
 
   useVimEditor(editor);
 
-  const [showExportMenu, setShowExportMenu] = useState(false);
-  const exportMenuRef = useRef<HTMLDivElement>(null);
-
   useEffect(() => {
     if (editor) {
       setEditor(editor, noteId);
@@ -75,22 +66,8 @@ export function NoteEditor() {
     return () => observer.disconnect();
   }, [setContextCompact, editor]);
 
-  // Close export menu when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
-        setShowExportMenu(false);
-      }
-    };
-    if (showExportMenu) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showExportMenu]);
-
   const exportAsMarkdown = async () => {
     if (!editor || !currentNote) return;
-    setShowExportMenu(false);
 
     try {
       const markdown = await editor.blocksToMarkdownLossy(editor.document);
@@ -124,7 +101,6 @@ export function NoteEditor() {
 
   const exportAsPDF = async () => {
     if (!editor || !currentNote) return;
-    setShowExportMenu(false);
 
     try {
       const html = await editor.blocksToHTMLLossy(editor.document);
@@ -207,8 +183,8 @@ export function NoteEditor() {
 
   if (!editor) {
     return (
-      <div className="flex flex-col w-full h-full bg-zinc-930 items-center justify-center">
-        <div className="text-zinc-400">Loading editor...</div>
+      <div className="flex h-full w-full flex-col items-center justify-center bg-zinc-950">
+        <div className="text-[13px] text-zinc-500">Loading editor…</div>
       </div>
     );
   }
@@ -244,112 +220,63 @@ export function NoteEditor() {
       className="relative flex h-full min-h-0 w-full bg-zinc-950"
     >
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex h-11 flex-shrink-0 items-center justify-between gap-2 px-3 sm:px-6">
-          <div className="min-w-0 flex-1 overflow-hidden">
-            <Breadcrumb>
-              <BreadcrumbList className="flex-nowrap">
-                <BreadcrumbItem>
-                  <BreadcrumbLink asChild className="text-zinc-500 hover:text-zinc-300 text-xs">
-                    <button type="button" onClick={() => goHome()}>Home</button>
-                  </BreadcrumbLink>
-                </BreadcrumbItem>
-                <BreadcrumbSeparator><Slash className="size-3 text-zinc-600" /></BreadcrumbSeparator>
+        <div className="flex h-9 flex-shrink-0 items-center justify-between gap-2 pl-3 pr-1.5">
+          <nav aria-label="Note location" className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden text-xs text-zinc-500">
+            {breadcrumbs.map((folder) => (
+              <Fragment key={folder.id}>
+                <span className="hidden max-w-[10rem] truncate sm:inline" title={folder.name}>{folder.name}</span>
+                <span className="hidden text-zinc-700 sm:inline" aria-hidden="true">/</span>
+              </Fragment>
+            ))}
+            <span aria-current="page" className="truncate text-zinc-300">{currentNote?.title || "Untitled"}</span>
+          </nav>
 
-                {breadcrumbs.map((folder) => (
-                  <Fragment key={folder.id}>
-                    <BreadcrumbItem className="hidden min-w-0 sm:inline-flex">
-                      <span className="max-w-[10rem] truncate text-xs text-zinc-500" title={folder.name}>
-                        {folder.name}
-                      </span>
-                    </BreadcrumbItem>
-                    <BreadcrumbSeparator className="hidden sm:list-item"><Slash className="size-3 text-zinc-600" /></BreadcrumbSeparator>
-                  </Fragment>
-                ))}
-
-                <BreadcrumbItem className="min-w-0">
-                  <BreadcrumbPage className="block truncate text-zinc-300 text-xs font-medium">
-                    {currentNote?.title || "Untitled"}
-                  </BreadcrumbPage>
-                </BreadcrumbItem>
-              </BreadcrumbList>
-            </Breadcrumb>
-          </div>
-
-          <div className="flex flex-shrink-0 items-center gap-1">
-            <button
-              type="button"
-              onClick={revealBacklinks}
-              className="flex items-center gap-1 rounded-md px-1.5 py-1 text-xs text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
-              title="Show notes that link here"
-              aria-label={`Backlinks: ${backlinks.length} ${backlinks.length === 1 ? "note links" : "notes link"} here`}
-            >
-              <Link2 size={15} />
-              <span className="tabular-nums">{backlinks.length}</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={toggleContextPanel}
-              className={`p-1.5 rounded-md transition-colors ${panelOpen
-                ? "text-blue-400 bg-blue-400/10"
-                : "text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800"
-                }`}
-              title={`${panelOpen ? "Hide" : "Show"} outline, tags and links (${shortcutText(SHORTCUTS.contextPanel)})`}
-              aria-label={panelOpen ? "Hide note context" : "Show note context"}
-              aria-pressed={panelOpen}
-              aria-keyshortcuts={shortcutAria(SHORTCUTS.contextPanel)}
-            >
-              <PanelRightDashed size={16} />
-            </button>
-
-            <button
-              type="button"
-              onClick={() => currentNote && toggleStar(currentNote.id)}
-              className={`p-1.5 hover:bg-zinc-800 rounded-md transition-colors ${currentNote?.starred
-                ? 'text-yellow-400'
-                : 'text-zinc-500 hover:text-yellow-400'
-                }`}
-              title={currentNote?.starred ? "Unstar" : "Star"}
-              aria-label={currentNote?.starred ? "Unstar note" : "Star note"}
-              aria-pressed={!!currentNote?.starred}
-            >
-              <Star size={16} className={currentNote?.starred ? "fill-yellow-400" : ""} />
-            </button>
-
-            {/* Export dropdown */}
-            <div className="relative" ref={exportMenuRef}>
+          <div className="flex flex-shrink-0 items-center gap-0.5">
+            <Tip label="Notes that link here">
               <button
                 type="button"
-                onClick={() => setShowExportMenu(!showExportMenu)}
-                className="p-1.5 text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 rounded-md transition-colors"
-                title="Export"
-                aria-label="Export note"
-                aria-expanded={showExportMenu}
+                onClick={revealBacklinks}
+                className="flex h-7 items-center gap-1 rounded-md px-1.5 text-xs text-zinc-400 hover:bg-white/[0.07] hover:text-zinc-100"
+                aria-label={`Backlinks: ${backlinks.length} ${backlinks.length === 1 ? "note links" : "notes link"} here`}
               >
-                <Download size={16} />
+                <Link2 size={14} />
+                <span className="tabular-nums">{backlinks.length}</span>
               </button>
+            </Tip>
 
-              {showExportMenu && (
+            <IconButton
+              label={panelOpen ? "Hide note context" : "Show note context"}
+              hint={`${panelOpen ? "Hide" : "Show"} outline, tags and links`}
+              shortcut={SHORTCUTS.contextPanel}
+              active={panelOpen}
+              aria-pressed={panelOpen}
+              aria-keyshortcuts={shortcutAria(SHORTCUTS.contextPanel)}
+              onClick={toggleContextPanel}
+            >
+              <PanelRightDashed size={15} />
+            </IconButton>
 
-                <div className="absolute right-0 top-full mt-1 bg-zinc-900 border border-zinc-800 rounded-lg shadow-xl py-1 min-w-[160px] z-50">
-                  <p className="px-3 py-2 text-sm text-zinc-300">Share as:</p>
-                  <button
-                    onClick={exportAsMarkdown}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100 transition-colors"
-                  >
-                    <FileText size={14} />
-                    Markdown (.md)
-                  </button>
-                  <button
-                    onClick={exportAsPDF}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100 transition-colors"
-                  >
-                    <FileType size={14} />
-                    PDF (Print)
-                  </button>
-                </div>
-              )}
-            </div>
+            <IconButton
+              label={currentNote?.starred ? "Unstar note" : "Star note"}
+              hint={currentNote?.starred ? "Remove from favorites" : "Add to favorites"}
+              aria-pressed={!!currentNote?.starred}
+              className={currentNote?.starred ? "!text-amber-300" : ""}
+              onClick={() => currentNote && toggleStar(currentNote.id)}
+            >
+              <Star size={15} className={currentNote?.starred ? "fill-current" : ""} />
+            </IconButton>
+
+            <Menu>
+              <MenuTrigger asChild>
+                <IconButton label="Export note" hint="Export">
+                  <Download size={15} />
+                </IconButton>
+              </MenuTrigger>
+              <MenuContent align="end">
+                <MenuItem icon={<FileText size={14} />} onSelect={() => void exportAsMarkdown()}>Markdown (.md)</MenuItem>
+                <MenuItem icon={<FileType size={14} />} onSelect={() => void exportAsPDF()}>PDF (Print)</MenuItem>
+              </MenuContent>
+            </Menu>
           </div>
         </div>
 
@@ -359,7 +286,7 @@ export function NoteEditor() {
             editor={editor}
             formattingToolbar={false}
             slashMenu={false}
-            className="note-editor-view mx-auto min-h-full max-w-4xl bg-zinc-950 pb-24 pt-2 sm:pt-6"
+            className="note-editor-view mx-auto min-h-full max-w-[828px] pb-32 pt-2 sm:pt-8"
             data-theming-css-variables-demo
           >
             {/* AI Menu - Only show if API key is present */}

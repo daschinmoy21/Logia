@@ -158,5 +158,16 @@ console.log('note-utils footerSaveLabel: ok');
     [0, 1, 2, 1, 0, 0],
   );
   assert.equal(open.find((i) => i.id === 'inA1')?.parentId, 'A1');
+
+  const unsorted = flattenVisibleTree(
+    [folder('z'), folder('a'), folder('orphan', 'missing')],
+    [makeNote({ id: 'n10', title: 'Note 10' }), makeNote({ id: 'n2', title: 'Note 2' }), makeNote({ id: 'lost', title: 'A lost note', folder_id: 'missing' })],
+    new Set(),
+  );
+  assert.deepEqual(
+    unsorted.map((i) => i.id),
+    ['a', 'orphan', 'z', 'lost', 'n2', 'n10'],
+    'folders then notes, in natural order, with orphans kept at the root',
+  );
   console.log('note-utils flattenVisibleTree: ok');
 }

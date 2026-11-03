@@ -73,7 +73,7 @@ export const AgentTerminalPane = memo(function AgentTerminalPane({ tool }: { too
   return (
     <div className="flex h-full min-h-0 flex-col">
       {session && hasTerminal && (
-        <div className="border-b border-zinc-900 px-3 py-1.5">
+        <div className="border-b border-zinc-800 px-3 py-1.5">
           <div className="flex items-center gap-2 text-xs">
             <span
               className={`size-1.5 flex-shrink-0 rounded-full ${
@@ -96,7 +96,7 @@ export const AgentTerminalPane = memo(function AgentTerminalPane({ tool }: { too
                 aria-pressed={composerOpen}
                 title={composerOpen ? 'Hide the prompt composer' : 'Show the prompt composer'}
                 aria-label={composerOpen ? 'Hide the prompt composer' : 'Show the prompt composer'}
-                className={`rounded p-1 transition-colors hover:bg-zinc-900 ${composerOpen ? 'text-blue-300' : 'text-zinc-500'}`}
+                className={`rounded p-1 transition-colors hover:bg-zinc-900 ${composerOpen ? 'text-zinc-200' : 'text-zinc-500'}`}
               >
                 <PencilLine size={13} />
               </button>
@@ -130,7 +130,7 @@ export const AgentTerminalPane = memo(function AgentTerminalPane({ tool }: { too
               ? `Snapshot of “${session.snapshotTitle}” in note-context.md. Edits don't sync either way.`
               : 'No note attached.'}
           </p>
-          {live && <p className="truncate text-[10px] text-zinc-600">Ctrl+H/L moves between panes · Ctrl+J/K cycles · Ctrl+Shift+L hides this panel.</p>}
+          {live && <p className="truncate text-[10px] text-zinc-500">Ctrl+H/L moves between panes · Ctrl+J/K cycles · Ctrl+Shift+L hides this panel.</p>}
           {session.error && (
             <p role="alert" className="mt-1 text-xs text-red-300">
               {session.error}
@@ -204,10 +204,10 @@ function AgentStartScreen({ tool, containerRef }: { tool: AgentTool; containerRe
   };
 
   return (
-    <div className="absolute inset-0 overflow-y-auto bg-zinc-950 p-4">
+    <div className="absolute inset-0 overflow-y-auto bg-zinc-950 px-4 py-3">
       <div className="flex items-center gap-2">
-        <ProviderIcon providerId={tool} size={22} />
-        <h3 className="flex-1 truncate text-sm font-semibold text-zinc-100">{def.label}</h3>
+        <ProviderIcon providerId={tool} size={18} />
+        <h3 className="flex-1 truncate text-[13px] font-medium text-zinc-100">{def.label}</h3>
         <span
           data-testid="agent-availability"
           className={`rounded px-1.5 py-0.5 text-[11px] ${
@@ -247,7 +247,7 @@ function AgentStartScreen({ tool, containerRef }: { tool: AgentTool; containerRe
           type="button"
           disabled={!canLaunch}
           onClick={() => start(false)}
-          className="inline-flex items-center justify-center gap-2 rounded-lg bg-zinc-100 px-3 py-2 text-sm font-medium text-zinc-900 transition-colors hover:bg-white disabled:bg-zinc-800 disabled:text-zinc-500"
+          className="inline-flex h-8 items-center justify-center gap-2 rounded-md bg-blue-500 px-3 text-[13px] font-medium text-zinc-925 hover:bg-blue-400 disabled:bg-zinc-800 disabled:text-zinc-500"
         >
           {starting ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
           {starting ? 'Starting…' : 'Start session'}
@@ -256,7 +256,7 @@ function AgentStartScreen({ tool, containerRef }: { tool: AgentTool; containerRe
           type="button"
           disabled={!canLaunch}
           onClick={() => start(true)}
-          className="inline-flex items-center justify-center gap-2 rounded-lg border border-zinc-800 px-3 py-2 text-sm text-zinc-300 transition-colors hover:border-zinc-600 hover:text-zinc-100 disabled:text-zinc-600 disabled:hover:border-zinc-800"
+          className="inline-flex h-8 items-center justify-center gap-2 rounded-md border border-zinc-800 bg-zinc-900 px-3 text-[13px] text-zinc-200 hover:bg-zinc-800 disabled:text-zinc-600 disabled:hover:bg-zinc-900"
         >
           <LogIn size={14} /> Sign in
         </button>
@@ -265,7 +265,7 @@ function AgentStartScreen({ tool, containerRef }: { tool: AgentTool; containerRe
         </p>
       </div>
 
-      <label className={`mt-4 flex items-start gap-2 text-xs ${canAttach ? 'text-zinc-300' : 'text-zinc-600'}`}>
+      <label className={`mt-4 flex items-start gap-2 text-xs ${canAttach ? 'text-zinc-300' : 'text-zinc-500'}`}>
         <input
           type="checkbox"
           checked={attach && canAttach}

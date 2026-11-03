@@ -519,10 +519,10 @@ export function VimController() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.15 }}
-            className={`fixed bottom-3 left-1/2 -translate-x-1/2 z-[2000] rounded-md border px-3 py-1.5 font-mono text-xs shadow-xl backdrop-blur-xl ${
+            className={`fixed bottom-9 left-1/2 -translate-x-1/2 z-[2000] rounded-md border px-3 py-1.5 font-mono text-xs shadow-xl ${
               message.error
                 ? 'border-red-500/30 bg-red-950/80 text-red-300'
-                : 'border-zinc-700/60 bg-zinc-900/85 text-zinc-300'
+                : 'border-zinc-700/60 bg-zinc-900 text-zinc-300'
             }`}
             role="status"
           >
@@ -545,7 +545,7 @@ function WhichKey({ open }: { open: boolean }) {
           animate={{ opacity: 1, y: 0 }}
           exit={reduceMotion ? undefined : { opacity: 0, y: 8 }}
           transition={{ duration: 0.14, ease: [0.22, 1, 0.36, 1] }}
-          className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[2000] w-[min(560px,calc(100vw-2rem))] rounded-xl border border-zinc-700/60 bg-zinc-900/90 p-3 shadow-2xl backdrop-blur-xl"
+          className="fixed bottom-9 left-1/2 -translate-x-1/2 z-[2000] w-[min(560px,calc(100vw-2rem))] rounded-xl border border-zinc-800 bg-zinc-900 p-3 shadow-2xl shadow-black/60"
           role="menu"
           aria-label="Leader key bindings"
         >
@@ -614,7 +614,7 @@ function CommandLine() {
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 8 }}
       transition={{ duration: 0.12 }}
-      className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[2001] w-[min(560px,calc(100vw-2rem))] flex items-center gap-1 rounded-lg border border-zinc-700/70 bg-zinc-900/95 px-3 py-2 font-mono text-sm shadow-2xl backdrop-blur-xl"
+      className="fixed bottom-9 left-1/2 -translate-x-1/2 z-[2001] w-[min(560px,calc(100vw-2rem))] flex items-center gap-1 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 font-mono text-[13px] shadow-2xl shadow-black/60"
     >
       <span className="text-blue-300">{prefix}</span>
       <input

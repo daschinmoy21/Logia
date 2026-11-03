@@ -2,7 +2,27 @@ import { create } from 'zustand';
 import { searchWorkspaceNotes } from '../lib/workspace.ts';
 import type { Note, Folder } from '../types/Note';
 
-export type SettingsTab = 'ai' | 'editor' | 'transcription' | 'sync';
+export type SettingsTab = 'ai' | 'general' | 'editor' | 'transcription' | 'sync' | 'about';
+
+const EXPANDED_KEY = 'logia-expanded-folders';
+
+/** A restart keeps the tree the way it was left. Stale ids are harmless. */
+function loadExpanded(): Set<string> {
+  try {
+    const raw = typeof localStorage === 'undefined' ? null : localStorage.getItem(EXPANDED_KEY);
+    return new Set(raw ? JSON.parse(raw) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function saveExpanded(folders: Set<string>) {
+  try {
+    localStorage.setItem(EXPANDED_KEY, JSON.stringify([...folders]));
+  } catch {
+    // Only a convenience: the tree still works for this session.
+  }
+}
 
 interface UiState {
   isSearchActive: boolean;
@@ -20,6 +40,7 @@ interface UiState {
   renamingNoteId: string | null;
   renameValue: string;
   contextMenu: { x: number; y: number; note?: Note; folder?: Folder } | null;
+  isTrashOpen: boolean;
   isSettingsOpen: boolean;
   settingsTab: SettingsTab;
   folderRenameRequest: { id: string; name: string } | null;
@@ -49,6 +70,7 @@ interface UiState {
   finishRenaming: () => void;
   setRenameValue: (value: string) => void;
   setContextMenu: (contextMenu: { x: number; y: number; note?: Note; folder?: Folder } | null) => void;
+  setIsTrashOpen: (isOpen: boolean) => void;
   setIsSettingsOpen: (isOpen: boolean, tab?: SettingsTab) => void;
   setFolderRenameRequest: (req: { id: string; name: string } | null) => void;
   setPendingAiPrompt: (prompt: string | null) => void;
@@ -89,6 +111,7 @@ const useUiStore = create<UiState>((set) => ({
   renamingNoteId: null,
   renameValue: '',
   contextMenu: null,
+  isTrashOpen: false,
   isSettingsOpen: false,
   settingsTab: 'ai',
   folderRenameRequest: null,
@@ -97,7 +120,7 @@ const useUiStore = create<UiState>((set) => ({
   isSupportOpen: false,
   isRecording: false,
   isAiSidebarOpen: false,
-  expandedFolders: new Set(),
+  expandedFolders: loadExpanded(),
   deleteConfirmFolderId: null,
   gitSyncConfigured: false,
   isSyncing: false, // [NEW]
@@ -120,6 +143,7 @@ const useUiStore = create<UiState>((set) => ({
   finishRenaming: () => set({ renamingNoteId: null, renameValue: '' }),
   setRenameValue: (value) => set({ renameValue: value }),
   setContextMenu: (contextMenu) => set({ contextMenu }),
+  setIsTrashOpen: (isTrashOpen) => set({ isTrashOpen }),
   setIsSettingsOpen: (isOpen, tab) => set(tab ? { isSettingsOpen: isOpen, settingsTab: tab } : { isSettingsOpen: isOpen }),
   setFolderRenameRequest: (folderRenameRequest) => set({ folderRenameRequest }),
   setPendingAiPrompt: (pendingAiPrompt) => set({ pendingAiPrompt }),
@@ -131,7 +155,10 @@ const useUiStore = create<UiState>((set) => ({
   }),
   setIsProcessingRecording: (isProcessing) => set({ isProcessingRecording: isProcessing }),
   setIsAiSidebarOpen: (isOpen) => set({ isAiSidebarOpen: isOpen }),
-  setExpandedFolders: (expandedFolders) => set({ expandedFolders }),
+  setExpandedFolders: (expandedFolders) => {
+    saveExpanded(expandedFolders);
+    set({ expandedFolders });
+  },
 
   setGitSyncConfigured: (configured) => set({ gitSyncConfigured: configured }),
   setIsSyncing: (isSyncing) => set({ isSyncing }), // [NEW]

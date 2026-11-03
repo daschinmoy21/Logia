@@ -149,6 +149,6 @@ test('API model settings display refreshed server results without a static fallb
   await expect(page.getByRole('menuitemradio', { name: /Server model 1$/ })).toHaveCount(0);
   await page.route('**/catalog/v1/models', (route) => route.fulfill({ status: 503, body: '{}' }));
   await page.getByRole('button', { name: 'Refresh models', exact: true }).click();
-  await expect(page.getByRole('status')).toContainText('HTTP 503');
+  await expect(page.getByTestId('model-dropdown').getByRole('status')).toContainText('HTTP 503');
   await expect(page.getByRole('menuitemradio')).toHaveCount(0);
 });

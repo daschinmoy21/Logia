@@ -12,6 +12,7 @@ export function useUiScale() {
       void getCurrentWebview().setZoom(scale).catch((error) => console.error('Could not scale the UI:', error));
     } else {
       document.documentElement.style.zoom = String(scale);
+      document.documentElement.style.setProperty('--ui-zoom', String(scale));
     }
   }, [scale]);
 

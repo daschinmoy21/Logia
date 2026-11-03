@@ -168,10 +168,10 @@ function createTerminal(TerminalClass: typeof Terminal, FitAddonClass: typeof Fi
       },
     },
     theme: {
-      background: '#09090b',
-      foreground: '#e4e4e7',
-      cursor: '#e4e4e7',
-      selectionBackground: '#3f3f46',
+      background: '#1a1916',
+      foreground: '#e6e2d9',
+      cursor: '#e8743b',
+      selectionBackground: "#4a3a2c",
     },
   });
   const fit = new FitAddonClass();

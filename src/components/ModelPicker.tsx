@@ -50,15 +50,15 @@ export function ModelPicker({ providerId, disabled = false, scope = 'provider', 
   return <Popover className="min-w-0">{({ close }) => <>
     <PopoverButton type="button" disabled={disabled} onClick={() => { setQuery(''); setCustom(false); setCustomProvider(providerId); }}
       aria-label={scope === 'chat' ? `Choose chat model. Current: ${active.label}${model ? `, ${model}` : ''}` : `Choose model for ${active.label}. Current: ${model || 'Provider default'}`}
-      className="flex min-w-0 max-w-full items-center gap-1.5 rounded-md px-2 py-1 text-xs text-zinc-300 transition-colors hover:bg-zinc-800 disabled:opacity-50">
+      className="flex h-7 min-w-0 max-w-full items-center gap-1.5 rounded-md px-1.5 text-xs text-zinc-400 hover:bg-white/[0.07] hover:text-zinc-100 data-[open]:bg-white/[0.07] disabled:opacity-50">
       <ProviderIcon providerId={active.id} size={14} /><span className="truncate">{model || defaultModelLabel || (scope === 'chat' ? 'Choose model' : 'Provider default')}</span><ChevronDown size={12} className="shrink-0 text-zinc-500" />
     </PopoverButton>
     <PopoverPanel focus portal anchor={{ to: placement === 'above' ? 'top start' : 'bottom start', gap: 8, padding: 8 }}
       data-agent-menu data-testid="model-dropdown" aria-label="Model picker" onKeyDown={navigate}
-      className="z-[1200] flex max-h-[min(28rem,var(--available-height,28rem))] w-80 max-w-[calc(100vw-16px)] flex-col overflow-hidden rounded-xl border border-zinc-700/80 bg-zinc-900 shadow-2xl shadow-black/60 focus:outline-none">
+      className="z-[1200] flex max-h-[min(28rem,var(--available-height,28rem))] w-80 max-w-[calc(100vw-16px)] flex-col overflow-hidden menu-surface rounded-lg border border-zinc-800 bg-zinc-900 shadow-xl shadow-black/50 focus:outline-none">
       <div className="flex shrink-0 items-center gap-2 border-b border-zinc-800 px-3 py-2">
         <Search size={14} className="shrink-0 text-zinc-500" />
-        <input autoFocus aria-label="Find a model" placeholder="Search models…" value={query} onChange={(event) => setQuery(event.target.value)} className="min-w-0 flex-1 bg-transparent py-1 text-xs text-zinc-100 placeholder:text-zinc-500 focus:outline-none" />
+        <input autoFocus aria-label="Find a model" placeholder="Search models…" value={query} onChange={(event) => setQuery(event.target.value)} className="min-w-0 flex-1 bg-transparent py-1 text-xs text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus-visible:outline-none" />
         <button type="button" aria-label="Show favorite models" aria-pressed={favoritesOnly} onClick={() => setFavoritesOnly((value) => !value)} className={`rounded p-1 hover:bg-zinc-800 ${favoritesOnly ? 'text-amber-300' : 'text-zinc-500'}`}><Filter size={13} /></button>
         <button type="button" aria-label="Refresh models" onClick={() => setRefresh((value) => value + 1)} className="rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"><RefreshCw size={13} /></button>
       </div>
@@ -107,16 +107,16 @@ function ModelGroup({ provider, activeProvider, query, favoritesOnly, refresh, o
   const showDefault = provider.kind === 'cli' && !defaultId && !needle && !favoritesOnly && catalog.length > 0;
   if (!loading && !error && !filtered.length && needle) return null;
   return <section aria-label={`${provider.label} models`} className="mb-1 last:mb-0">
-    <div className="flex items-center gap-2 px-2 py-1.5 text-[10px] font-medium uppercase tracking-wide text-zinc-500"><ProviderIcon providerId={provider.id} size={12} /><span className="flex-1">{provider.label}</span>{loading && <Loader2 size={12} className="animate-spin" />}</div>
+    <div className="flex items-center gap-2 px-2 py-1.5 text-[11px] font-medium text-zinc-500"><ProviderIcon providerId={provider.id} size={12} /><span className="flex-1">{provider.label}</span>{loading && <Loader2 size={12} className="animate-spin" />}</div>
     {loading ? <p role="status" className="px-2 py-2 text-xs text-zinc-500">Loading models…</p> : error ? <p role="status" className="px-2 py-2 text-xs leading-5 text-zinc-400">{error}</p>
       : !filtered.length && !showDefault ? <p className="px-2 py-2 text-xs text-zinc-500">{favoritesOnly ? 'No favorite models.' : 'No models available.'}</p> : <>
-        {showDefault && <button type="button" role="menuitemradio" aria-checked={provider.id === activeProvider && !model} onClick={() => onSelect(provider.id, '')} className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-xs text-zinc-300 hover:bg-zinc-800 focus:bg-zinc-800 focus:outline-none"><span className="flex-1">CLI default</span>{provider.id === activeProvider && !model && <Check size={13} />}</button>}
+        {showDefault && <button type="button" role="menuitemradio" aria-checked={provider.id === activeProvider && !model} onClick={() => onSelect(provider.id, '')} className="flex w-full items-center gap-2 rounded-[5px] px-2 py-1.5 text-left text-[13px] text-zinc-200 hover:bg-white/[0.07] focus:bg-white/[0.07] focus:outline-none"><span className="flex-1">CLI default</span>{provider.id === activeProvider && !model && <Check size={13} />}</button>}
         {filtered.map((item) => {
           const selected = provider.id === activeProvider && selectedId === item.id;
           const favorite = !!favorites?.includes(item.id);
-          return <div key={item.id} className={`flex items-center rounded-md ${selected ? 'bg-zinc-800/80' : ''}`}>
-            <button type="button" role="menuitemradio" aria-label={`${provider.label}: ${item.label}`} aria-checked={selected} onClick={() => onSelect(provider.id, item.id)} className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-2 text-left text-xs text-zinc-200 hover:bg-zinc-800 focus:bg-zinc-800 focus:outline-none"><span className="min-w-0 flex-1 truncate" title={item.id}>{item.label}</span>{selected && <Check size={13} className="shrink-0 text-indigo-300" />}</button>
-            <button type="button" aria-label={`Favorite ${provider.label}: ${item.label}`} aria-pressed={favorite} onClick={() => toggleFavorite(provider.id, item.id)} className={`shrink-0 rounded-md p-2 hover:text-amber-300 ${favorite ? 'text-amber-400' : 'text-zinc-600'}`}><Star size={13} className={favorite ? 'fill-current' : ''} /></button>
+          return <div key={item.id} className={`flex items-center rounded-md ${selected ? 'bg-white/[0.05]' : ''}`}>
+            <button type="button" role="menuitemradio" aria-label={`${provider.label}: ${item.label}`} aria-checked={selected} onClick={() => onSelect(provider.id, item.id)} className="flex min-w-0 flex-1 items-center gap-2 rounded-[5px] px-2 py-1.5 text-left text-[13px] text-zinc-200 hover:bg-white/[0.07] focus:bg-white/[0.07] focus:outline-none"><span className="min-w-0 flex-1 truncate" title={item.id}>{item.label}</span>{selected && <Check size={13} className="shrink-0 text-blue-400" />}</button>
+            <button type="button" aria-label={`Favorite ${provider.label}: ${item.label}`} aria-pressed={favorite} onClick={() => toggleFavorite(provider.id, item.id)} className={`shrink-0 rounded-md p-2 hover:text-amber-300 ${favorite ? 'text-amber-400' : 'text-zinc-500'}`}><Star size={13} className={favorite ? 'fill-current' : ''} /></button>
           </div>;
         })}
       </>}

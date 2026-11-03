@@ -3,10 +3,9 @@ import { isTauri } from '@tauri-apps/api/core';
 import {
   AlertTriangle,
   CalendarDays,
-  ChevronDown,
   FileText,
   FileUp,
-  Layout,
+  PenTool,
   Plus,
   Search,
   SearchX,
@@ -16,6 +15,9 @@ import {
 import { useNotesStore } from '../../store/notesStore';
 import { getNoteTags, notePreview, searchWorkspaceNotes } from '../../lib/workspace';
 import type { Note } from '../../types/Note';
+import useUiStore from '../../store/UiStore';
+import { Button, Tip } from '../ui/kit';
+import { PillSelect } from '../ui/menu';
 import {
   createCanvas,
   createTextNote,
@@ -26,12 +28,13 @@ import {
   relativeTime,
   toggleStar,
 } from './actions';
+import { PixelScene } from './PixelScene';
 import { useWorkspaceStore, type HomeFilter, type HomeSort } from './workspaceStore';
-import { isBlockingModalOpen, isEditableTarget, Kbd, SHORTCUTS, shortcutAria, shortcutText, type Shortcut } from './shortcuts';
+import { isBlockingModalOpen, isEditableTarget, Kbd, SHORTCUTS, shortcutAria, type Shortcut } from './shortcuts';
 
 const PAGE_SIZE = 100;
 const TAG_LIMIT = 14;
-const focusRing = 'outline-none focus-visible:ring-2 focus-visible:ring-blue-500/70';
+const RECENT_LIMIT = 4;
 
 const FILTERS: Array<{ id: HomeFilter; label: string }> = [
   { id: 'all', label: 'All' },
@@ -52,23 +55,23 @@ function ActionButton({
   primary?: boolean;
   shortcut?: Shortcut;
 }) {
-  return (
-    <button
-      type="button"
+  const button = (
+    <Button
+      variant={primary ? 'primary' : 'secondary'}
       onClick={onClick}
       aria-keyshortcuts={shortcut ? shortcutAria(shortcut) : undefined}
-      title={shortcut ? `${label} (${shortcutText(shortcut)})` : label}
-      className={`inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-md border px-2.5 text-[13px] font-medium transition-colors ${focusRing} ${
-        primary
-          ? 'border-blue-500 bg-blue-600 text-white hover:bg-blue-500'
-          : 'border-zinc-800 bg-zinc-900/60 text-zinc-300 hover:border-zinc-700 hover:bg-zinc-800 hover:text-zinc-100'
-      }`}
     >
       {icon}
       {label}
-    </button>
+    </Button>
   );
+  return shortcut ? <Tip label={label} shortcut={shortcut}>{button}</Tip> : button;
 }
+
+const openNoteMenu = (event: { preventDefault: () => void; clientX: number; clientY: number }, note: Note) => {
+  event.preventDefault();
+  useUiStore.getState().setContextMenu({ x: event.clientX, y: event.clientY, note });
+};
 
 function NoteRow({ note, path, tags }: { note: Note; path: string; tags: string[] }) {
   const title = note.title || 'Untitled';
@@ -78,32 +81,29 @@ function NoteRow({ note, path, tags }: { note: Note; path: string; tags: string[
   const updated = new Date(note.updated_at);
 
   return (
-    <li className="group relative flex items-start border-b border-zinc-900 last:border-b-0">
+    <li className="group relative">
       <button
         type="button"
         data-note-row
         onClick={() => openNote(note)}
-        className={`flex min-w-0 flex-1 items-start gap-3 rounded-md px-2 py-3 text-left transition-colors hover:bg-zinc-900/70 ${focusRing} focus-visible:ring-inset`}
+        onContextMenu={(event) => openNoteMenu(event, note)}
+        className="flex h-9 w-full min-w-0 items-center gap-2.5 rounded-md pl-2 pr-9 text-left hover:bg-white/[0.04]"
       >
-        <span className="mt-0.5 flex-shrink-0" aria-hidden="true">
-          {isCanvas ? <Layout size={15} className="text-purple-400/90" /> : <FileText size={15} className="text-zinc-500" />}
+        <span className="flex-shrink-0 text-zinc-500" aria-hidden="true">
+          {isCanvas ? <PenTool size={14} /> : <FileText size={15} />}
         </span>
-        <span className="min-w-0 flex-1 pr-7">
-          <span className="block truncate text-sm font-medium text-zinc-100">{title}</span>
-          {preview && <span className="mt-0.5 line-clamp-2 block text-[13px] leading-5 text-zinc-400">{preview}</span>}
-          <span className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-zinc-500">
-            {when && (
-              <time dateTime={note.updated_at} title={Number.isNaN(updated.getTime()) ? undefined : updated.toLocaleString()}>
-                {when}
-              </time>
-            )}
-            {isCanvas && <span className="text-purple-400/80">Canvas</span>}
-            {path && <span className="max-w-[16rem] truncate">{path}</span>}
-            {tags.slice(0, 3).map((tag) => (
-              <span key={tag} className="text-blue-300/70">#{tag}</span>
-            ))}
-            {tags.length > 3 && <span>+{tags.length - 3}</span>}
-          </span>
+        <span className="max-w-[55%] flex-shrink-0 truncate text-[13px] text-zinc-100">{title}</span>
+        <span className="hidden min-w-0 flex-1 truncate text-[13px] text-zinc-500 sm:block">{preview}</span>
+        <span className="ml-auto flex flex-shrink-0 items-center gap-2.5 text-xs text-zinc-500">
+          {tags.slice(0, 2).map((tag) => (
+            <span key={tag} className="hidden text-zinc-400 lg:inline">#{tag}</span>
+          ))}
+          {path && <span className="hidden max-w-[9rem] truncate md:inline">{path}</span>}
+          {when && (
+            <time dateTime={note.updated_at} title={Number.isNaN(updated.getTime()) ? undefined : updated.toLocaleString()} className="whitespace-nowrap font-mono text-[11px]">
+              {when}
+            </time>
+          )}
         </span>
       </button>
       <button
@@ -111,45 +111,71 @@ function NoteRow({ note, path, tags }: { note: Note; path: string; tags: string[
         onClick={() => toggleStar(note)}
         aria-pressed={!!note.starred}
         aria-label={note.starred ? `Unstar ${title}` : `Star ${title}`}
-        title={note.starred ? 'Unstar' : 'Star'}
-        className={`absolute right-1.5 top-2.5 rounded-md p-1 transition-colors hover:bg-zinc-800 ${focusRing} ${
-          note.starred ? 'text-yellow-400' : 'text-zinc-600 hover:text-yellow-400 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 focus-visible:opacity-100'
+        className={`absolute right-1.5 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center rounded hover:bg-white/10 ${
+          note.starred ? 'text-amber-300' : 'text-zinc-500 hover:text-zinc-100 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 focus-visible:opacity-100'
         }`}
       >
-        <Star size={14} className={note.starred ? 'fill-yellow-400' : ''} />
+        <Star size={13} className={note.starred ? 'fill-current' : ''} />
       </button>
     </li>
   );
 }
 
+function RecentCards({ notes }: { notes: Note[] }) {
+  return (
+    <section aria-label="Jump back in" className="mt-8">
+      <h2 className="mb-2 px-0.5 text-xs font-medium text-zinc-400">Jump back in</h2>
+      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+        {notes.map((note) => (
+          <button
+            key={note.id}
+            type="button"
+            onClick={() => openNote(note)}
+            onContextMenu={(event) => openNoteMenu(event, note)}
+            className="flex min-w-0 flex-col gap-3 rounded-lg border border-zinc-800/80 bg-zinc-925 p-3 text-left hover:border-zinc-700 hover:bg-zinc-900"
+          >
+            <span className="text-zinc-500" aria-hidden="true">
+              {note.note_type === 'canvas' ? <PenTool size={15} /> : <FileText size={15} />}
+            </span>
+            <span className="min-w-0">
+              <span className="block truncate text-[13px] font-medium text-zinc-100">{note.title || 'Untitled'}</span>
+              <span className="mt-1 block truncate font-mono text-[11px] text-zinc-500">{relativeTime(note.updated_at)}</span>
+            </span>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function FirstRun() {
   const cards = [
-    { icon: <FileText size={18} className="text-blue-400" />, title: 'Write a note', body: 'Headings, lists, code and [[links]] between notes.', onClick: () => createTextNote() },
-    { icon: <CalendarDays size={18} className="text-emerald-400" />, title: "Start today's note", body: 'A dated page with space for intentions and notes.', onClick: openToday },
-    { icon: <FileUp size={18} className="text-amber-400" />, title: 'Import Markdown', body: 'Bring in .md files. Your originals are not changed.', onClick: importMarkdown },
-    { icon: <Layout size={18} className="text-purple-400" />, title: 'Open a canvas', body: 'A freeform space for sketches and diagrams.', onClick: () => createCanvas() },
+    { icon: <FileText size={16} />, title: 'Write a note', body: 'Headings, lists, code and [[links]] between notes.', onClick: () => createTextNote() },
+    { icon: <CalendarDays size={16} />, title: "Start today's note", body: 'A dated page with space for intentions and notes.', onClick: openToday },
+    { icon: <FileUp size={16} />, title: 'Import Markdown', body: 'Bring in .md files. Your originals are not changed.', onClick: importMarkdown },
+    { icon: <PenTool size={16} />, title: 'Open a canvas', body: 'A freeform space for sketches and diagrams.', onClick: () => createCanvas() },
   ];
   return (
-    <section aria-labelledby="first-run-title" className="mx-auto max-w-2xl pt-6 sm:pt-14">
-      <h2 id="first-run-title" className="text-xl font-semibold tracking-tight text-zinc-100">Nothing here yet</h2>
-      <p className="mt-1.5 text-sm text-zinc-400">Pick a starting point. Everything you add will be listed and searchable here.</p>
-      <div className="mt-6 grid gap-2.5 sm:grid-cols-2">
+    <section aria-labelledby="first-run-title" className="pt-6">
+      <h2 id="first-run-title" className="text-center text-sm font-medium text-zinc-100">Nothing here yet</h2>
+      <p className="mt-1 text-center text-[13px] text-zinc-400">Pick a starting point. Everything you add will be listed and searchable here.</p>
+      <div className="mt-5 grid gap-2 sm:grid-cols-2">
         {cards.map((card) => (
           <button
             key={card.title}
             type="button"
             onClick={card.onClick}
-            className={`flex items-start gap-3 rounded-lg border border-zinc-800 bg-zinc-900/40 p-4 text-left transition-colors hover:border-zinc-700 hover:bg-zinc-900 ${focusRing}`}
+            className="flex items-start gap-3 rounded-lg border border-zinc-800/80 bg-zinc-925 p-3.5 text-left hover:border-zinc-700 hover:bg-zinc-900"
           >
-            <span className="mt-0.5 flex-shrink-0" aria-hidden="true">{card.icon}</span>
+            <span className="mt-0.5 flex-shrink-0 text-zinc-400" aria-hidden="true">{card.icon}</span>
             <span>
-              <span className="block text-sm font-medium text-zinc-100">{card.title}</span>
-              <span className="mt-0.5 block text-[13px] leading-5 text-zinc-400">{card.body}</span>
+              <span className="block text-[13px] font-medium text-zinc-100">{card.title}</span>
+              <span className="mt-0.5 block text-xs leading-5 text-zinc-500">{card.body}</span>
             </span>
           </button>
         ))}
       </div>
-      <p className="mt-6 flex flex-wrap items-center gap-1.5 text-xs text-zinc-500">
+      <p className="mt-6 flex flex-wrap items-center justify-center gap-1.5 text-xs text-zinc-500">
         Press <Kbd keys={SHORTCUTS.commands} /> any time to see every command.
       </p>
     </section>
@@ -186,8 +212,8 @@ function NoResults({
 
   return (
     <div className="flex flex-col items-center px-4 py-14 text-center">
-      <SearchX size={22} className="text-zinc-600" aria-hidden="true" />
-      <p className="mt-3 text-sm font-medium text-zinc-200">{title}</p>
+      <SearchX size={18} className="text-zinc-600" aria-hidden="true" />
+      <p className="mt-3 text-[13px] font-medium text-zinc-200">{title}</p>
       <p className="mt-1 max-w-sm text-[13px] leading-5 text-zinc-400">{body}</p>
       <div className="mt-4 flex flex-wrap justify-center gap-2">
         {filtersOnly && filter === 'canvas' && (
@@ -204,12 +230,9 @@ function NoResults({
 
 function LoadingRows() {
   return (
-    <div aria-busy="true" aria-label="Loading notes" role="status" className="mt-8 space-y-5">
+    <div aria-busy="true" aria-label="Loading notes" role="status" className="mt-8 space-y-4">
       {[0, 1, 2, 3].map((i) => (
-        <div key={i} className="animate-pulse space-y-2 motion-reduce:animate-none">
-          <div className="h-3.5 w-1/3 rounded bg-zinc-800/80" />
-          <div className="h-3 w-3/4 rounded bg-zinc-900" />
-        </div>
+        <div key={i} className="h-3 animate-pulse rounded bg-zinc-900 motion-reduce:animate-none" style={{ width: `${70 - i * 10}%` }} />
       ))}
     </div>
   );
@@ -229,31 +252,23 @@ function LoadProblem({
   onRetry: () => void;
 }) {
   return (
-    <div role="alert" className="mt-4 flex flex-wrap items-start gap-x-3 gap-y-2 rounded-md border border-red-500/25 bg-red-500/5 px-3 py-2.5">
+    <div role="alert" className="mt-4 flex flex-wrap items-start gap-x-3 gap-y-2 rounded-lg border border-red-500/20 bg-red-500/[0.04] px-3 py-2.5">
       <AlertTriangle size={15} className="mt-0.5 flex-shrink-0 text-red-300" aria-hidden="true" />
       <div className="min-w-0 flex-1 basis-56">
-        <p className="text-sm font-medium text-red-100">{title}</p>
+        <p className="text-[13px] font-medium text-red-200">{title}</p>
         <p className="mt-0.5 text-[13px] leading-5 text-zinc-400">{body}</p>
         <p className="mt-1 break-words font-mono text-xs leading-5 text-zinc-500">{detail}</p>
       </div>
-      <button
-        type="button"
-        onClick={onRetry}
-        disabled={busy}
-        className={`h-8 flex-shrink-0 rounded-md border border-zinc-700 bg-zinc-900 px-2.5 text-[13px] font-medium text-zinc-200 transition-colors hover:bg-zinc-800 disabled:opacity-60 ${focusRing}`}
-      >
-        {busy ? 'Retrying…' : 'Retry'}
-      </button>
+      <Button onClick={onRetry} disabled={busy}>{busy ? 'Retrying…' : 'Retry'}</Button>
     </div>
   );
 }
 
-function BrowserNote() {
-  return (
-    <p className="mt-3 rounded-md border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs leading-5 text-amber-200/80">
-      This is a browser workspace. Notes are kept only in this browser. Trash, audio capture, to-dos, Git sync and saved AI keys need the desktop app.
-    </p>
-  );
+function greeting(hour = new Date().getHours()) {
+  if (hour < 5) return 'Up late';
+  if (hour < 12) return 'Good morning';
+  if (hour < 18) return 'Good afternoon';
+  return 'Good evening';
 }
 
 export function WorkspaceHome() {
@@ -340,6 +355,9 @@ export function WorkspaceHome() {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       rows()[0]?.focus();
+    } else if (e.key === 'Enter' && searching && results[0]) {
+      e.preventDefault();
+      void openNote(results[0]);
     } else if (e.key === 'Escape' && query) {
       e.preventDefault();
       setHome({ query: '' });
@@ -370,33 +388,72 @@ export function WorkspaceHome() {
     void loadFolders().finally(() => setRetryingFolders(false));
   };
   const native = isTauri();
+  const showRecents = !searching && filter === 'all' && !tag && notes.length > RECENT_LIMIT;
+  const recents = showRecents
+    ? [...notes].sort((a, b) => (Date.parse(b.updated_at) || 0) - (Date.parse(a.updated_at) || 0)).slice(0, RECENT_LIMIT)
+    : [];
 
   const countLabel = `${results.length} ${results.length === 1 ? 'note' : 'notes'}`;
 
   return (
     <div className="h-full min-h-0 overflow-y-auto bg-zinc-950">
-      <main className="mx-auto w-full max-w-4xl px-4 pb-16 pt-6 sm:px-8 sm:pt-10">
-        <header className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
-          <div className="min-w-0">
-            <h1 className="text-2xl font-semibold tracking-tight text-zinc-100">Home</h1>
-            {!loading && notes.length > 0 && (
-              <p className="mt-0.5 text-[13px] text-zinc-500">
-                {counts.all - counts.canvas} {counts.all - counts.canvas === 1 ? 'note' : 'notes'}
-                {counts.canvas > 0 && ` · ${counts.canvas} ${counts.canvas === 1 ? 'canvas' : 'canvases'}`}
-              </p>
-            )}
-          </div>
-          {!isEmptyWorkspace && !notesUnavailable && (
-            <div className="flex flex-wrap gap-1.5">
-              <ActionButton primary icon={<Plus size={14} />} label="New note" onClick={() => createTextNote()} shortcut={native ? SHORTCUTS.newNote : undefined} />
-              <ActionButton icon={<Layout size={14} />} label="New canvas" onClick={() => createCanvas()} />
-              <ActionButton icon={<CalendarDays size={14} />} label="Today" onClick={openToday} shortcut={SHORTCUTS.dailyNote} />
-              <ActionButton icon={<FileUp size={14} />} label="Import" onClick={importMarkdown} />
-            </div>
-          )}
+      <div className="relative min-h-full">
+      <PixelScene className="absolute inset-x-0 top-0 h-[240px] w-full sm:h-[400px]" />
+      <main className="relative mx-auto w-full max-w-[780px] px-4 pb-16 pt-[140px] sm:px-8 sm:pt-[250px]">
+        <header className="text-center">
+          <h1 className="text-[24px] font-semibold tracking-tight text-zinc-50 [text-shadow:0_1px_12px_rgb(0_0_0_/_0.7)] sm:text-[28px]">
+            {greeting()}. What's on your mind?
+          </h1>
         </header>
 
-        {!native && <BrowserNote />}
+        {!loading && notes.length > 0 && (
+          <div className="mt-5 rounded-xl border border-zinc-800 bg-zinc-900 p-1.5 shadow-2xl shadow-black/50">
+            <div className="relative rounded-lg bg-zinc-950/70 focus-within:ring-1 focus-within:ring-zinc-600">
+              <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" aria-hidden="true" />
+              <input
+                ref={searchRef}
+                type="search"
+                value={query}
+                onChange={(e) => setHome({ query: e.target.value })}
+                onKeyDown={onSearchKeyDown}
+                placeholder="Search notes, #tags, is:starred…"
+                aria-label="Search notes"
+                aria-keyshortcuts="/"
+                data-vim-escape-to-editor
+                className="h-12 w-full rounded-lg bg-transparent pl-9 pr-10 text-sm text-zinc-100 outline-none placeholder:text-zinc-500 focus-visible:outline-none [&::-webkit-search-cancel-button]:hidden"
+              />
+              {query ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setHome({ query: '' });
+                    searchRef.current?.focus();
+                  }}
+                  aria-label="Clear search"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded p-1 text-zinc-500 hover:text-zinc-200"
+                >
+                  <X size={14} />
+                </button>
+              ) : (
+                <kbd aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 hidden min-w-5 -translate-y-1/2 rounded-[4px] border border-zinc-700 px-1 text-center font-mono text-[11px] leading-[18px] text-zinc-400 sm:block">/</kbd>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-x-1 gap-y-1 pl-1.5 pr-0.5 pt-1.5">
+              <span className="mr-2 whitespace-nowrap font-mono text-[11px] text-zinc-500">
+                {counts.all - counts.canvas} {counts.all - counts.canvas === 1 ? 'note' : 'notes'}
+                {counts.canvas > 0 && ` · ${counts.canvas} ${counts.canvas === 1 ? 'canvas' : 'canvases'}`}
+              </span>
+              <Tip label="Today's note" shortcut={SHORTCUTS.dailyNote}>
+                <Button variant="ghost" size="sm" onClick={openToday} aria-keyshortcuts={shortcutAria(SHORTCUTS.dailyNote)}><CalendarDays size={13} /> Today</Button>
+              </Tip>
+              <Button variant="ghost" size="sm" onClick={() => createCanvas()}><PenTool size={12} /> New canvas</Button>
+              <Button variant="ghost" size="sm" onClick={importMarkdown}><FileUp size={13} /> Import</Button>
+              <span className="ml-auto">
+                <ActionButton primary icon={<Plus size={14} />} label="New note" onClick={() => createTextNote()} shortcut={native ? SHORTCUTS.newNote : undefined} />
+              </span>
+            </div>
+          </div>
+        )}
 
         {loadError && !loading && (
           <LoadProblem
@@ -428,91 +485,58 @@ export function WorkspaceHome() {
 
         {!loading && notes.length > 0 && (
           <>
-            <div className="sticky top-0 z-10 -mx-1 mt-5 bg-zinc-950 px-1 pb-3 pt-2">
-              <div className="relative">
-                <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" aria-hidden="true" />
-                <input
-                  ref={searchRef}
-                  type="search"
-                  value={query}
-                  onChange={(e) => setHome({ query: e.target.value })}
-                  onKeyDown={onSearchKeyDown}
-                  placeholder="Search notes, #tags, is:starred…"
-                  aria-label="Search notes"
-                  aria-keyshortcuts="/"
-                  data-vim-escape-to-editor
-                  className="h-9 w-full rounded-md border border-zinc-800 bg-zinc-900/70 pl-9 pr-9 text-sm text-zinc-100 outline-none transition-colors placeholder:text-zinc-500 focus:border-blue-500/70 focus:ring-1 focus:ring-blue-500/40 [&::-webkit-search-cancel-button]:hidden"
-                />
-                {query ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setHome({ query: '' });
-                      searchRef.current?.focus();
-                    }}
-                    aria-label="Clear search"
-                    className={`absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-zinc-500 hover:text-zinc-200 ${focusRing}`}
-                  >
-                    <X size={14} />
-                  </button>
-                ) : (
-                  <kbd aria-hidden="true" className="pointer-events-none absolute right-2.5 top-1/2 hidden -translate-y-1/2 rounded border border-zinc-700/80 bg-zinc-800/70 px-1.5 font-mono text-[10px] leading-4 text-zinc-500 sm:block">/</kbd>
-                )}
-              </div>
+            {recents.length > 0 && <RecentCards notes={recents} />}
 
-              <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2">
-                <div role="group" aria-label="Filter by type" className="flex rounded-md border border-zinc-800 p-0.5">
+            <section aria-label="All notes" className="mt-6 rounded-xl border border-zinc-800 bg-zinc-925">
+            <div className="sticky top-0 z-10 rounded-t-xl border-b border-zinc-800 bg-zinc-925 px-2.5 py-1.5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div role="group" aria-label="Filter by type" className="flex h-7 items-center rounded-md p-0.5">
                   {FILTERS.map((f) => (
                     <button
                       key={f.id}
                       type="button"
                       onClick={() => setHome({ filter: f.id })}
                       aria-pressed={filter === f.id}
-                      className={`rounded px-2.5 py-0.5 text-xs font-medium transition-colors ${focusRing} ${
-                        filter === f.id ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-400 hover:text-zinc-200'
+                      className={`flex h-full items-center gap-1.5 rounded-[4px] px-2 text-xs ${
+                        filter === f.id ? 'bg-white/[0.13] text-zinc-100' : 'text-zinc-500 hover:text-zinc-200'
                       }`}
                     >
                       {f.label}
-                      <span className={`ml-1.5 tabular-nums ${filter === f.id ? 'text-zinc-400' : 'text-zinc-600'}`}>{counts[f.id]}</span>
+                      <span className={`font-mono text-[11px] ${filter === f.id ? 'text-zinc-400' : 'text-zinc-500'}`}>{counts[f.id]}</span>
                     </button>
                   ))}
                 </div>
-                <label className="flex items-center gap-1.5 text-xs text-zinc-500">
-                  Sort
-                  <span className="relative">
-                    <select
-                      value={effectiveSort}
-                      onChange={(e) => setHome({ sort: e.target.value as HomeSort })}
-                      className={`appearance-none rounded-md border border-zinc-800 bg-zinc-900 py-1.5 pl-2.5 pr-7 text-xs text-zinc-300 hover:border-zinc-600 ${focusRing}`}
-                      style={{ colorScheme: 'dark' }}
-                    >
-                      {searching && <option value="relevance">Best match</option>}
-                      <option value="updated">Recently edited</option>
-                      <option value="created">Recently created</option>
-                      <option value="title">Title A–Z</option>
-                    </select>
-                    <ChevronDown size={12} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-zinc-400" />
-                  </span>
-                </label>
+                <PillSelect
+                  label="Sort"
+                  value={effectiveSort}
+                  align="end"
+                  onChange={(value) => setHome({ sort: value as HomeSort })}
+                  options={[
+                    ...(searching ? [{ value: 'relevance', label: 'Best match' }] : []),
+                    { value: 'updated', label: 'Recently edited' },
+                    { value: 'created', label: 'Recently created' },
+                    { value: 'title', label: 'Title A–Z' },
+                  ]}
+                />
               </div>
             </div>
 
             {/* Outside the sticky header: a long tag list shouldn't eat a small screen. */}
             {tagChips.length > 0 && (
-                <div role="group" aria-label="Filter by tag" className="mb-3 flex flex-wrap items-center gap-1">
+                <div role="group" aria-label="Filter by tag" className="flex flex-wrap items-center gap-1 px-3 pt-2.5">
                   {tagChips.map(([t, count]) => (
                     <button
                       key={t}
                       type="button"
                       onClick={() => setHome({ tag: tag === t ? null : t })}
                       aria-pressed={tag === t}
-                      className={`max-w-[14rem] truncate rounded-full border px-2 py-px text-xs transition-colors ${focusRing} ${
+                      className={`max-w-[14rem] truncate rounded-[5px] px-1.5 py-0.5 text-xs ${
                         tag === t
-                          ? 'border-blue-500/60 bg-blue-500/15 text-blue-200'
-                          : 'border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200'
+                          ? 'bg-blue-500/20 text-blue-200'
+                          : 'bg-white/[0.05] text-zinc-400 hover:bg-white/[0.13] hover:text-zinc-200'
                       }`}
                     >
-                      #{t} <span className="tabular-nums text-zinc-500">{count}</span>
+                      #{t} <span className="font-mono text-[11px] text-zinc-500">{count}</span>
                     </button>
                   ))}
                   {tagCounts.length > TAG_LIMIT && (
@@ -520,7 +544,7 @@ export function WorkspaceHome() {
                       type="button"
                       onClick={() => setShowAllTags(!showAllTags)}
                       aria-expanded={showAllTags}
-                      className={`rounded px-1.5 py-px text-xs text-zinc-500 hover:text-zinc-200 ${focusRing}`}
+                      className="rounded px-1.5 py-0.5 text-xs text-zinc-500 hover:text-zinc-200"
                     >
                       {showAllTags ? 'Fewer' : `${tagCounts.length - TAG_LIMIT} more`}
                     </button>
@@ -534,7 +558,7 @@ export function WorkspaceHome() {
               <NoResults query={deferredQuery} filter={filter} tag={tag} onClear={resetHomeFilters} />
             ) : (
               <>
-                <ul ref={listRef} onKeyDown={onListKeyDown} aria-label="Notes">
+                <ul ref={listRef} onKeyDown={onListKeyDown} aria-label="Notes" className="p-1.5">
                   {results.slice(0, visibleCount).map((note) => (
                     <NoteRow
                       key={note.id}
@@ -545,7 +569,7 @@ export function WorkspaceHome() {
                   ))}
                 </ul>
                 {results.length > visibleCount && (
-                  <div className="mt-4 flex justify-center">
+                  <div className="flex justify-center pb-3 pt-1">
                     <ActionButton
                       icon={null}
                       label={`Show more (${results.length - visibleCount} left)`}
@@ -555,9 +579,11 @@ export function WorkspaceHome() {
                 )}
               </>
             )}
+            </section>
           </>
         )}
       </main>
+      </div>
     </div>
   );
 }

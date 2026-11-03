@@ -23,17 +23,17 @@ export function EditApprovalPicker() {
   };
   return <Popover>{({ close }) => <>
     <PopoverButton type="button" aria-label={`Edit approval mode: ${selected.label}`}
-      className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-zinc-300 hover:bg-zinc-800">
+      className="flex h-7 items-center gap-1.5 rounded-md px-1.5 text-xs text-zinc-400 hover:bg-white/[0.07] hover:text-zinc-100">
       <Icon size={13} /><span>{selected.label}</span><ChevronDown size={12} className="text-zinc-500" />
     </PopoverButton>
     <PopoverPanel focus portal anchor={{ to: 'top start', gap: 8, padding: 8 }} data-agent-menu
       role="menu" aria-label="Edit approval mode" onKeyDown={navigate}
-      className="z-[1200] w-72 max-w-[calc(100vw-16px)] rounded-xl border border-zinc-700/80 bg-zinc-900 p-1.5 shadow-2xl shadow-black/60 focus:outline-none">
+      className="z-[1200] w-72 max-w-[calc(100vw-16px)] menu-surface rounded-lg border border-zinc-800 bg-zinc-900 p-1 shadow-xl shadow-black/50 focus:outline-none">
       {modes.map(({ id, label, description, icon: ModeIcon }) =>
         <button key={id} type="button" role="menuitemradio" aria-checked={mode === id} onClick={() => { setMode(id); close(); }}
-          className="w-full rounded-lg px-3 py-2.5 text-left text-zinc-200 hover:bg-zinc-800 focus:bg-zinc-800 focus:outline-none">
-          <span className="flex items-center gap-2 text-sm"><ModeIcon size={15} /><span className="flex-1">{label}</span>{mode === id && <Check size={14} className="text-indigo-300" />}</span>
-          <span className="mt-1 block text-xs leading-5 text-zinc-400">{description}</span>
+          className="w-full rounded-[5px] px-2 py-1.5 text-left text-zinc-200 hover:bg-white/[0.07] focus:bg-white/[0.07] focus:outline-none">
+          <span className="flex items-center gap-2 text-[13px]"><ModeIcon size={15} /><span className="flex-1">{label}</span>{mode === id && <Check size={14} className="text-blue-400" />}</span>
+          <span className="mt-0.5 block text-xs leading-5 text-zinc-500">{description}</span>
         </button>)}
     </PopoverPanel>
   </>}</Popover>;

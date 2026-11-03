@@ -44,7 +44,7 @@ export function revealBlock(editor: any, blockId: string) {
   // Web Animations leave the DOM attributes alone, so ProseMirror doesn't re-parse the node.
   if (!reduceMotion) {
     dom.animate(
-      [{ backgroundColor: 'rgb(59 130 246 / 0.22)' }, { backgroundColor: 'rgb(59 130 246 / 0)' }],
+      [{ backgroundColor: 'rgb(232 116 59 / 0.22)' }, { backgroundColor: 'rgb(232 116 59 / 0)' }],
       { duration: 1100, easing: 'ease-out' },
     );
   }
@@ -76,6 +76,9 @@ function focusNewNote(note: Note) {
   if (note.note_type === 'canvas') return;
   whenNoteEditorReady(note.id, (editor) => {
     const first = editor.document[0];
+    // A new note's placeholder title goes away, so the first thing typed names the note.
+    const text = Array.isArray(first?.content) ? first.content.map((c: { text?: string }) => c.text ?? '').join('') : '';
+    if (first && text === 'Untitled') editor.updateBlock(first, { content: [] });
     if (first) editor.setTextCursorPosition(first, 'end');
     editor.focus();
   });
@@ -94,6 +97,110 @@ async function createAndFocus(type: 'text' | 'canvas', folderId?: string, title?
 
 export const createTextNote = (title?: string) => createAndFocus('text', undefined, title);
 export const createCanvas = () => createAndFocus('canvas');
+
+function expandFolder(id: string) {
+  const ui = useUiStore.getState();
+  if (!ui.expandedFolders.has(id)) ui.setExpandedFolders(new Set([...ui.expandedFolders, id]));
+}
+
+/** New note or canvas in a folder, opened with the folder visible. */
+export function createIn(type: 'text' | 'canvas', folderId?: string) {
+  if (folderId) expandFolder(folderId);
+  return createAndFocus(type, folderId);
+}
+
+/** New folder with its name ready to type over. */
+export async function createFolderIn(parentId?: string) {
+  try {
+    if (parentId) expandFolder(parentId);
+    const folder = await useNotesStore.getState().createFolder('New Folder', parentId);
+    useUiStore.getState().setFolderRenameRequest({ id: folder.id, name: folder.name });
+    return folder;
+  } catch (error) {
+    toast.error(`Couldn't create the folder: ${errorText(error)}`);
+    return null;
+  }
+}
+
+export async function moveNote(id: string, folderId: string | undefined) {
+  try {
+    if (folderId) expandFolder(folderId);
+    await useNotesStore.getState().updateNote(id, { folder_id: folderId });
+  } catch (error) {
+    toast.error(`Couldn't move the note: ${errorText(error)}`);
+  }
+}
+
+export async function moveFolder(id: string, parentId: string | undefined) {
+  try {
+    if (parentId) expandFolder(parentId);
+    await useNotesStore.getState().updateFolder(id, { parent_id: parentId });
+  } catch (error) {
+    toast.error(`Couldn't move the folder: ${errorText(error)}`);
+  }
+}
+
+export async function duplicateNote(note: Note) {
+  try {
+    await useNotesStore.getState().saveCurrentNote();
+    const latest = useNotesStore.getState().notes.find((n) => n.id === note.id) ?? note;
+    await useNotesStore.getState().createNote(latest.note_type === 'canvas' ? 'canvas' : 'text', latest.folder_id, {
+      title: `${latest.title || 'Untitled'} copy`,
+      content: latest.content,
+    });
+  } catch (error) {
+    toast.error(`Couldn't duplicate the note: ${errorText(error)}`);
+  }
+}
+
+export async function copyWikiLink(note: Note) {
+  try {
+    await navigator.clipboard.writeText(`[[${note.title || 'Untitled'}]]`);
+    toast.success('Link copied');
+  } catch (error) {
+    toast.error(`Couldn't copy the link: ${errorText(error)}`);
+  }
+}
+
+/** Open without moving focus, as a tree click does. False if the current note couldn't save. */
+export async function selectNoteQuietly(note: Note) {
+  try {
+    await useNotesStore.getState().selectNote(note);
+    return true;
+  } catch (error) {
+    toast.error(`Couldn't save the current note, so it stayed open: ${errorText(error)}`);
+    return false;
+  }
+}
+
+/** Close tabs; closing the active one moves to its neighbor, or Home when none are left. */
+export async function closeTabs(ids: string[]) {
+  const { tabs, removeTabs } = useWorkspaceStore.getState();
+  const store = useNotesStore.getState();
+  const currentId = store.currentNote?.id;
+  if (currentId && ids.includes(currentId)) {
+    const index = tabs.indexOf(currentId);
+    const nextId = [...tabs.slice(index + 1), ...tabs.slice(0, index).reverse()].find((id) => !ids.includes(id));
+    const next = nextId ? store.notes.find((note) => note.id === nextId) : undefined;
+    try {
+      await store.selectNote(next ?? null);
+    } catch (error) {
+      toast.error(`Couldn't save the current note, so it stayed open: ${errorText(error)}`);
+      return;
+    }
+  }
+  removeTabs(ids);
+}
+
+export function cycleTab(delta: number) {
+  const { tabs } = useWorkspaceStore.getState();
+  const store = useNotesStore.getState();
+  if (!tabs.length) return;
+  const index = store.currentNote ? tabs.indexOf(store.currentNote.id) : -1;
+  const nextId = tabs[(index + delta + tabs.length) % tabs.length];
+  const next = store.notes.find((note) => note.id === nextId);
+  if (next) void openNote(next);
+}
 
 export async function openToday() {
   try {

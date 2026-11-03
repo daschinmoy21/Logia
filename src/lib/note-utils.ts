@@ -107,35 +107,48 @@ export function footerSaveLabel(isSaved: boolean): string {
   return isSaved ? 'Saved' : 'Saving…';
 }
 
-export type TreeItem =
+type TreeNote = Pick<Note, 'id' | 'title' | 'folder_id'>;
+
+export type TreeItem<N extends TreeNote = Note> =
   | { kind: 'folder'; id: string; parentId: string | null; depth: number; folder: Folder }
-  | { kind: 'note'; id: string; parentId: string | null; depth: number; note: Note };
+  | { kind: 'note'; id: string; parentId: string | null; depth: number; note: N };
+
+const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
 
 /**
- * Visible sidebar rows in display order: root folders (recursively — child
- * folders, then notes, only when expanded), then root notes. Matches the
- * order AnimatedFileTree renders.
+ * Visible tree rows in display order: within each level, folders then notes,
+ * each sorted by name the way an IDE's explorer does. A folder's contents are
+ * included only when it's expanded. Items whose parent is missing show at the
+ * root rather than disappear.
  */
-export function flattenVisibleTree(
+export function flattenVisibleTree<N extends TreeNote>(
   folders: Folder[],
-  notes: Note[],
+  notes: N[],
   expanded: Set<string>,
-): TreeItem[] {
-  const out: TreeItem[] = [];
+): TreeItem<N>[] {
+  const folderIds = new Set(folders.map((folder) => folder.id));
+  const foldersIn = new Map<string | null, Folder[]>();
+  const notesIn = new Map<string | null, N[]>();
+  const add = <T,>(groups: Map<string | null, T[]>, key: string | null, item: T) => {
+    const group = groups.get(key);
+    if (group) group.push(item);
+    else groups.set(key, [item]);
+  };
+  for (const folder of folders) add(foldersIn, folder.parent_id && folderIds.has(folder.parent_id) ? folder.parent_id : null, folder);
+  for (const note of notes) add(notesIn, note.folder_id && folderIds.has(note.folder_id) ? note.folder_id : null, note);
+  for (const group of foldersIn.values()) group.sort((a, b) => collator.compare(a.name, b.name));
+  for (const group of notesIn.values()) group.sort((a, b) => collator.compare(a.title || 'Untitled', b.title || 'Untitled'));
+
+  const out: TreeItem<N>[] = [];
   const walk = (parentId: string | null, depth: number) => {
-    for (const folder of folders.filter((f) => (f.parent_id ?? null) === parentId)) {
+    for (const folder of foldersIn.get(parentId) ?? []) {
       out.push({ kind: 'folder', id: folder.id, parentId, depth, folder });
-      if (expanded.has(folder.id)) {
-        walk(folder.id, depth + 1);
-        for (const note of notes.filter((n) => n.folder_id === folder.id)) {
-          out.push({ kind: 'note', id: note.id, parentId: folder.id, depth: depth + 1, note });
-        }
-      }
+      if (expanded.has(folder.id)) walk(folder.id, depth + 1);
+    }
+    for (const note of notesIn.get(parentId) ?? []) {
+      out.push({ kind: 'note', id: note.id, parentId, depth, note });
     }
   };
   walk(null, 0);
-  for (const note of notes.filter((n) => n.folder_id == null)) {
-    out.push({ kind: 'note', id: note.id, parentId: null, depth: 0, note });
-  }
   return out;
 }

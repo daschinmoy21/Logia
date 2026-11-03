@@ -172,6 +172,45 @@ test('early channel errors and failed writes close their native processes', asyn
 });
 
 
+test('the right edge reveals the panel on hover without taking focus, and pinning replaces it', async ({ page }) => {
+  await openAgentWorkspace(page);
+  const editor = page.locator('[data-note-editor="agent-note"] [contenteditable="true"]').first();
+  const composer = page.getByRole('textbox', { name: 'Message Logia', exact: true });
+  await editor.click();
+  await expect(composer).toHaveCount(0);
+  await page.mouse.move(1439, 500);
+  await expect(composer).toBeVisible();
+  await expect(editor).toBeFocused();
+  await page.mouse.move(500, 500);
+  await expect(composer).toHaveCount(0);
+
+  await page.mouse.move(1439, 500);
+  await composer.click();
+  await page.mouse.move(500, 500);
+  await page.waitForTimeout(600);
+  await expect(composer).toBeVisible();
+  await editor.click();
+  await expect(composer).toHaveCount(0);
+
+  await page.mouse.move(1439, 500);
+  await page.getByRole('button', { name: /^Choose agent\. Current:/ }).click();
+  await page.mouse.move(500, 500);
+  await page.waitForTimeout(600);
+  await expect(page.getByRole('menu', { name: 'Agents', exact: true })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await editor.click();
+  await expect(composer).toHaveCount(0);
+
+  await page.mouse.move(1439, 500);
+  await expect(composer).toBeVisible();
+  await page.getByRole('button', { name: 'Open AI sidebar', exact: true }).click();
+  await page.mouse.move(500, 500);
+  await page.waitForTimeout(600);
+  await expect(composer).toBeVisible();
+  await page.getByRole('button', { name: 'Close AI sidebar', exact: true }).first().click();
+  await expect(composer).toHaveCount(0);
+});
+
 for (const variant of ['Vim on', 'mobile'] as const) {
   test(`pane navigation reveals hidden panes and returns to the editor (${variant})`, async ({ page }) => {
     if (variant === 'mobile') await page.setViewportSize({ width: 390, height: 844 });
