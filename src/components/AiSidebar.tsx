@@ -1,6 +1,9 @@
 import { useNotesStore } from "@/store/notesStore";
 import type { Note } from "@/types/Note";
 import { SuggestionCard } from "./chat/SuggestionCard";
+import { EditApprovalPicker } from "./chat/EditApprovalPicker";
+import { parseEditorActions } from "../lib/parse-editor-actions";
+import { handleAiAction } from "../lib/editor-actions";
 import { countWordsInNoteContent } from "@/lib/note-utils";
 import useUiStore from "../store/UiStore";
 import { Resizable } from "re-resizable";
@@ -42,6 +45,16 @@ interface AiSidebarProps {
 
 type Tab = "chat" | "calendar" | "info";
 
+interface LogiaMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  actionStatus?: "pending" | "approved" | "refused";
+  appliedCount?: number;
+  applying?: boolean;
+  actionError?: string;
+}
+
 /** Matches the app's narrow layout: too little room to dock beside the note. */
 const COMPACT_QUERY = "(max-width: 767px)";
 
@@ -64,9 +77,8 @@ const AiSidebar = ({ isOpen, onClose }: AiSidebarProps) => {
   const setIsSettingsOpen = useUiStore((s) => s.setIsSettingsOpen);
 
   // Chat State - includes actionStatus for persistence
-  const [messagesMap, setMessagesMap] = useState<
-    Record<string, { role: "user" | "assistant"; content: string; actionStatus?: "pending" | "approved" | "refused" }[]>
-  >({});
+  const [messagesMap, setMessagesMap] = useState<Record<string, LogiaMessage[]>>({});
+  const applyingMessages = useRef(new Set<string>());
   const [isLoading, setIsLoading] = useState(false);
   const [isCompact, setIsCompact] = useState(() => window.matchMedia(COMPACT_QUERY).matches);
   const [streamingMessage, setStreamingMessage] = useState<string>("");
@@ -79,16 +91,36 @@ const AiSidebar = ({ isOpen, onClose }: AiSidebarProps) => {
 
   const messages = currentNote ? messagesMap[currentNote.id] || [] : [];
 
-  // Function to update action status for a message
-  const updateMessageStatus = (messageIndex: number, status: "pending" | "approved" | "refused") => {
-    if (!currentNote) return;
-    setMessagesMap((prev) => {
-      const noteMessages = [...(prev[currentNote.id] || [])];
-      if (noteMessages[messageIndex]) {
-        noteMessages[messageIndex] = { ...noteMessages[messageIndex], actionStatus: status };
+  const patchMessage = (noteId: string, messageId: string, patch: Partial<LogiaMessage>) => {
+    setMessagesMap((prev) => ({ ...prev, [noteId]: (prev[noteId] || []).map((msg) =>
+      msg.id === messageId ? { ...msg, ...patch } : msg) }));
+  };
+
+  // Execution belongs to the thread, so remounting a card cannot replay its edits.
+  const applyMessageActions = async (noteId: string, message: LogiaMessage) => {
+    if (message.actionStatus === "approved" || message.actionStatus === "refused" || applyingMessages.current.has(message.id)) return;
+    applyingMessages.current.add(message.id);
+    patchMessage(noteId, message.id, { applying: true, actionError: undefined });
+    let appliedCount = message.appliedCount ?? 0;
+    const actions = parseEditorActions(message.content).actions;
+    const originalEditor = useUiStore.getState().editor;
+    try {
+      for (; appliedCount < actions.length;) {
+        const { editor, editorNoteId } = useUiStore.getState();
+        if (!editor || editor !== originalEditor || editorNoteId !== noteId || useNotesStore.getState().currentNote?.id !== noteId) {
+          throw new Error("Open the original note to apply these changes.");
+        }
+        await handleAiAction(editor, actions[appliedCount]);
+        appliedCount++;
+        patchMessage(noteId, message.id, { appliedCount });
       }
-      return { ...prev, [currentNote.id]: noteMessages };
-    });
+      patchMessage(noteId, message.id, { actionStatus: "approved" });
+    } catch (error) {
+      patchMessage(noteId, message.id, { actionError: error instanceof Error ? error.message : String(error) });
+    } finally {
+      applyingMessages.current.delete(message.id);
+      patchMessage(noteId, message.id, { applying: false });
+    }
   };
 
   useEffect(() => {
@@ -139,7 +171,8 @@ const AiSidebar = ({ isOpen, onClose }: AiSidebarProps) => {
   const handleSendMessage = async (message: string) => {
     if (!message.trim() || isLoading || !ensureProviderReady() || !currentNote) return;
     const provider = activeProvider();
-    const userMessage = { role: "user" as const, content: message };
+    const autoAcceptEdits = useSettingsStore.getState().editApprovalMode === "auto-edits";
+    const userMessage: LogiaMessage = { id: crypto.randomUUID(), role: "user", content: message };
     setMessagesMap((prev) => ({
       ...prev,
       [currentNote.id]: [...(prev[currentNote.id] || []), userMessage],
@@ -212,6 +245,7 @@ TO REPLACE CONTENT:
         fullResponse = "_Stopped._";
       }
       const assistantMessage = {
+        id: crypto.randomUUID(),
         role: "assistant" as const,
         content: fullResponse,
       };
@@ -220,6 +254,11 @@ TO REPLACE CONTENT:
         [currentNote.id]: [...(prev[currentNote.id] || []), assistantMessage],
       }));
       setStreamingMessage("");
+      // Only completed replies use auto-accept; stopping or returning to Supervised cancels it.
+      if (!controller.signal.aborted && autoAcceptEdits && useSettingsStore.getState().editApprovalMode === "auto-edits"
+        && parseEditorActions(fullResponse).actions.length) {
+        await applyMessageActions(currentNote.id, assistantMessage);
+      }
     } catch (error: unknown) {
       const aborted = abortRef.current?.signal.aborted;
       if (!aborted) console.error("AI error:", error);
@@ -229,7 +268,7 @@ TO REPLACE CONTENT:
         ...prev,
         [currentNote.id]: [
           ...(prev[currentNote.id] || []),
-          { role: "assistant", content: errorMessage },
+          { id: crypto.randomUUID(), role: "assistant", content: errorMessage },
         ],
       }));
       setStreamingMessage("");
@@ -450,86 +489,13 @@ TO REPLACE CONTENT:
                           </div>
                         </div>
                       ) : (
-                        messages.map((msg, index) => {
-                          // Extract ALL action objects from the message
-                          let actionDataList: any[] = [];
-                          let textContent = msg.content;
-
-                          if (msg.role === "assistant") {
-                            // Find all JSON objects or arrays in the content
-                            const content = msg.content;
-                            let searchStart = 0;
-
-                            while (searchStart < content.length) {
-                              // Look for start of JSON (object or array)
-                              let startChar = '';
-                              let startIdx = -1;
-
-                              const objStart = content.indexOf("{", searchStart);
-                              const arrStart = content.indexOf("[", searchStart);
-
-                              if (objStart !== -1 && (arrStart === -1 || objStart < arrStart)) {
-                                startIdx = objStart;
-                                startChar = "{";
-                              } else if (arrStart !== -1) {
-                                startIdx = arrStart;
-                                startChar = "[";
-                              }
-
-                              if (startIdx === -1) break;
-
-                              const endChar = startChar === "{" ? "}" : "]";
-                              let depth = 0;
-                              let endIdx = -1;
-
-                              for (let i = startIdx; i < content.length; i++) {
-                                if (content[i] === startChar) depth++;
-                                else if (content[i] === endChar) {
-                                  depth--;
-                                  if (depth === 0) {
-                                    endIdx = i;
-                                    break;
-                                  }
-                                }
-                              }
-
-                              if (endIdx !== -1) {
-                                const jsonStr = content.substring(startIdx, endIdx + 1);
-                                try {
-                                  const parsed = JSON.parse(jsonStr);
-
-                                  // Handle array of actions
-                                  if (Array.isArray(parsed)) {
-                                    parsed.forEach((item: any) => {
-                                      if (item.type === "editor_action") {
-                                        actionDataList.push(item);
-                                      }
-                                    });
-                                    // Remove the array from text content
-                                    textContent = textContent.replace(jsonStr, "").trim();
-                                  }
-                                  // Handle single action object
-                                  else if (parsed.type === "editor_action") {
-                                    actionDataList.push(parsed);
-                                    // Remove from text content
-                                    textContent = textContent.replace(jsonStr, "").trim();
-                                  }
-                                } catch (e) {
-                                  // JSON parse failed, skip
-                                }
-                                searchStart = endIdx + 1;
-                              } else {
-                                break;
-                              }
-                            }
-
-                            // Clean up any leftover brackets or commas
-                            textContent = textContent.replace(/^\s*[\[\],\s]+\s*$/, "").trim();
-                          }
+                        messages.map((msg) => {
+                          const { actions: actionDataList, text: textContent } = msg.role === "assistant"
+                            ? parseEditorActions(msg.content) : { actions: [], text: msg.content };
 
                           return (
                             <div
-                              key={index}
+                              key={msg.id}
                               className={`flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}
                             >
                               <div
@@ -555,7 +521,11 @@ TO REPLACE CONTENT:
                                   <SuggestionCard
                                     actionDataList={actionDataList}
                                     status={msg.actionStatus || "pending"}
-                                    onStatusChange={(status) => updateMessageStatus(index, status)}
+                                    appliedCount={msg.appliedCount ?? 0}
+                                    isProcessing={!!msg.applying}
+                                    error={msg.actionError}
+                                    onApprove={() => void applyMessageActions(currentNote.id, msg)}
+                                    onRefuse={() => patchMessage(currentNote.id, msg.id, { actionStatus: "refused" })}
                                   />
                                 )}
                               </div>
@@ -622,6 +592,7 @@ TO REPLACE CONTENT:
                               <span className="truncate">{currentNote.title || "Untitled"}</span>
                             </button>
                             <ModelPicker providerId={providerId} scope="chat" disabled={isLoading} />
+                            <EditApprovalPicker />
                           </>
                         }
                       />

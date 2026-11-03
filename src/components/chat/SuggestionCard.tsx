@@ -1,13 +1,15 @@
 import { Check, X, Plus, Minus, RefreshCw, Edit3, ChevronDown, ChevronUp, Table, List } from "lucide-react";
-import useUiStore from "../../store/UiStore";
-import { handleAiAction } from "../../lib/editor-actions";
-import toast from "react-hot-toast";
+import type { EditorAction } from "../../lib/editor-actions";
 import { useState } from "react";
 
 interface SuggestionCardProps {
-    actionDataList: any[];  // Changed to accept list of actions
+    actionDataList: EditorAction[];
     status: "pending" | "approved" | "refused";
-    onStatusChange: (status: "pending" | "approved" | "refused") => void;
+    appliedCount: number;
+    isProcessing: boolean;
+    error?: string;
+    onApprove: () => void;
+    onRefuse: () => void;
 }
 
 // Get action metadata for styling
@@ -39,48 +41,10 @@ const getPreviewText = (actionData: any): string => {
     return data.text || data.code || data.newContent || data.searchText || "";
 };
 
-export function SuggestionCard({ actionDataList, status, onStatusChange }: SuggestionCardProps) {
+export function SuggestionCard({ actionDataList, status, appliedCount, isProcessing, error, onApprove, onRefuse }: SuggestionCardProps) {
     const [isExpanded, setIsExpanded] = useState(false);
-    const [isProcessing, setIsProcessing] = useState(false);
-    const [processedCount, setProcessedCount] = useState(0);
-
     const totalActions = actionDataList.length;
     const isSingleAction = totalActions === 1;
-
-    const handleApproveAll = async () => {
-        const editor = useUiStore.getState().editor;
-        if (!editor) {
-            toast.error("Editor not connected");
-            return;
-        }
-
-        setIsProcessing(true);
-        let successCount = 0;
-
-        for (let i = 0; i < actionDataList.length; i++) {
-            const actionData = actionDataList[i];
-            try {
-                await handleAiAction(editor, actionData);
-                // Add a small delay to ensure the editor has processed the change
-                // and to avoid race conditions with overlapping block searches
-                await new Promise((resolve) => setTimeout(resolve, 300));
-
-                successCount++;
-                setProcessedCount(i + 1);
-            } catch (e: any) {
-                console.error(`Failed action ${i + 1}:`, e);
-                toast.error(`Action ${i + 1} failed: ${e.message || "Unknown error"}`);
-            }
-        }
-
-        setIsProcessing(false);
-        if (successCount > 0) {
-            onStatusChange("approved");
-            if (successCount < totalActions) {
-                toast.success(`Applied ${successCount}/${totalActions} changes`);
-            }
-        }
-    };
 
     if (status === "approved") {
         return (
@@ -113,7 +77,7 @@ export function SuggestionCard({ actionDataList, status, onStatusChange }: Sugge
                         <X size={14} className="text-zinc-500" />
                     </div>
                     <span className="text-xs text-zinc-500 line-through">
-                        {totalActions} change{totalActions > 1 ? "s" : ""} refused
+                        {appliedCount > 0 ? `${appliedCount} applied; ${totalActions - appliedCount} remaining changes refused` : `${totalActions} change${totalActions > 1 ? "s" : ""} refused`}
                     </span>
                 </div>
             </div>
@@ -183,30 +147,32 @@ export function SuggestionCard({ actionDataList, status, onStatusChange }: Sugge
                     <div className="flex items-center gap-2">
                         <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
                         <span className="text-xs text-blue-400">
-                            Applying changes... {processedCount}/{totalActions}
+                            Applying changes... {appliedCount}/{totalActions}
                         </span>
                     </div>
                     <div className="mt-2 h-1 bg-zinc-800 rounded-full overflow-hidden">
                         <div
                             className="h-full bg-blue-500 transition-all duration-300"
-                            style={{ width: `${(processedCount / totalActions) * 100}%` }}
+                            style={{ width: `${(appliedCount / totalActions) * 100}%` }}
                         />
                     </div>
                 </div>
             )}
 
+            {error && <p role="alert" className="px-3 py-2 text-xs text-red-300">{error}{appliedCount > 0 && ` ${appliedCount}/${totalActions} changes applied; retry continues with the remaining changes.`}</p>}
+
             {/* Actions */}
             <div className="flex gap-2 p-3 bg-zinc-900/50">
                 <button
-                    onClick={handleApproveAll}
+                    onClick={onApprove}
                     disabled={isProcessing}
                     className="flex-1 bg-green-600 hover:bg-green-500 disabled:bg-green-800 disabled:cursor-not-allowed text-white text-xs font-semibold py-2.5 rounded-md transition-all shadow-md hover:shadow-lg active:scale-95 flex items-center justify-center gap-1.5"
                 >
                     <Check size={14} />
-                    {isSingleAction ? "Approve" : `Approve All (${totalActions})`}
+                    {appliedCount > 0 ? `Approve remaining (${totalActions - appliedCount})` : isSingleAction ? "Approve" : `Approve All (${totalActions})`}
                 </button>
                 <button
-                    onClick={() => onStatusChange("refused")}
+                    onClick={onRefuse}
                     disabled={isProcessing}
                     className="flex-1 bg-zinc-800 hover:bg-zinc-700 disabled:cursor-not-allowed text-zinc-400 hover:text-zinc-200 text-xs font-medium py-2.5 rounded-md transition-all active:scale-95 flex items-center justify-center gap-1.5"
                 >

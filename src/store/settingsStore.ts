@@ -4,6 +4,8 @@ import { invoke } from '@tauri-apps/api/core';
 import { PROVIDERS, getProvider } from '../lib/ai/providers';
 import { normalizeUiScale } from '../lib/ui-scale';
 
+export type EditApprovalMode = 'supervised' | 'auto-edits';
+
 export interface CliToolInfo {
   id: string;
   binary: string;
@@ -24,6 +26,7 @@ interface SettingsState {
   composerVim: boolean | null;
   sidebarFloating: boolean;
   uiScale: number;
+  editApprovalMode: EditApprovalMode;
 
   // --- runtime status (not persisted) ---
   keyStatus: Record<string, boolean>;
@@ -39,6 +42,7 @@ interface SettingsState {
   setComposerVim: (enabled: boolean | null) => void;
   setSidebarFloating: (floating: boolean) => void;
   setUiScale: (scale: number) => void;
+  setEditApprovalMode: (mode: EditApprovalMode) => void;
 
   refreshKeyStatus: () => Promise<void>;
   refreshCliStatus: () => Promise<void>;
@@ -61,6 +65,7 @@ export const useSettingsStore = create<SettingsState>()(
       composerVim: null,
       sidebarFloating: false,
       uiScale: 1,
+      editApprovalMode: 'supervised',
 
       keyStatus: {},
       cliStatus: {},
@@ -85,6 +90,7 @@ export const useSettingsStore = create<SettingsState>()(
       setComposerVim: (composerVim) => set({ composerVim }),
       setSidebarFloating: (sidebarFloating) => set({ sidebarFloating }),
       setUiScale: (scale) => set({ uiScale: normalizeUiScale(scale) }),
+      setEditApprovalMode: (editApprovalMode) => set({ editApprovalMode }),
 
       refreshKeyStatus: async () => {
         try {
@@ -134,6 +140,7 @@ export const useSettingsStore = create<SettingsState>()(
         composerVim: s.composerVim,
         sidebarFloating: s.sidebarFloating,
         uiScale: s.uiScale,
+        editApprovalMode: s.editApprovalMode,
       }),
     },
   ),

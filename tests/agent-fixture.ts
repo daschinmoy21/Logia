@@ -52,7 +52,7 @@ export async function installAgentFixture(page: Page) {
         if (command === 'plugin:event|unlisten') return;
         if (command === 'ai_cli_run') {
           if (win.__agentHoldChat) return new Promise<string>((resolve) => chatReplies.set(args.requestId, resolve));
-          return 'Fixture chat reply';
+          return win.__agentChatReply ?? 'Fixture chat reply';
         }
         if (command === 'ai_cli_cancel') return true;
         if (command === 'agent_terminal_start') {
