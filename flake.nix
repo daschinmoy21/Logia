@@ -133,6 +133,15 @@
             # Environment variables for the build
             OPENSSL_NO_VENDOR = 1;
 
+            # Avoid relying on /bin/sh in the sandbox for PTY test commands
+            # and the model-discovery test's generated shell script.
+            postPatch = ''
+              substituteInPlace src-tauri/src/terminal_process.rs \
+                --replace-fail '"/bin/sh"' '"${pkgs.runtimeShell}"'
+              substituteInPlace src-tauri/src/cli_models.rs \
+                --replace-fail '#!/bin/sh' '#!${pkgs.runtimeShell}'
+            '';
+
             # Override the default build phase to use cargo-tauri properly
             buildPhase = ''
               runHook preBuild

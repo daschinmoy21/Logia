@@ -137,6 +137,15 @@ impl Drop for TerminalProcess {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    fn test_shell() -> CommandBuilder {
+        let mut cmd = CommandBuilder::new("/bin/sh");
+        // portable-pty defaults to HOME, which need not exist in build sandboxes.
+        cmd.cwd(std::env::current_dir().unwrap());
+        cmd
+    }
+
     #[test]
     fn rejects_invalid_dimensions() {
         assert!(pty_size(0, 24).is_err());
@@ -147,7 +156,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn interactive_roundtrip_resize_and_exit() {
-        let mut cmd = CommandBuilder::new("/bin/sh");
+        let mut cmd = test_shell();
         cmd.args([
             "-c",
             "stty -echo; printf 'READY\\n'; read line; stty size; printf 'reply:%s\\n' \"$line\"",
@@ -199,7 +208,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn close_terminates_child() {
-        let mut cmd = CommandBuilder::new("/bin/sh");
+        let mut cmd = test_shell();
         cmd.args(["-c", "exec sleep 60"]);
         let StartedTerminal { process, .. } = spawn(cmd, 80, 24).unwrap();
         process.close();
@@ -215,7 +224,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn close_unblocks_pending_terminal_input() {
-        let mut cmd = CommandBuilder::new("/bin/sh");
+        let mut cmd = test_shell();
         cmd.args(["-c", "trap '' HUP; printf READY; exec sleep 60"]);
         let StartedTerminal {
             process,
