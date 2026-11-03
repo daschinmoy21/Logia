@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { invoke } from '@tauri-apps/api/core';
 import { PROVIDERS, getProvider } from '../lib/ai/providers';
+import { normalizeUiScale } from '../lib/ui-scale';
 
 export interface CliToolInfo {
   id: string;
@@ -13,6 +14,8 @@ export interface CliToolInfo {
 interface SettingsState {
   // --- persisted (non-secret) preferences ---
   activeProvider: string;
+  addedProviders: string[];
+  favoriteModels: Record<string, string[]>;
   models: Record<string, string>;
   baseUrls: Record<string, string>;
   cliBinaries: Record<string, string>;
@@ -20,18 +23,22 @@ interface SettingsState {
   /** Vim in the agent composer; null follows vimEnabled. */
   composerVim: boolean | null;
   sidebarFloating: boolean;
+  uiScale: number;
 
   // --- runtime status (not persisted) ---
   keyStatus: Record<string, boolean>;
   cliStatus: Record<string, CliToolInfo>;
 
   setActiveProvider: (id: string) => void;
+  addProvider: (id: string) => void;
+  toggleFavoriteModel: (providerId: string, modelId: string) => void;
   setModel: (providerId: string, model: string) => void;
   setBaseUrl: (providerId: string, url: string) => void;
   setCliBinary: (providerId: string, binary: string) => void;
   setVimEnabled: (enabled: boolean) => void;
   setComposerVim: (enabled: boolean | null) => void;
   setSidebarFloating: (floating: boolean) => void;
+  setUiScale: (scale: number) => void;
 
   refreshKeyStatus: () => Promise<void>;
   refreshCliStatus: () => Promise<void>;
@@ -45,12 +52,15 @@ export const useSettingsStore = create<SettingsState>()(
   persist(
     (set, get) => ({
       activeProvider: 'google',
+      addedProviders: [],
+      favoriteModels: {},
       models: {},
       baseUrls: {},
       cliBinaries: {},
       vimEnabled: false,
       composerVim: null,
       sidebarFloating: false,
+      uiScale: 1,
 
       keyStatus: {},
       cliStatus: {},
@@ -58,6 +68,13 @@ export const useSettingsStore = create<SettingsState>()(
       setActiveProvider: (id) => {
         if (getProvider(id)) set({ activeProvider: id });
       },
+      addProvider: (id) => {
+        if (getProvider(id)) set((s) => ({ addedProviders: [...new Set([...s.addedProviders, id])] }));
+      },
+      toggleFavoriteModel: (providerId, modelId) => set((s) => {
+        const current = s.favoriteModels[providerId] ?? [];
+        return { favoriteModels: { ...s.favoriteModels, [providerId]: current.includes(modelId) ? current.filter((id) => id !== modelId) : [...current, modelId] } };
+      }),
       setModel: (providerId, model) =>
         set((s) => ({ models: { ...s.models, [providerId]: model } })),
       setBaseUrl: (providerId, url) =>
@@ -67,6 +84,7 @@ export const useSettingsStore = create<SettingsState>()(
       setVimEnabled: (vimEnabled) => set({ vimEnabled }),
       setComposerVim: (composerVim) => set({ composerVim }),
       setSidebarFloating: (sidebarFloating) => set({ sidebarFloating }),
+      setUiScale: (scale) => set({ uiScale: normalizeUiScale(scale) }),
 
       refreshKeyStatus: async () => {
         try {
@@ -107,12 +125,15 @@ export const useSettingsStore = create<SettingsState>()(
       version: 1,
       partialize: (s) => ({
         activeProvider: s.activeProvider,
+        addedProviders: s.addedProviders,
+        favoriteModels: s.favoriteModels,
         models: s.models,
         baseUrls: s.baseUrls,
         cliBinaries: s.cliBinaries,
         vimEnabled: s.vimEnabled,
         composerVim: s.composerVim,
         sidebarFloating: s.sidebarFloating,
+        uiScale: s.uiScale,
       }),
     },
   ),

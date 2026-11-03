@@ -21,6 +21,7 @@ export type AgentSessionStatus = 'starting' | 'running' | 'stopped' | 'exited' |
 export interface AgentSessionView {
   status: AgentSessionStatus;
   login: boolean;
+  model: string | null;
   hasTerminal: boolean;
   cwd: string | null;
   snapshotTitle: string | null;
@@ -217,12 +218,13 @@ export async function startAgentSession(
   options: {
     container: HTMLElement;
     binary?: string;
+    model?: string;
     login?: boolean;
     context?: { title: string; markdown: string };
   },
 ): Promise<void> {
   if (!isDesktopAgentHost() || isLiveSession(useAgentSessions.getState().sessions[tool])) return;
-  const { container, binary, login = false, context } = options;
+  const { container, binary, model, login = false, context } = options;
 
   disposeHandle(tool);
   const handle: SessionHandle = {
@@ -244,6 +246,7 @@ export async function startAgentSession(
       [tool]: {
         status: 'starting',
         login,
+        model: login ? null : model ?? null,
         hasTerminal: false,
         cwd: null,
         snapshotTitle: context?.title ?? null,
@@ -290,7 +293,7 @@ export async function startAgentSession(
       }
     };
 
-    const { id, cwd } = await startAgentTerminal({ tool, binary, cols, rows, login, context }, onEvent);
+    const { id, cwd } = await startAgentTerminal({ tool, binary, model: login ? undefined : model, cols, rows, login, context }, onEvent);
     handle.id = id;
     if (handles.get(tool) !== handle || handle.ended) {
       // Stopped, failed or disposed while the process was spawning; only now can it be closed.

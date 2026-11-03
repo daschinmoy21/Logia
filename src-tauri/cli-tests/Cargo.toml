@@ -5,6 +5,9 @@ edition = "2021"
 publish = false
 [lib]
 path = "../src/cli_transport.rs"
+[[test]]
+name = "cli_models"
+path = "../src/cli_models.rs"
 [dependencies]
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }

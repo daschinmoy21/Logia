@@ -18,7 +18,7 @@ export function isDesktopAgentHost(): boolean {
 }
 
 export async function startAgentTerminal(options: {
-  tool: AgentTool; binary?: string; cols: number; rows: number; login?: boolean;
+  tool: AgentTool; binary?: string; model?: string; cols: number; rows: number; login?: boolean;
   context?: { title: string; markdown: string };
 }, onEvent: (event: AgentTerminalEvent) => void): Promise<{ id: string; cwd: string }> {
   if (!isDesktopAgentHost()) throw new Error('Agent terminals require the Logia desktop app.');

@@ -23,6 +23,7 @@ import { useWorkspaceStore } from "./components/workspace/workspaceStore";
 import { hasMod, isBlockingModalOpen } from "./components/workspace/shortcuts";
 
 import { usePaneNavigation } from "./hooks/usePaneNavigation";
+import { useUiScale } from "./hooks/useUiScale";
 
 import { AnimatePresence, motion } from "framer-motion";
 
@@ -34,6 +35,7 @@ const HIDE_DELAY_MS = 260;
 const NARROW_QUERY = "(max-width: 767px)";
 
 function App() {
+  useUiScale();
   const { isAiSidebarOpen, setIsAiSidebarOpen } = useUiStore();
   const sidebarFloatingSetting = useSettingsStore((s) => s.sidebarFloating);
   const [isNarrow, setIsNarrow] = useState(() => window.matchMedia(NARROW_QUERY).matches);
@@ -219,7 +221,7 @@ function App() {
     : { type: "spring" as const, stiffness: 420, damping: 38, mass: 0.8 };
 
   return (
-    <div className="bg-zinc-950 flex flex-col h-screen overflow-hidden">
+    <div className="bg-zinc-950 flex flex-col h-full overflow-hidden">
       <PreflightModal />
       <Settings />
       <CommandPalette />

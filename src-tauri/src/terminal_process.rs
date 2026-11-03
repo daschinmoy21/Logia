@@ -30,6 +30,17 @@ pub fn launch_spec(tool: &str, login: bool) -> Result<(&'static str, Vec<&'stati
     Ok((binary, args))
 }
 
+pub fn launch_args(tool: &str, login: bool, model: Option<&str>) -> Result<Vec<String>, String> {
+    let (_, args) = launch_spec(tool, login)?;
+    let mut args: Vec<String> = args.into_iter().map(String::from).collect();
+    if !login {
+        if let Some(model) = model.map(str::trim).filter(|m| !m.is_empty()) {
+            args.extend(["--model".to_string(), model.to_string()]);
+        }
+    }
+    Ok(args)
+}
+
 pub fn pty_size(cols: u16, rows: u16) -> Result<PtySize, String> {
     if !(2..=500).contains(&cols) || !(1..=300).contains(&rows) {
         return Err("Terminal size must be 2–500 columns and 1–300 rows".into());
@@ -243,5 +254,15 @@ mod tests {
         }
         assert!(launch_spec("sh", false).is_err());
         assert!(launch_spec("codex; touch /tmp/nope", false).is_err());
+    }
+
+    #[test]
+    fn selected_model_is_an_argument_and_never_changes_login() {
+        for tool in ["codex", "claude-code", "pi", "opencode"] {
+            assert_eq!(launch_args(tool, false, Some(" provider/model ")).unwrap(), ["--model", "provider/model"]);
+            assert_eq!(launch_args(tool, false, Some(" ")).unwrap(), Vec::<String>::new());
+            assert!(!launch_args(tool, true, Some("custom-model")).unwrap().contains(&"custom-model".into()));
+        }
+        assert!(launch_args("sh", false, Some("x")).is_err());
     }
 }

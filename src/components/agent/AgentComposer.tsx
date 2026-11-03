@@ -82,7 +82,7 @@ export function AgentComposer({
           {...vim.textareaProps}
         />
         <div className="flex items-center justify-between gap-2 px-1.5 pb-1.5">
-          <div className="flex min-w-0 items-center gap-1">{leading}</div>
+          <div className="flex min-w-0 flex-wrap items-center gap-1">{leading}</div>
           {busy && onStop ? (
             <button
               type="button"

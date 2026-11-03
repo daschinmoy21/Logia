@@ -29,11 +29,20 @@ export async function installAgentFixture(page: Page) {
     win.__agentFailWrite = false;
     win.__agentEmit = (id: string, event: any) => channels.get(id)?.onmessage(event);
     win.__TAURI_INTERNALS__ = {
+      metadata: { currentWebview: { label: 'main' }, currentWindow: { label: 'main' } },
       transformCallback: () => ++counter,
       unregisterCallback: () => {},
       invoke: async (command: string, args: any) => {
         win.__agentCalls.push({ command, args: command === 'agent_terminal_start' ? { options: args.options } : args });
-        if (command === 'ai_cli_detect') return ['codex', 'claude-code', 'pi', 'opencode'].map(id => ({ id, binary: id, available: true, path: `/fixture/bin/${id}` }));
+        if (command === 'ai_cli_detect') return (win.__agentInstalledTools ?? ['codex', 'claude-code', 'pi', 'opencode']).map((id: string) => ({ id, binary: id, available: true, path: `/fixture/bin/${id}` }));
+        if (command === 'ai_cli_models') {
+          if (win.__agentModelError) throw new Error('Fixture: model discovery unavailable');
+          return win.__agentModels?.[args.tool] ?? [{ id: 'fixture-model', label: 'Fixture Model', isDefault: true }, { id: 'provider/second-model', label: 'Second Model' }];
+        }
+        if (command === 'plugin:webview|set_webview_zoom') return;
+        if (command === 'plugin:event|listen') return ++counter;
+        if (command === 'plugin:event|unlisten') return;
+        if (command === 'ai_cli_run') return 'Fixture chat reply';
         if (command === 'agent_terminal_start') {
           if (win.__agentFailStart) throw new Error('Fixture: executable could not be started');
           const id = `fixture-${++counter}`;

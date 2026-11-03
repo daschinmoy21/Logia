@@ -12,6 +12,7 @@ Logia blends structured text editing with infinite visual canvases, ensuring you
 - **AI-Powered Assistance**: Chat with your notes and edit them with AI using the provider you prefer — Google Gemini, OpenAI, Anthropic Claude, OpenRouter, Groq, DeepSeek, Mistral, local models (Ollama, LM Studio, any OpenAI-compatible server), or the coding-agent CLIs you already have installed (Claude Code, Codex, OpenCode, Gemini CLI).
 - **Vim Mode**: Optional modal editing in notes (motions, operators, text objects, visual mode, search, registers) plus keyboard navigation for the whole app — a leader key, a `:` command line and a file explorer.
 - **Auto-hide Sidebar**: Pin the sidebar, or let it slide in when the pointer reaches the left edge (`Ctrl/⌘+\` to toggle).
+- **UI Scaling**: Use `Ctrl/⌘` + `+` or `−` to resize the interface, and `Ctrl/⌘+0` to reset. Your scale is saved; controls are also in Settings → Editor & Vim.
 - **Rich Text Editing**: Full-featured editor with BlockNote for structured content creation.
 - **Visual Note-Taking**: Integrated **tldraw** canvas for infinite sketching, diagrams, and whiteboarding.
 - **Audio Recording & Transcription**: Record and transcribe audio content directly in your notes.
@@ -25,7 +26,11 @@ Logia blends structured text editing with infinite visual canvases, ensuring you
 
 ## AI providers
 
-Open **Settings → AI providers**, pick a provider, add its API key (stored encrypted in your OS keychain) and choose a model. You can switch providers any time from the picker above the AI chat box, or with `:provider <id>` in vim mode.
+Open **Settings → AI providers → Add provider** to add a CLI agent, cloud API, or local server. The provider list shows your configured providers and detected CLIs; select one to edit its setup. API keys are stored encrypted in your OS keychain. You can switch providers and models directly in the chat composer, or use `:provider <id>` in Vim mode.
+
+Chat settings groups live models by provider, with search, favorites, refresh, and locally bundled provider logos. Codex uses `app-server` → `model/list`; Claude Code uses its initialization catalog; OpenCode uses `models`; Pi uses `--list-models`; Gemini CLI uses its JSON model listing. Cloud and local API providers query their model-list endpoints, including pagination. No static model suggestions are shown when discovery fails. Custom IDs remain available as an explicit option.
+
+Terminal sessions use the model chosen before starting; use the CLI's `/model` command (`/models` in OpenCode) to change it within a running session. API providers without an explicit selection use a default reported by the live catalog, or its first returned model.
 
 | Kind | Providers | Notes |
 | --- | --- | --- |

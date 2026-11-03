@@ -1,5 +1,5 @@
 import { memo, useEffect, useRef, useState } from 'react';
-import { AlertTriangle, ExternalLink, Loader2, LogIn, PencilLine, Play, RefreshCw, Settings2, Square, Terminal } from 'lucide-react';
+import { AlertTriangle, ExternalLink, Loader2, LogIn, PencilLine, Play, RefreshCw, Settings2, Square } from 'lucide-react';
 import { AGENT_TOOLS, isDesktopAgentHost, type AgentTool } from '../../lib/ai/agent-terminal';
 import { noteToMarkdown } from '../../lib/note-markdown';
 import { openExternal } from '../../lib/utils';
@@ -7,6 +7,8 @@ import { useNotesStore } from '../../store/notesStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import useUiStore from '../../store/UiStore';
 import { AgentComposer } from './AgentComposer';
+import { ProviderIcon } from '../ProviderIcon';
+import { ModelPicker } from '../ModelPicker';
 import {
   AVAILABILITY_LABELS,
   agentAvailability,
@@ -112,6 +114,7 @@ export const AgentTerminalPane = memo(function AgentTerminalPane({ tool }: { too
               Folder: {session.cwd}
             </p>
           )}
+          {!session.login && <p className="truncate text-[11px] text-zinc-400" title={session.model ?? undefined}>Model at start: {session.model || 'CLI default'} · Change models in the CLI with /model{tool === 'opencode' ? 's' : ''}.</p>}
           <p className="truncate text-[10px] text-zinc-500">
             {session.snapshotTitle
               ? `Snapshot of “${session.snapshotTitle}” in note-context.md. Edits don't sync either way.`
@@ -186,13 +189,14 @@ function AgentStartScreen({ tool, containerRef }: { tool: AgentTool; containerRe
       !login && attach && canAttach && note
         ? { title: note.title || 'Untitled', markdown: noteToMarkdown(note.content) }
         : undefined;
-    void startAgentSession(tool, { container, binary: binary?.trim() || undefined, login, context });
+    const model = useSettingsStore.getState().models[tool]?.trim() || undefined;
+    void startAgentSession(tool, { container, binary: binary?.trim() || undefined, model: login ? undefined : model, login, context });
   };
 
   return (
     <div className="absolute inset-0 overflow-y-auto bg-zinc-950 p-4">
       <div className="flex items-center gap-2">
-        <Terminal size={16} className="text-zinc-400" />
+        <ProviderIcon providerId={tool} size={22} />
         <h3 className="flex-1 truncate text-sm font-semibold text-zinc-100">{def.label}</h3>
         <span
           data-testid="agent-availability"
@@ -225,6 +229,9 @@ function AgentStartScreen({ tool, containerRef }: { tool: AgentTool; containerRe
         </p>
       )}
 
+      <div className="mt-4 flex items-center justify-between gap-2 text-xs text-zinc-500">
+        <span>Session model</span><ModelPicker providerId={tool} disabled={starting} placement="below" />
+      </div>
       <div className="mt-4 flex flex-col gap-2">
         <button
           type="button"

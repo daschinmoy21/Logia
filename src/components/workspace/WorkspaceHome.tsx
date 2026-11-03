@@ -3,6 +3,7 @@ import { isTauri } from '@tauri-apps/api/core';
 import {
   AlertTriangle,
   CalendarDays,
+  ChevronDown,
   FileText,
   FileUp,
   Layout,
@@ -478,16 +479,20 @@ export function WorkspaceHome() {
                 </div>
                 <label className="flex items-center gap-1.5 text-xs text-zinc-500">
                   Sort
-                  <select
-                    value={effectiveSort}
-                    onChange={(e) => setHome({ sort: e.target.value as HomeSort })}
-                    className={`rounded border border-zinc-800 bg-zinc-900 px-1.5 py-1 text-xs text-zinc-300 ${focusRing}`}
-                  >
-                    {searching && <option value="relevance">Best match</option>}
-                    <option value="updated">Recently edited</option>
-                    <option value="created">Recently created</option>
-                    <option value="title">Title A–Z</option>
-                  </select>
+                  <span className="relative">
+                    <select
+                      value={effectiveSort}
+                      onChange={(e) => setHome({ sort: e.target.value as HomeSort })}
+                      className={`appearance-none rounded-md border border-zinc-800 bg-zinc-900 py-1.5 pl-2.5 pr-7 text-xs text-zinc-300 hover:border-zinc-600 ${focusRing}`}
+                      style={{ colorScheme: 'dark' }}
+                    >
+                      {searching && <option value="relevance">Best match</option>}
+                      <option value="updated">Recently edited</option>
+                      <option value="created">Recently created</option>
+                      <option value="title">Title A–Z</option>
+                    </select>
+                    <ChevronDown size={12} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-zinc-400" />
+                  </span>
                 </label>
               </div>
             </div>

@@ -10,15 +10,15 @@ import {
   type ProviderGroup,
   getProvider,
   resolveBaseUrl,
-  resolveModel,
 } from '../lib/ai/providers';
 import { complete, friendlyAiError } from '../lib/ai/client';
-import { AGENT_TOOLS } from '../lib/ai/agent-terminal';
+import { ModelPicker } from './ModelPicker';
+import { ProviderIcon } from './ProviderIcon';
 import { openExternal } from '../lib/utils';
-import { AVAILABILITY_LABELS, agentAvailability, refreshAgentDetection, useAgentSessions } from './agent/agentSessions';
 import { EDITOR_KEYS, EXPLORER_KEYS, EX_COMMANDS, GLOBAL_KEYS, LEADER_BINDINGS, type KeyDoc } from '../lib/vim/keymap';
 import {
   X,
+  Plus,
   RefreshCw,
   Check,
   Loader2,
@@ -81,16 +81,16 @@ export const Settings = () => {
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" aria-hidden="true" />
 
       <div className="fixed inset-0 flex items-center justify-center p-4">
-        <DialogPanel className="w-full max-w-3xl h-[min(680px,88vh)] rounded-xl bg-zinc-900 border border-zinc-800 shadow-2xl flex overflow-hidden">
+        <DialogPanel className="w-full max-w-6xl h-[min(800px,90dvh)] rounded-xl bg-zinc-950 border border-zinc-800 shadow-2xl flex flex-col sm:flex-row overflow-hidden">
           {/* Tab rail */}
-          <nav className="w-36 sm:w-48 flex-shrink-0 border-r border-zinc-800 bg-zinc-950/40 p-3 flex flex-col gap-0.5">
-            <DialogTitle className="px-2 pb-3 text-sm font-semibold text-zinc-200">Settings</DialogTitle>
+          <nav className="w-full sm:w-44 flex-shrink-0 border-b sm:border-b-0 sm:border-r border-zinc-800 bg-zinc-900/40 p-3 flex sm:flex-col gap-0.5 overflow-x-auto">
+            <DialogTitle className="hidden sm:block px-2 pb-3 text-sm font-semibold text-zinc-200">Settings</DialogTitle>
             {TABS.map((t) => (
               <button
                 key={t.id}
                 type="button"
                 onClick={() => setTab(t.id)}
-                className={`flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors ${
+                className={`flex shrink-0 items-center gap-2.5 whitespace-nowrap rounded-md px-2 py-1.5 text-sm transition-colors ${
                   tab === t.id ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200'
                 }`}
                 aria-current={tab === t.id ? 'page' : undefined}
@@ -101,7 +101,7 @@ export const Settings = () => {
             ))}
           </nav>
 
-          <div className="flex-1 min-w-0 flex flex-col">
+          <div className="flex-1 min-h-0 min-w-0 flex flex-col">
             <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800">
               <h2 className="text-base font-medium text-white">{TABS.find((t) => t.id === tab)?.label}</h2>
               <button
@@ -142,119 +142,67 @@ function DesktopOnly({ feature }: { feature: string }) {
 function AiSettings() {
   const settings = useSettingsStore();
   const [selectedId, setSelectedId] = useState(settings.activeProvider);
+  const [adding, setAdding] = useState(false);
+  const [search, setSearch] = useState('');
   const provider = getProvider(selectedId) ?? PROVIDERS[0];
 
   useEffect(() => {
     if (!isTauri()) return;
-    settings.refreshKeyStatus();
-    settings.refreshCliStatus();
+    void settings.refreshKeyStatus();
+    void settings.refreshCliStatus();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const groups: ProviderGroup[] = ['cloud', 'local', 'cli'];
+  const configured = PROVIDERS.filter((p) => p.id === settings.activeProvider ||
+    settings.addedProviders.includes(p.id) || settings.keyStatus[p.id] ||
+    settings.cliStatus[p.id]?.available || settings.models[p.id] || settings.baseUrls[p.id] || settings.cliBinaries[p.id]);
+  const groups: ProviderGroup[] = ['cli', 'cloud', 'local'];
+  const status = (p: ProviderDef) => p.kind === 'cli'
+    ? !isTauri() ? 'Desktop app required' : settings.cliStatus[p.id]?.available ? 'CLI installed' : settings.cliStatus[p.id] ? 'CLI not detected' : 'Checking CLI…'
+    : p.needsKey ? settings.keyStatus[p.id] ? 'API key saved' : 'Add an API key' : 'Local endpoint';
 
   return (
-    <div className="space-y-6">
-      {!isTauri() && <DesktopOnly feature="Saving AI keys and using CLI agents" />}
-      <p className="text-sm text-zinc-400">
-        Pick where AI chat, the <code className="rounded bg-zinc-800 px-1 text-zinc-300">/ai</code> editor menu and transcript structuring get their answers.
-        Keys are stored encrypted in your OS keychain.
-      </p>
-
-      {groups.map((group) => (
-        <div key={group}>
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 mb-2">{GROUP_LABELS[group]}</p>
-          <div className="flex flex-wrap gap-2">
-            {PROVIDERS.filter((p) => p.group === group).map((p) => {
-              const ready = isProviderReady(p.id, settings);
-              const isActive = settings.activeProvider === p.id;
-              const isSelected = selectedId === p.id;
-              return (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => setSelectedId(p.id)}
-                  className={`group flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-all ${
-                    isSelected
-                      ? 'border-blue-500/60 bg-blue-500/10 text-zinc-100'
-                      : 'border-zinc-800 bg-zinc-950/50 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200'
-                  }`}
-                  aria-pressed={isSelected}
-                >
-                  <span className={`size-1.5 rounded-full ${ready ? 'bg-emerald-400' : 'bg-zinc-700'}`} />
-                  {p.label}
-                  {isActive && (
-                    <span className="rounded bg-blue-500/20 px-1.5 text-[10px] font-medium uppercase tracking-wide text-blue-300">
-                      active
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      ))}
-
-      <ProviderDetails key={provider.id} provider={provider} />
-      <ExternalAgentSettings />
-    </div>
-  );
-}
-
-/** Terminal agents in the AI panel. Each CLI handles its own sign-in, so only the binary is configured here. */
-function ExternalAgentSettings() {
-  const cliStatus = useSettingsStore((s) => s.cliStatus);
-  const cliBinaries = useSettingsStore((s) => s.cliBinaries);
-  const setCliBinary = useSettingsStore((s) => s.setCliBinary);
-  const detecting = useAgentSessions((s) => s.detecting);
-
-  return (
-    <section className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-5 space-y-4">
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <h3 className="flex items-center gap-2 text-sm font-semibold text-zinc-100">
-            <Terminal size={14} /> External agents
-          </h3>
-          <p className="mt-1 text-xs text-zinc-500">
-            Interactive terminal sessions in the AI panel. Each CLI manages its own sign-in; Logia stores no tokens.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => void refreshAgentDetection()}
-          disabled={!isTauri()}
-          className="flex-shrink-0 p-1.5 rounded text-zinc-400 hover:text-zinc-100 hover:bg-white/10 disabled:opacity-40 transition-colors"
-          title="Detect again"
-          aria-label="Detect external agents again"
-        >
-          <RefreshCw size={13} className={detecting ? 'animate-spin' : ''} />
-        </button>
+    <div className="space-y-5">
+      <div className="flex items-center justify-between gap-4">
+        <p className="text-sm text-zinc-400">Your AI providers</p>
+        <button type="button" onClick={() => { setAdding(true); setSearch(''); }} className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-800"><Plus size={14} /> Add provider</button>
       </div>
-      {AGENT_TOOLS.map((tool) => {
-        const info = cliStatus[tool.id];
-        const availability = agentAvailability(info, detecting);
-        return (
-          <Field
-            key={tool.id}
-            label={tool.label}
-            hint={
-              <span className={availability === 'installed' ? 'text-emerald-400' : availability === 'missing' ? 'text-amber-400' : undefined}>
-                {info?.available && info.path ? info.path : AVAILABILITY_LABELS[availability]}
-              </span>
-            }
-          >
-            <input
-              className={inputClass}
-              aria-label={`${tool.label} binary or full path`}
-              value={cliBinaries[tool.id] ?? ''}
-              placeholder={tool.binary}
-              onChange={(e) => setCliBinary(tool.id, e.target.value)}
-              onBlur={() => void refreshAgentDetection()}
-            />
-          </Field>
-        );
-      })}
-    </section>
+      <div className="grid min-w-0 overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950 md:grid-cols-[13rem_minmax(0,1fr)]">
+        <div aria-label="Your providers" className="max-h-52 overflow-y-auto border-b border-zinc-800 md:max-h-none md:border-b-0 md:border-r">
+          {configured.map((p) => <button key={p.id} type="button" onClick={() => setSelectedId(p.id)} aria-pressed={selectedId === p.id}
+            className={`flex w-full items-start gap-3 border-b border-zinc-800/70 px-4 py-4 text-left transition-colors ${selectedId === p.id ? 'bg-zinc-800/70 text-zinc-100' : 'text-zinc-400 hover:bg-zinc-900'}`}>
+            <ProviderIcon providerId={p.id} size={19} className="mt-0.5" />
+            <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{p.label}</span><span className="mt-1 block text-[11px] text-zinc-500">{status(p)}</span></span>
+            {settings.activeProvider === p.id && <Check size={13} className="mt-1 shrink-0 text-blue-400" aria-label="Active provider" />}
+          </button>)}
+        </div>
+        <div className="min-w-0 p-4 sm:p-5"><ProviderDetails key={provider.id} provider={provider} /></div>
+      </div>
+      {adding && <Dialog open onClose={() => setAdding(false)} className="relative z-[1100]">
+        <div className="fixed inset-0 bg-black/70" aria-hidden="true" />
+        <div className="fixed inset-0 flex items-center justify-center p-4">
+          <DialogPanel className="flex max-h-[85dvh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-zinc-700 bg-zinc-950 shadow-2xl">
+            <div className="flex items-start justify-between border-b border-zinc-800 p-5">
+              <div><DialogTitle className="text-lg font-semibold text-zinc-100">Add provider</DialogTitle><p className="mt-1 text-sm text-zinc-500">Choose a CLI agent, cloud API, or local server.</p></div>
+              <button type="button" aria-label="Close add provider" onClick={() => setAdding(false)} className="rounded p-1 text-zinc-400 hover:bg-zinc-800"><X size={18} /></button>
+            </div>
+            <div className="overflow-y-auto p-5">
+              <input autoFocus aria-label="Search providers" placeholder="Search providers…" value={search} onChange={(e) => setSearch(e.target.value)} className={inputClass} />
+              {groups.map((group) => <div key={group} className="mt-5">
+                <p className="mb-2 text-xs font-medium text-zinc-500">{GROUP_LABELS[group]}</p>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {PROVIDERS.filter((p) => p.group === group && p.label.toLowerCase().includes(search.toLowerCase())).map((p) => <button key={p.id} type="button" onClick={() => { settings.addProvider(p.id); setSelectedId(p.id); setAdding(false); }}
+                    className="flex items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-left text-sm text-zinc-200 hover:border-blue-500 hover:bg-zinc-800">
+                    <ProviderIcon providerId={p.id} size={20} /><span className="flex-1">{p.label}</span>{configured.some((item) => item.id === p.id) && <Check size={14} className="text-blue-400" />}
+                  </button>)}
+                </div>
+              </div>)}
+              {!PROVIDERS.some((p) => p.label.toLowerCase().includes(search.toLowerCase())) && <p className="mt-4 text-sm text-zinc-500">No providers match your search.</p>}
+            </div>
+          </DialogPanel>
+        </div>
+      </Dialog>}
+    </div>
   );
 }
 
@@ -269,7 +217,6 @@ function ProviderDetails({ provider }: { provider: ProviderDef }) {
   const hasKey = !!settings.keyStatus[provider.id];
   const showKey = provider.needsKey || provider.id === 'custom';
   const cli = settings.cliStatus[provider.id];
-  const modelListId = `models-${provider.id}`;
 
   const saveKey = async () => {
     if (!keyInput.trim()) return;
@@ -314,11 +261,11 @@ function ProviderDetails({ provider }: { provider: ProviderDef }) {
   };
 
   return (
-    <section className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-5 space-y-4">
-      <div className="flex items-start justify-between gap-4">
+    <section className="space-y-5">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
           <h3 className="flex items-center gap-2 text-sm font-semibold text-zinc-100">
-            {provider.kind === 'cli' ? <Terminal size={14} /> : <Sparkles size={14} className="text-blue-400" />}
+            <ProviderIcon providerId={provider.id} size={20} />
             {provider.label}
           </h3>
           {provider.hint && <p className="mt-1 text-xs text-zinc-500">{provider.hint}</p>}
@@ -342,15 +289,16 @@ function ProviderDetails({ provider }: { provider: ProviderDef }) {
         <div className="space-y-3">
           <div
             className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs ${
-              cli?.available ? 'bg-emerald-500/10 text-emerald-300' : 'bg-amber-500/10 text-amber-300'
+              cli?.available ? 'bg-emerald-500/10 text-emerald-300' : !isTauri() || !cli ? 'bg-zinc-900 text-zinc-400' : 'bg-amber-500/10 text-amber-300'
             }`}
           >
-            {cli?.available ? <Check size={14} /> : <AlertTriangle size={14} />}
+            {cli?.available ? <Check size={14} /> : !isTauri() || !cli ? <Terminal size={14} /> : <AlertTriangle size={14} />}
             <span className="truncate">
-              {cli?.available ? `Found at ${cli.path}` : `\`${cli?.binary ?? provider.binary}\` not found on PATH`}
+              {!isTauri() ? 'CLI detection is available in the desktop app.' : cli?.available ? `Found at ${cli.path}` : cli ? `\`${cli.binary}\` not found on PATH` : 'Checking PATH…'}
             </span>
             <button
               type="button"
+              disabled={!isTauri()}
               onClick={() => settings.refreshCliStatus()}
               className="ml-auto p-1 rounded hover:bg-white/10"
               title="Detect again"
@@ -359,7 +307,7 @@ function ProviderDetails({ provider }: { provider: ProviderDef }) {
               <RefreshCw size={12} />
             </button>
           </div>
-          {!cli?.available && provider.installHint && (
+          {isTauri() && cli?.available === false && provider.installHint && (
             <p className="text-xs text-zinc-500">
               Install: <code className="rounded bg-zinc-800 px-1.5 py-0.5 text-zinc-300">{provider.installHint}</code>
             </p>
@@ -430,43 +378,11 @@ function ProviderDetails({ provider }: { provider: ProviderDef }) {
         </Field>
       )}
 
-      <Field
-        label={provider.kind === 'cli' ? 'Model (optional)' : 'Model'}
-        hint={provider.kind === 'cli' ? "Leave empty to use the CLI's own default." : undefined}
-      >
-        <input
-          className={inputClass}
-          list={modelListId}
-          value={settings.models[provider.id] ?? ''}
-          placeholder={provider.defaultModel || 'default'}
-          onChange={(e) => settings.setModel(provider.id, e.target.value)}
-        />
-        <datalist id={modelListId}>
-          {provider.models.map((m) => (
-            <option key={m} value={m} />
-          ))}
-        </datalist>
-        {provider.models.length > 0 && (
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {provider.models.map((m) => {
-              const current = resolveModel(provider, settings.models) === m;
-              return (
-                <button
-                  type="button"
-                  key={m}
-                  onClick={() => settings.setModel(provider.id, m)}
-                  className={`rounded-md border px-2 py-0.5 text-[11px] transition-colors ${
-                    current
-                      ? 'border-blue-500/50 bg-blue-500/10 text-blue-200'
-                      : 'border-zinc-800 text-zinc-500 hover:border-zinc-600 hover:text-zinc-300'
-                  }`}
-                >
-                  {m}
-                </button>
-              );
-            })}
-          </div>
-        )}
+      <Field label="Default model" hint="Also available directly in chat.">
+        <div className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900 px-2 py-2">
+          <span className="pl-1 text-xs text-zinc-500">Model</span>
+          <ModelPicker key={provider.id} providerId={provider.id} placement="below" />
+        </div>
       </Field>
 
       <div className="flex items-center gap-3 pt-1">
@@ -544,6 +460,8 @@ function KeyTable({ title, rows }: { title: string; rows: KeyDoc[] }) {
 }
 
 function EditorSettings() {
+  const uiScale = useSettingsStore((s) => s.uiScale);
+  const setUiScale = useSettingsStore((s) => s.setUiScale);
   const vimEnabled = useSettingsStore((s) => s.vimEnabled);
   const setVimEnabled = useSettingsStore((s) => s.setVimEnabled);
   const sidebarFloating = useSettingsStore((s) => s.sidebarFloating);
@@ -556,6 +474,16 @@ function EditorSettings() {
 
   return (
     <div className="space-y-6">
+      <section className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-5 space-y-3">
+        <h3 className="text-sm font-semibold text-zinc-100">UI scale</h3>
+        <p className="text-xs text-zinc-500">Ctrl/Cmd +/− changes the whole interface. Ctrl/Cmd+0 resets to 100%.</p>
+        <div className="flex items-center gap-3 text-sm text-zinc-300">
+          <button type="button" aria-label="Zoom out" disabled={uiScale <= 0.5} onClick={() => setUiScale(uiScale - 0.1)} className="rounded border border-zinc-700 px-3 py-1 disabled:opacity-40">−</button>
+          <output aria-label="UI scale">{Math.round(uiScale * 100)}%</output>
+          <button type="button" aria-label="Zoom in" disabled={uiScale >= 2} onClick={() => setUiScale(uiScale + 0.1)} className="rounded border border-zinc-700 px-3 py-1 disabled:opacity-40">+</button>
+          <button type="button" onClick={() => setUiScale(1)} className="text-xs text-zinc-400 hover:text-zinc-100">Reset</button>
+        </div>
+      </section>
       <section className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-5 space-y-4">
         <div className="flex items-center justify-between gap-4">
           <div>
@@ -585,7 +513,7 @@ function EditorSettings() {
         </div>
       </section>
 
-      <section className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-5 space-y-5">
+      <section className="space-y-5">
         <div className="flex items-center justify-between gap-4">
           <div>
             <h3 className="text-sm font-semibold text-zinc-100">Vim mode</h3>

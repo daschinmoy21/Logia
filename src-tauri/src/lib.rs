@@ -12,6 +12,7 @@ mod git_sync;
 mod notes;
 mod config_crypto;
 mod ai_cli;
+mod cli_models;
 mod agent_terminal;
 mod terminal_process;
 mod cli_transport;
@@ -812,6 +813,7 @@ pub fn run() {
             save_ai_key,
             remove_ai_key,
             ai_cli::ai_cli_detect,
+            ai_cli::ai_cli_models,
             ai_cli::ai_cli_run,
             ai_cli::ai_cli_cancel,
             cli_bridge::cli_bridge_ready,

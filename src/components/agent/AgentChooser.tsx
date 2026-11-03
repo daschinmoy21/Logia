@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { Check, ChevronDown, RefreshCw, Settings2, Sparkles, Terminal } from 'lucide-react';
+import { Check, ChevronDown, RefreshCw, Settings2, Sparkles } from 'lucide-react';
 import { AGENT_TOOLS, isDesktopAgentHost, type AgentTool } from '../../lib/ai/agent-terminal';
+import { ProviderIcon } from '../ProviderIcon';
 import { useSettingsStore } from '../../store/settingsStore';
 import useUiStore from '../../store/UiStore';
 import {
@@ -109,7 +110,7 @@ export function AgentChooser({ selected, title, onSelect }: AgentChooserProps) {
         className="flex w-full min-w-0 items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-sm text-zinc-200 transition-colors hover:bg-zinc-900"
       >
         {selectedTool ? (
-          <Terminal size={14} className="flex-shrink-0 text-zinc-400" />
+          <ProviderIcon providerId={selectedTool.id} size={16} />
         ) : (
           <Sparkles size={14} className="flex-shrink-0 text-blue-400" />
         )}
@@ -151,7 +152,7 @@ export function AgentChooser({ selected, title, onSelect }: AgentChooserProps) {
                 onClick={() => choose(tool.id)}
                 className={`${itemClass} ${itemTone(selected === tool.id)}`}
               >
-                <Terminal size={14} className="flex-shrink-0 text-zinc-400" />
+                <ProviderIcon providerId={tool.id} size={16} />
                 <span className="flex-1 truncate">{tool.label}</span>
                 <span className={`flex-shrink-0 text-[11px] ${live ? 'text-blue-300' : AVAILABILITY_TONE[availability]}`}>
                   {live ? 'Running' : AVAILABILITY_LABELS[availability]}

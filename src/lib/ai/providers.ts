@@ -21,9 +21,6 @@ export interface ProviderDef {
   /** true when the user may override the endpoint. */
   editableBaseUrl?: boolean;
   defaultBaseUrl?: string;
-  defaultModel: string;
-  /** Suggestions for the model field; any string is accepted. */
-  models: string[];
   keyUrl?: string;
   hint?: string;
   /** Binary looked up on PATH (cli providers only). */
@@ -39,8 +36,6 @@ export const PROVIDERS: ProviderDef[] = [
     group: 'cloud',
     flavor: 'google',
     needsKey: true,
-    defaultModel: 'gemini-2.5-flash',
-    models: ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.5-flash-lite'],
     keyUrl: 'https://aistudio.google.com/app/apikey',
   },
   {
@@ -50,8 +45,6 @@ export const PROVIDERS: ProviderDef[] = [
     group: 'cloud',
     flavor: 'openai',
     needsKey: true,
-    defaultModel: 'gpt-5-mini',
-    models: ['gpt-5', 'gpt-5-mini', 'gpt-5-nano', 'gpt-4.1', 'gpt-4o-mini'],
     keyUrl: 'https://platform.openai.com/api-keys',
   },
   {
@@ -61,8 +54,6 @@ export const PROVIDERS: ProviderDef[] = [
     group: 'cloud',
     flavor: 'anthropic',
     needsKey: true,
-    defaultModel: 'claude-sonnet-5',
-    models: ['claude-sonnet-5', 'claude-opus-5-5', 'claude-fable-5-1', 'claude-haiku-4-5-20251001'],
     keyUrl: 'https://console.anthropic.com/settings/keys',
   },
   {
@@ -73,8 +64,6 @@ export const PROVIDERS: ProviderDef[] = [
     flavor: 'openai-compatible',
     needsKey: true,
     defaultBaseUrl: 'https://openrouter.ai/api/v1',
-    defaultModel: 'openai/gpt-5-mini',
-    models: ['openai/gpt-5-mini', 'anthropic/claude-sonnet-5', 'google/gemini-2.5-flash', 'deepseek/deepseek-chat'],
     keyUrl: 'https://openrouter.ai/keys',
     hint: 'One key, hundreds of models. Use the provider/model id from openrouter.ai/models.',
   },
@@ -86,8 +75,6 @@ export const PROVIDERS: ProviderDef[] = [
     flavor: 'openai-compatible',
     needsKey: true,
     defaultBaseUrl: 'https://api.groq.com/openai/v1',
-    defaultModel: 'llama-3.3-70b-versatile',
-    models: ['llama-3.3-70b-versatile', 'openai/gpt-oss-120b', 'qwen/qwen3-32b'],
     keyUrl: 'https://console.groq.com/keys',
   },
   {
@@ -98,8 +85,6 @@ export const PROVIDERS: ProviderDef[] = [
     flavor: 'openai-compatible',
     needsKey: true,
     defaultBaseUrl: 'https://api.deepseek.com/v1',
-    defaultModel: 'deepseek-chat',
-    models: ['deepseek-chat', 'deepseek-reasoner'],
     keyUrl: 'https://platform.deepseek.com/api_keys',
   },
   {
@@ -110,8 +95,6 @@ export const PROVIDERS: ProviderDef[] = [
     flavor: 'openai-compatible',
     needsKey: true,
     defaultBaseUrl: 'https://api.mistral.ai/v1',
-    defaultModel: 'mistral-medium-latest',
-    models: ['mistral-medium-latest', 'mistral-small-latest', 'codestral-latest'],
     keyUrl: 'https://console.mistral.ai/api-keys',
   },
   {
@@ -123,8 +106,6 @@ export const PROVIDERS: ProviderDef[] = [
     needsKey: false,
     editableBaseUrl: true,
     defaultBaseUrl: 'http://localhost:11434/v1',
-    defaultModel: 'llama3.2',
-    models: ['llama3.2', 'qwen3', 'gemma3', 'mistral'],
     hint: 'Runs fully offline. Pull a model first: ollama pull llama3.2',
   },
   {
@@ -136,8 +117,6 @@ export const PROVIDERS: ProviderDef[] = [
     needsKey: false,
     editableBaseUrl: true,
     defaultBaseUrl: 'http://localhost:1234/v1',
-    defaultModel: 'local-model',
-    models: [],
     hint: 'Start the local server in LM Studio (Developer tab) and use the loaded model id.',
   },
   {
@@ -149,8 +128,6 @@ export const PROVIDERS: ProviderDef[] = [
     needsKey: false,
     editableBaseUrl: true,
     defaultBaseUrl: 'http://localhost:8080/v1',
-    defaultModel: '',
-    models: [],
     hint: 'Any server that speaks the OpenAI chat completions API (llama.cpp, vLLM, LiteLLM, …). The API key is optional.',
   },
   {
@@ -160,8 +137,6 @@ export const PROVIDERS: ProviderDef[] = [
     group: 'cli',
     needsKey: false,
     binary: 'claude',
-    defaultModel: '',
-    models: ['sonnet', 'opus', 'haiku'],
     installHint: 'npm i -g @anthropic-ai/claude-code',
     hint: 'Uses your Claude subscription via `claude -p`.',
   },
@@ -172,8 +147,6 @@ export const PROVIDERS: ProviderDef[] = [
     group: 'cli',
     needsKey: false,
     binary: 'codex',
-    defaultModel: '',
-    models: ['gpt-5', 'gpt-5-codex'],
     installHint: 'npm i -g @openai/codex',
     hint: 'Runs `codex exec` in a read-only sandbox.',
   },
@@ -184,8 +157,6 @@ export const PROVIDERS: ProviderDef[] = [
     group: 'cli',
     needsKey: false,
     binary: 'opencode',
-    defaultModel: '',
-    models: ['anthropic/claude-sonnet-5', 'openai/gpt-5'],
     installHint: 'curl -fsSL https://opencode.ai/install | bash',
     hint: 'Runs `opencode run`. Models use the provider/model form.',
   },
@@ -196,8 +167,6 @@ export const PROVIDERS: ProviderDef[] = [
     group: 'cli',
     needsKey: false,
     binary: 'pi',
-    defaultModel: '',
-    models: [],
     installHint: 'npm install -g --ignore-scripts @earendil-works/pi-coding-agent',
     hint: 'Runs pi --print for chat. Use the agent terminal for interactive sessions and /login.',
   },
@@ -208,8 +177,6 @@ export const PROVIDERS: ProviderDef[] = [
     group: 'cli',
     needsKey: false,
     binary: 'gemini',
-    defaultModel: '',
-    models: ['gemini-2.5-pro', 'gemini-2.5-flash'],
     installHint: 'npm i -g @google/gemini-cli',
     hint: 'Runs `gemini -p` with your Google login.',
   },
@@ -228,7 +195,7 @@ export function getProvider(id: string | undefined | null): ProviderDef | undefi
 /** Model to use for a provider given the user's per-provider overrides. */
 export function resolveModel(provider: ProviderDef, overrides: Record<string, string>): string {
   const override = overrides[provider.id]?.trim();
-  return override || provider.defaultModel;
+  return override || '';
 }
 
 export function resolveBaseUrl(provider: ProviderDef, overrides: Record<string, string>): string | undefined {

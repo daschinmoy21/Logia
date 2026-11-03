@@ -15,26 +15,8 @@ import {
 } from './providers';
 import { getApiKey, useSettingsStore } from '../../store/settingsStore';
 
-const isTauri = () => typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
-
-/**
- * Route HTTP calls through the Tauri HTTP plugin so provider APIs aren't
- * blocked by CORS in the webview. Falls back to the browser fetch when the
- * plugin isn't available or the URL is outside its scope.
- */
-const aiFetch: typeof fetch = async (input, init) => {
-  if (isTauri()) {
-    try {
-      const { fetch: tauriFetch } = await import('@tauri-apps/plugin-http');
-      return await tauriFetch(input, init);
-    } catch (error) {
-      const msg = String(error);
-      // Scope/permission errors mean the plugin refused; try the webview.
-      if (!/not allowed|scope|forbidden/i.test(msg)) throw error;
-    }
-  }
-  return fetch(input, init);
-};
+import { aiFetch } from './http';
+import { loadProviderModels } from './model-catalog';
 
 export class AiNotConfiguredError extends Error {}
 
@@ -55,8 +37,10 @@ export async function getLanguageModel(provider = activeProvider()): Promise<Lan
     throw new AiNotConfiguredError(`${provider.label} is a CLI agent and can't be used here.`);
   }
   const state = useSettingsStore.getState();
-  const model = resolveModel(provider, state.models);
-  if (!model) throw new AiNotConfiguredError(`Set a model for ${provider.label} in Settings → AI.`);
+  const chosen = resolveModel(provider, state.models);
+  const catalog = chosen ? [] : await loadProviderModels(provider.id);
+  const model = chosen || catalog.find((m) => m.isDefault)?.id || catalog[0]?.id;
+  if (!model) throw new AiNotConfiguredError(`Choose a model for ${provider.label} in chat settings.`);
 
   const apiKey = provider.needsKey || provider.id === 'custom' ? await getApiKey(provider.id) : '';
   if (provider.needsKey && !apiKey) {

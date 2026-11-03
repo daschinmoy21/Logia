@@ -7,7 +7,8 @@ import { Resizable } from "re-resizable";
 import { useState, useEffect, useRef } from "react";
 import { activeProvider, friendlyAiError, streamChat } from "../lib/ai/client";
 import { isProviderReady } from "../store/settingsStore";
-import { ProviderSwitcher } from "./ProviderSwitcher";
+import { ModelPicker } from "./ModelPicker";
+import { useSettingsStore } from "../store/settingsStore";
 import { AgentChooser, type AgentSelection } from "./agent/AgentChooser";
 import { AgentComposer } from "./agent/AgentComposer";
 import { AgentTerminalPane } from "./agent/AgentTerminalPane";
@@ -49,6 +50,7 @@ const TERMINAL_WIDTH = 480;
 const noNotes: Note[] = [];
 
 const AiSidebar = ({ isOpen, onClose }: AiSidebarProps) => {
+  const providerId = useSettingsStore((s) => s.activeProvider);
   const [activeTab, setActiveTab] = useState<Tab>("chat");
   const [activeAgent, setActiveAgent] = useState<AgentSelection>("logia");
   const [includeNote, setIncludeNote] = useState(true);
@@ -617,7 +619,7 @@ TO REPLACE CONTENT:
                               <FileText size={12} className="flex-shrink-0" />
                               <span className="truncate">{currentNote.title || "Untitled"}</span>
                             </button>
-                            <ProviderSwitcher />
+                            <ModelPicker providerId={providerId} scope="chat" disabled={isLoading} />
                           </>
                         }
                       />

@@ -233,6 +233,15 @@ fn workspace_dir(app_handle: &tauri::AppHandle) -> Result<PathBuf, String> {
 }
 
 #[tauri::command]
+pub async fn ai_cli_models(app: tauri::AppHandle, tool: String, binary: Option<String>) -> Result<Vec<crate::cli_models::CliModel>, String> {
+    let spec = tool_spec(&tool).ok_or("Unknown CLI provider")?;
+    let path = augmented_path();
+    let binary = binary.as_deref().map(str::trim).filter(|s| !s.is_empty()).unwrap_or(spec.default_binary);
+    let executable = resolve_binary(binary, &path).ok_or("CLI not found. Set its binary path in Settings → AI.")?;
+    crate::cli_models::discover(&tool, &executable, &path, &workspace_dir(&app)?).await
+}
+
+#[tauri::command]
 pub async fn ai_cli_detect(overrides: Option<HashMap<String, String>>) -> Result<Vec<CliToolInfo>, String> {
     let overrides = overrides.unwrap_or_default();
     let path_var = augmented_path();

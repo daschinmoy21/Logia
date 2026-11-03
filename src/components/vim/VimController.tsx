@@ -10,6 +10,7 @@ import { LEADER_BINDINGS, type LeaderAction } from '../../lib/vim/keymap';
 import { flattenVisibleTree, type TreeItem } from '../../lib/note-utils';
 import { PROVIDERS, getProvider } from '../../lib/ai/providers';
 import { isPaneNavigationKey } from '../../hooks/usePaneNavigation';
+import { uiScaleAction } from '../../lib/ui-scale';
 import { prefersReducedMotion } from '../../lib/utils';
 
 /* ------------------------------------------------------------- helpers -- */
@@ -415,7 +416,7 @@ export function VimController() {
     };
 
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.isComposing || e.metaKey || isPaneNavigationKey(e)) return;
+      if (e.isComposing || e.metaKey || isPaneNavigationKey(e) || uiScaleAction(e)) return;
       if (e.target instanceof Element && e.target.closest('[data-agent-menu]')) return;
       const vim = useVimStore.getState();
 

@@ -32,6 +32,7 @@ pub struct NoteContext {
 pub struct StartOptions {
     tool: String,
     binary: Option<String>,
+    model: Option<String>,
     cols: u16,
     rows: u16,
     #[serde(default)]
@@ -65,7 +66,8 @@ pub async fn agent_terminal_start(
         .join("agent-sessions");
     let sessions = state.0.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        let (default_binary, args) = terminal_process::launch_spec(&options.tool, options.login)?;
+        let (default_binary, _) = terminal_process::launch_spec(&options.tool, options.login)?;
+        let args = terminal_process::launch_args(&options.tool, options.login, options.model.as_deref())?;
         terminal_process::pty_size(options.cols, options.rows)?;
         if options.context.as_ref().is_some_and(|c| c.markdown.len() > 1024 * 1024 || c.title.len() > 4096) {
             return Err("Note context exceeds the 1 MiB limit".into());
