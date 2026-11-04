@@ -66,6 +66,69 @@ test('the home scene animates, holds still for reduced motion, and stops with Ho
   expect(await pixels()).toBe(still);
 });
 
+test('opening the context panel does not move the note toolbar buttons', async ({ page }) => {
+  await seed(page);
+  await openHomeNote(page, 'Research plan');
+  const panel = page.getByRole('complementary', { name: 'Note context' });
+  const exportButton = page.getByRole('button', { name: 'Export note', exact: true });
+  await expect(panel).toBeVisible();
+  const open = await exportButton.boundingBox();
+  const panelBox = await panel.boundingBox();
+  expect(panelBox!.y).toBeGreaterThanOrEqual(open!.y + open!.height);
+  await page.getByRole('button', { name: 'Hide note context', exact: true }).click();
+  await expect(panel).toHaveCount(0);
+  const closed = await exportButton.boundingBox();
+  expect(closed!.x).toBe(open!.x);
+  expect(closed!.y).toBe(open!.y);
+});
+
+test('Today creates its note in one Daily folder and reveals it in the tree', async ({ page }) => {
+  await seed(page);
+  const dailies = async () => {
+    const { notes, folders } = await readStored(page);
+    return {
+      folders: folders.filter((f: { name: string }) => f.name === 'Daily'),
+      notes: notes.filter((n: { title: string }) => /^\d{4}-\d{2}-\d{2}$/.test(n.title)),
+    };
+  };
+  await page.getByRole('button', { name: 'Today', exact: true }).first().click();
+  await expect.poll(async () => (await dailies()).notes.length).toBe(1);
+  const first = await dailies();
+  expect(first.folders).toHaveLength(1);
+  expect(first.folders[0].parent_id).toBeUndefined();
+  expect(first.notes[0].folder_id).toBe(first.folders[0].id);
+  await expect(page.getByRole('treeitem', { name: 'Daily', exact: true })).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.getByRole('treeitem', { name: first.notes[0].title, exact: true })).toHaveAttribute('aria-selected', 'true');
+
+  await page.keyboard.press('Control+Shift+d');
+  await page.evaluate(async () => {
+    const { useNotesStore } = await import('/src/store/notesStore.ts');
+    await Promise.all([useNotesStore.getState().openDailyNote(), useNotesStore.getState().openDailyNote()]);
+  });
+  const second = await dailies();
+  expect(second.folders).toHaveLength(1);
+  expect(second.notes).toHaveLength(1);
+});
+
+test('an existing daily note stays where it is, and concurrent folder requests make one folder', async ({ page }) => {
+  const today = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const title = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
+  await seed(page, [...records, { ...records[0], id: 'old-daily', title, starred: false }]);
+  await page.getByRole('button', { name: 'Today', exact: true }).first().click();
+  await expect(page.locator('[data-note-editor="old-daily"]')).toBeVisible();
+  const before = await readStored(page);
+  expect(before.notes.find((n: { id: string }) => n.id === 'old-daily').folder_id).toBeUndefined();
+  expect(before.folders).toHaveLength(0);
+  const ids = await page.evaluate(async () => {
+    const { useNotesStore } = await import('/src/store/notesStore.ts');
+    const made = await Promise.all([useNotesStore.getState().ensureDailyFolder(), useNotesStore.getState().ensureDailyFolder()]);
+    return made.map((folder) => folder.id);
+  });
+  expect(ids[0]).toBe(ids[1]);
+  expect((await readStored(page)).folders).toHaveLength(1);
+});
+
 test('keyboard palette opens notes and command mode creates only one daily note', async ({ page }) => {
   await seed(page);
   await page.keyboard.press('Control+p');

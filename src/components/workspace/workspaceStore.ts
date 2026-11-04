@@ -28,6 +28,7 @@ interface WorkspaceUiState {
   /** Where the sidebar's new-item buttons create things; null is the workspace root. */
   treeFolderId: string | null;
   sidebarWidth: number;
+  aiPanelWidth: number;
   favoritesOpen: boolean;
 
   setReady: (ready: boolean) => void;
@@ -43,6 +44,7 @@ interface WorkspaceUiState {
   moveTab: (id: string, over: string) => void;
   setTreeFolderId: (id: string | null) => void;
   setSidebarWidth: (width: number) => void;
+  setAiPanelWidth: (width: number) => void;
   setFavoritesOpen: (open: boolean) => void;
 }
 
@@ -60,6 +62,7 @@ export const useWorkspaceStore = create<WorkspaceUiState>()(
       previewTab: null,
       treeFolderId: null,
       sidebarWidth: 264,
+      aiPanelWidth: 380,
       favoritesOpen: true,
 
       setReady: (ready) => set({ ready }),
@@ -102,6 +105,7 @@ export const useWorkspaceStore = create<WorkspaceUiState>()(
       }),
       setTreeFolderId: (treeFolderId) => set({ treeFolderId }),
       setSidebarWidth: (sidebarWidth) => set({ sidebarWidth }),
+      setAiPanelWidth: (aiPanelWidth) => set({ aiPanelWidth }),
       setFavoritesOpen: (favoritesOpen) => set({ favoritesOpen }),
     }),
     {
@@ -112,6 +116,7 @@ export const useWorkspaceStore = create<WorkspaceUiState>()(
         tabs: s.tabs,
         previewTab: s.previewTab,
         sidebarWidth: s.sidebarWidth,
+        aiPanelWidth: s.aiPanelWidth,
         favoritesOpen: s.favoritesOpen,
       }),
     },

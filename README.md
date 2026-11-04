@@ -30,8 +30,6 @@ Open **Settings → AI providers → Add provider** to add a CLI agent, cloud AP
 
 The model dropdown opens next to the composer, with live models grouped by provider, search, favorites, refresh, and locally bundled provider logos. Selecting a model applies it and closes the dropdown. Codex uses `app-server` → `model/list`; Claude Code uses its initialization catalog; OpenCode uses `models`; Pi uses `--list-models`; Gemini CLI uses its JSON model listing. Cloud and local API providers query their model-list endpoints, including pagination. No static model suggestions are shown when discovery fails. Custom IDs remain available as an explicit option.
 
-Logia chat has a saved edit-approval dropdown beside the model picker. **Supervised** keeps the Approve / Refuse cards; **Auto-accept edits** applies note changes from completed replies immediately and shows an applied summary. The choice applies to new replies. If a different note is open when a reply finishes, its edits wait for you to reopen the original note and approve them. Failed batches show progress, and retrying continues with the remaining edits.
-
 Terminal sessions use the model chosen before starting; use the CLI's `/model` command (`/models` in OpenCode) to change it within a running session. API providers without an explicit selection use a default reported by the live catalog, or its first returned model.
 
 Choosing an agent opens a chat transcript with a ready-to-use composer. **New session** immediately clears the conversation and focuses the input. Model selection and note attachment are in the composer; Codex also exposes reasoning efforts reported by its live catalog and an access selector (read-only by default). Follow-ups share a scratch workspace and include the conversation history. The terminal icon opens the CLI for sign-in or direct terminal use.
@@ -313,6 +311,6 @@ This project is licensed under the GNU Affero General Public License v3.0 (AGPL-
 
 ### Agent panel
 
-Open the AI sidebar and choose **Logia chat**, **Codex**, **Claude Code**, **Pi**, or **OpenCode**. External agents run interactively in the desktop app’s embedded terminal. Install the CLI separately, refresh detection, and set a custom executable in Settings → AI if needed. **Sign in** launches the CLI’s own login flow; Logia does not import subscription credentials into its API providers. Pi uses `/login` inside its terminal.
+Open the AI sidebar and choose **Codex**, **Claude Code**, **Pi**, **OpenCode**, or **Grok Build**. External agents run interactively in the desktop app’s embedded terminal. Install the CLI separately, refresh detection, and set a custom executable in Settings → AI if needed. **Sign in** launches the CLI’s own login flow; Logia does not import subscription credentials into its API providers. Pi uses `/login` inside its terminal.
 
 Use Ctrl+H/L to focus the pane to the left/right and Ctrl+J/K to cycle between file tree, editor, and AI; this works with Vim off and inside the terminal. Ctrl+Shift+P opens commands. The agent composer has an independent Vim toggle and NORMAL/INSERT indicator. Terminal input keeps the CLI’s own keybindings. See [agent terminal details](docs/agent-terminal.md) for scope and authentication behavior.

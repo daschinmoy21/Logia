@@ -1,6 +1,6 @@
 import { Channel, invoke } from '@tauri-apps/api/core';
 
-export type AgentTool = 'codex' | 'claude-code' | 'pi' | 'opencode';
+export type AgentTool = 'codex' | 'claude-code' | 'pi' | 'opencode' | 'grok';
 export type AgentTerminalEvent =
   | { kind: 'data'; data: number[] }
   | { kind: 'exit'; code: number }
@@ -10,6 +10,7 @@ export const AGENT_TOOLS = [
   { id: 'codex', label: 'Codex', binary: 'codex', loginHint: 'Sign in with a device code using your ChatGPT account.', installUrl: 'https://developers.openai.com/codex/cli/' },
   { id: 'claude-code', label: 'Claude Code', binary: 'claude', loginHint: 'Sign in through Claude Code’s browser login.', installUrl: 'https://code.claude.com/docs/en/setup' },
   { id: 'pi', label: 'Pi', binary: 'pi', loginHint: 'Run /login in Pi to choose a provider and sign in.', installUrl: 'https://pi.dev' },
+  { id: 'grok', label: 'Grok Build', binary: 'grok', loginHint: 'Sign in through Grok Build’s browser login, or set XAI_API_KEY.', installUrl: 'https://docs.x.ai/build/overview' },
   { id: 'opencode', label: 'OpenCode', binary: 'opencode', loginHint: 'Choose a provider in OpenCode’s login flow.', installUrl: 'https://opencode.ai/docs/' },
 ] as const;
 

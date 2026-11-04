@@ -58,6 +58,7 @@ fn tool_spec(tool: &str) -> Option<ToolSpec> {
     match tool {
         "claude-code" => Some(ToolSpec { default_binary: "claude", prompt_on_stdin: true }),
         "codex" => Some(ToolSpec { default_binary: "codex", prompt_on_stdin: true }),
+        "grok" => Some(ToolSpec { default_binary: "grok", prompt_on_stdin: false }),
         "opencode" => Some(ToolSpec { default_binary: "opencode", prompt_on_stdin: false }),
         "pi" => Some(ToolSpec { default_binary: "pi", prompt_on_stdin: false }),
         "gemini-cli" => Some(ToolSpec { default_binary: "gemini", prompt_on_stdin: false }),
@@ -80,6 +81,7 @@ pub(crate) fn augmented_path() -> OsString {
             ".npm-global/bin",
             ".cargo/bin",
             ".opencode/bin",
+            ".grok/bin",
             ".claude/local",
             ".volta/bin",
             ".nix-profile/bin",
@@ -211,7 +213,7 @@ pub async fn ai_cli_models(app: tauri::AppHandle, tool: String, binary: Option<S
 pub async fn ai_cli_detect(overrides: Option<HashMap<String, String>>) -> Result<Vec<CliToolInfo>, String> {
     let overrides = overrides.unwrap_or_default();
     let path_var = augmented_path();
-    let tools = ["claude-code", "codex", "opencode", "gemini-cli", "pi"];
+    let tools = ["claude-code", "codex", "grok", "opencode", "gemini-cli", "pi"];
     Ok(tools
         .iter()
         .map(|id| {

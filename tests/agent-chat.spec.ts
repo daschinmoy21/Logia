@@ -32,7 +32,7 @@ test('new sessions open directly into a composer and send real model, effort, ac
   await expect(page.getByTestId('model-dropdown')).toHaveCount(0);
   await pick(page, 'Reasoning effort', 'High');
   await pick(page, 'Agent access', 'Workspace');
-  await expect(page.getByRole('button', { name: 'Attach current note', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('button', { name: 'Remove attached note', exact: true })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('agent-chat.png') });
   await composer.fill('Summarize the attached note');
   await page.getByRole('button', { name: 'Send to Codex', exact: true }).click();
@@ -136,12 +136,48 @@ test('the active note including unsaved edits is included by default and can be 
   await page.getByRole('button', { name: 'Remove attached note', exact: true }).click();
   await page.getByRole('button', { name: 'Close AI sidebar', exact: true }).first().click();
   await page.getByRole('button', { name: 'Open AI sidebar', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Attach current note', exact: true })).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.getByRole('button', { name: 'Attach current note', exact: true })).toBeVisible();
   await composer.fill('Continue without the note');
   await page.getByRole('button', { name: 'Send to Codex', exact: true }).click();
   await expect(page.getByRole('log').getByText('Fixture chat reply', { exact: true })).toHaveCount(2);
   const second = (await agentCalls(page)).filter((call) => call.command === 'ai_cli_run')[1];
   expect(second.args.prompt).not.toContain('Latest unsaved sentence.');
+});
+
+test('attached files stay separate from the current note and reach the prompt as paths', async ({ page }) => {
+  await openChat(page);
+  await page.evaluate(() => { (window as any).__agentAttachPaths = ['/fixture/files/photo.png', '/fixture/files/report.pdf']; });
+  await page.getByRole('button', { name: 'Attach files', exact: true }).click();
+  await expect(page.getByText('photo.png', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Remove report.pdf', exact: true }).click();
+  await expect(page.getByText('report.pdf', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Current note: Agent collaboration', { exact: true })).toBeVisible();
+  await page.getByRole('textbox', { name: 'Message Codex', exact: true }).fill('Look at this');
+  await page.getByRole('button', { name: 'Send to Codex', exact: true }).click();
+  await expect(page.getByRole('log')).toContainText('Fixture chat reply');
+  const run = (await agentCalls(page)).find((call) => call.command === 'ai_cli_run')!;
+  expect(run.args.prompt).toContain('Attached files:\n- /fixture/files/photo.png');
+  expect(run.args.prompt).not.toContain('report.pdf');
+  await expect(page.getByText('photo.png', { exact: true })).toHaveCount(0);
+});
+
+test('a resized panel keeps its width when switching agents and after a reload', async ({ page }) => {
+  await openChat(page);
+  const panel = page.locator('[data-workspace-pane="ai"]');
+  const start = (await panel.boundingBox())!;
+  await page.mouse.move(start.x, start.y + 300);
+  await page.mouse.down();
+  await page.mouse.move(start.x + 70, start.y + 300, { steps: 4 });
+  await page.mouse.up();
+  const width = (await panel.boundingBox())!.width;
+  expect(width).toBeLessThan(start.width - 40);
+  await choose(page, 'Pi');
+  await expect(page.getByRole('textbox', { name: 'Message Pi', exact: true })).toBeVisible();
+  expect((await panel.boundingBox())!.width).toBe(width);
+  await page.reload();
+  await page.getByRole('button', { name: 'Open AI sidebar', exact: true }).click();
+  await expect(page.getByRole('textbox', { name: 'Message Pi', exact: true })).toBeVisible();
+  expect((await panel.boundingBox())!.width).toBe(width);
 });
 
 test('model choices open in an anchored dropdown and support keyboard selection and outside dismissal', async ({ page }, testInfo) => {
@@ -155,7 +191,8 @@ test('model choices open in an anchored dropdown and support keyboard selection 
   const anchor = await trigger.boundingBox();
   const box = await menu.boundingBox();
   expect(box!.width).toBeLessThan(400);
-  expect(Math.abs(box!.x - anchor!.x)).toBeLessThan(24);
+  // The wider menu shifts left a little to stay inside the window.
+  expect(Math.abs(box!.x - anchor!.x)).toBeLessThan(40);
   expect(box!.y + box!.height).toBeLessThanOrEqual(anchor!.y + 1);
   await page.screenshot({ path: testInfo.outputPath('model-dropdown.png') });
   await page.getByRole('textbox', { name: 'Find a model' }).press('ArrowDown');

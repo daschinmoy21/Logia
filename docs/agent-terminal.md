@@ -1,6 +1,6 @@
 # Interactive agents in Logia
 
-The AI sidebar offers built-in Logia chat and interactive terminals for installed Codex, Claude Code, Pi, and OpenCode executables. API chat remains available through the existing provider settings. The terminal runs on the machine hosting the desktop application; a browser preview cannot launch processes.
+The AI sidebar offers chat and interactive terminals for installed Codex, Claude Code, Pi, and OpenCode executables. API providers remain available for editor AI and transcription through the existing provider settings. The terminal runs on the machine hosting the desktop application; a browser preview cannot launch processes.
 
 A launch requires a click. Selecting an agent does not start it or sign in. Detection checks the executable path, not account status. **Installed** means the executable was found; it does not claim that authentication succeeded. Overrides come from Settings → AI. Logia spawns the executable directly with fixed arguments, without evaluating shell commands or automatically installing packages.
 

@@ -30,12 +30,16 @@ interface NotesState {
   updateCurrentNoteContent: (content: string) => void;
   updateCurrentNoteTitle: (title: string) => void;
   saveCurrentNote: () => Promise<void>;
+  /** The root folder daily notes are created in, made on first use. */
+  ensureDailyFolder: () => Promise<Folder>;
 }
 
 // Serialize writes so older saves cannot land after newer ones.
 let saveQueue: Promise<unknown> = Promise.resolve();
 let activeSaves = 0;
 let openingDaily: Promise<Note> | null = null;
+let creatingDailyFolder: Promise<Folder> | null = null;
+const DAILY_FOLDER = 'Daily';
 const starQueues = new Map<string, Promise<void>>();
 function writeNote(note: Note, preferLatest = false): Promise<void> {
   const next = saveQueue.catch(() => {}).then(() => {
@@ -351,7 +355,8 @@ export const useNotesStore = create<NotesState>()(
         const block = (type: string, content: string, level?: number) => ({
           id: crypto.randomUUID(), type, content, props: level ? { level } : {}, children: [],
         });
-        return get().createNote('text', undefined, {
+        const folder = await get().ensureDailyFolder();
+        return get().createNote('text', folder.id, {
           title,
           content: JSON.stringify([
             block('heading', title, 1), block('paragraph', '#daily'),
@@ -361,6 +366,19 @@ export const useNotesStore = create<NotesState>()(
         });
       })().finally(() => { openingDaily = null; });
       return openingDaily;
+    },
+
+    ensureDailyFolder: () => {
+      if (creatingDailyFolder) return creatingDailyFolder;
+      creatingDailyFolder = (async () => {
+        // An unread folder list can't prove the folder is missing, and guessing would duplicate it.
+        if (get().folderLoadError) await get().loadFolders();
+        const loadError = get().folderLoadError;
+        if (loadError) throw new Error(loadError);
+        return get().folders.find((folder) => folder.name === DAILY_FOLDER && folder.parent_id == null)
+          ?? await get().createFolder(DAILY_FOLDER);
+      })().finally(() => { creatingDailyFolder = null; });
+      return creatingDailyFolder;
     },
 
     saveCurrentNote: async () => {

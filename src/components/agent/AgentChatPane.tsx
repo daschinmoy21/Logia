@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Brain, Loader2, LockKeyhole, Paperclip, Plus, Settings2, Terminal, X } from 'lucide-react';
+import { ArrowLeft, Brain, FileText, Loader2, LockKeyhole, Paperclip, Plus, Settings2, Terminal, X } from 'lucide-react';
+import { open as openFileDialog } from '@tauri-apps/plugin-dialog';
+import toast from 'react-hot-toast';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { AGENT_TOOLS, isDesktopAgentHost, type AgentTool } from '../../lib/ai/agent-terminal';
@@ -19,8 +21,11 @@ import { newAgentChat, sendAgentChat, setAgentChatIncludeNote, setAgentChatOptio
 const accessLabels = { 'read-only': 'Read only', 'workspace-write': 'Workspace', 'danger-full-access': 'Full access' };
 const effortLabels: Record<string, string> = { none: 'None', minimal: 'Minimal', low: 'Low', medium: 'Medium', high: 'High', xhigh: 'Extra high', max: 'Max' };
 const terminalViews = new Set<AgentTool>();
+/** Chosen files wait for the next send, even across closing the panel or switching agents. */
+const pendingFiles = new Map<AgentTool, string[]>();
+const fileName = (path: string) => path.split(/[\\/]/).pop() || path;
 
-export function AgentChatPane({ tool }: { tool: AgentTool }) {
+export function AgentChatPane({ tool, onSwitchAgent }: { tool: AgentTool; onSwitchAgent: (agent: AgentTool) => void }) {
   const def = AGENT_TOOLS.find((t) => t.id === tool)!;
   const chat = useAgentChats((s) => s.chats[tool]);
   const model = useSettingsStore((s) => s.models[tool]);
@@ -35,6 +40,12 @@ export function AgentChatPane({ tool }: { tool: AgentTool }) {
   };
   const attach = chat?.includeNote ?? true;
   const setAttach = (includeNote: boolean) => setAgentChatIncludeNote(tool, includeNote);
+  const [files, setFilesState] = useState<string[]>(() => pendingFiles.get(tool) ?? []);
+  const setFiles = (next: string[]) => {
+    pendingFiles.set(tool, next);
+    setFilesState(next);
+  };
+  const pendingPrompt = useUiStore((s) => s.pendingAiPrompt);
   const [catalog, setCatalog] = useState<CatalogModel[]>([]);
   const effort = chat?.options.reasoningEffort ?? '';
   const access = chat?.options.access ?? 'read-only';
@@ -65,6 +76,32 @@ export function AgentChatPane({ tool }: { tool: AgentTool }) {
     // A hover reveal must not pull the caret out of the note being typed in.
     if (!terminalOpen && !composer.current?.closest('[data-ai-peek]')) composer.current?.querySelector('textarea')?.focus();
   }, [chat?.id, terminalOpen]);
+
+  const noteAttachable = !!note && note.note_type !== 'canvas';
+
+  const send = (text: string) => {
+    const body = files.length ? `${text}\n\nAttached files:\n${files.map((path) => `- ${path}`).join('\n')}` : text;
+    const sent = sendAgentChat(tool, body, { access: tool === 'codex' ? access : undefined, reasoningEffort: selectedEffort || undefined }, attach && noteAttachable ? { id: note.id, title: note.title || 'Untitled', markdown: noteToMarkdown(note.content) } : undefined);
+    if (sent) setFiles([]);
+    return sent;
+  };
+
+  // The vim `:ai <prompt>` command hands its prompt to whichever agent is open.
+  useEffect(() => {
+    if (!pendingPrompt || terminalOpen || running) return;
+    useUiStore.getState().setPendingAiPrompt(null);
+    send(pendingPrompt);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingPrompt, terminalOpen, running]);
+
+  const chooseFiles = async () => {
+    try {
+      const chosen = await openFileDialog({ multiple: true });
+      if (chosen?.length) setFiles([...new Set([...files, ...chosen])]);
+    } catch (error) {
+      toast.error(`Couldn't attach files: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
 
   if (terminalOpen) return <div className="flex min-h-0 flex-1 flex-col">
     <div className="flex h-8 items-center border-b border-zinc-800 px-1.5">
@@ -104,19 +141,24 @@ export function AgentChatPane({ tool }: { tool: AgentTool }) {
     {!desktop && <p className="px-4 py-2 text-xs text-zinc-500">Open the desktop app to chat with {def.label}.</p>}
     {desktop && info?.available === false && <p className="px-4 py-2 text-xs text-amber-300">{def.label} wasn’t found. <button type="button" onClick={() => useUiStore.getState().setIsSettingsOpen(true, 'ai')} className="underline underline-offset-2">Set its binary path</button>.</p>}
     <div ref={composer} className="shrink-0">
-      {attach && note && note.note_type !== 'canvas' && <div className="mx-3.5 flex h-6 items-center gap-1.5 text-xs text-zinc-500"><Paperclip size={12} /><span className="min-w-0 flex-1 truncate">Current note: {note.title || 'Untitled'}</span><button type="button" onClick={() => setAttach(false)} aria-label="Remove attached note"><X size={12} /></button></div>}
-      <AgentComposer key={chat?.id ?? tool} draftKey={`chat:${tool}:${chat?.id ?? 'new'}`} label={`Message ${def.label}`} placeholder="Ask for changes, send follow-ups, or attach a note" busy={running} canSend={desktop && info?.available !== false}
+      {(noteAttachable || files.length > 0) && <div className="mx-2.5 flex flex-wrap items-center gap-1 pt-1">
+        {noteAttachable && (attach
+          ? <span className="flex h-6 max-w-full items-center gap-1.5 rounded-md bg-white/[0.06] pl-1.5 pr-0.5 text-xs text-zinc-300"><FileText size={12} className="shrink-0 text-zinc-500" /><span className="min-w-0 truncate">Current note: {note.title || 'Untitled'}</span><button type="button" onClick={() => setAttach(false)} aria-label="Remove attached note" className="flex size-5 shrink-0 items-center justify-center rounded text-zinc-500 hover:bg-white/10 hover:text-zinc-100"><X size={12} /></button></span>
+          : <button type="button" disabled={running} onClick={() => setAttach(true)} aria-label="Attach current note" className="flex h-6 items-center gap-1 rounded-md border border-dashed border-zinc-700 px-1.5 text-xs text-zinc-500 hover:border-zinc-600 hover:text-zinc-200 disabled:opacity-40"><Plus size={12} /> Current note</button>)}
+        {files.map((path) => <span key={path} title={path} className="flex h-6 max-w-48 items-center gap-1.5 rounded-md bg-white/[0.06] pl-1.5 pr-0.5 text-xs text-zinc-300"><Paperclip size={12} className="shrink-0 text-zinc-500" /><span className="min-w-0 truncate">{fileName(path)}</span><button type="button" onClick={() => setFiles(files.filter((item) => item !== path))} aria-label={`Remove ${fileName(path)}`} className="flex size-5 shrink-0 items-center justify-center rounded text-zinc-500 hover:bg-white/10 hover:text-zinc-100"><X size={12} /></button></span>)}
+      </div>}
+      <AgentComposer key={chat?.id ?? tool} draftKey={`chat:${tool}:${chat?.id ?? 'new'}`} label={`Message ${def.label}`} placeholder="Ask for changes or send a follow-up" busy={running} canSend={desktop && info?.available !== false}
         sendLabel={`Send to ${def.label}`} onStop={() => stopAgentChat(tool)}
-        onSend={(text) => sendAgentChat(tool, text, { access: tool === 'codex' ? access : undefined, reasoningEffort: selectedEffort || undefined }, attach && note && note.note_type !== 'canvas' ? { id: note.id, title: note.title || 'Untitled', markdown: noteToMarkdown(note.content) } : undefined)}
+        onSend={send}
         leading={<>
-          <ModelPicker providerId={tool} disabled={running} defaultModelLabel={selected?.label} />
+          <IconButton label="Attach files" hint={desktop ? 'Attach files or images' : 'Attaching files needs the desktop app'} side="top" disabled={running || !desktop} onClick={() => void chooseFiles()}><Paperclip size={14} /></IconButton>
+          <ModelPicker providerId={tool} scope="agents" onSwitchAgent={onSwitchAgent} disabled={running} defaultModelLabel={selected?.label} />
           {tool === 'codex' && <>
             <PillSelect label="Reasoning effort" icon={<Brain size={13} />} side="top" value={selectedEffort} disabled={running} onChange={(value) => setAgentChatOptions(tool, { reasoningEffort: value || undefined })}
               options={[{ value: '', label: 'Default' }, ...efforts.map((value) => ({ value, label: effortLabels[value] }))]} />
             <PillSelect label="Agent access" icon={<LockKeyhole size={13} />} side="top" value={access} disabled={running} onChange={(value) => setAgentChatOptions(tool, { access: value as typeof access })}
               options={Object.entries(accessLabels).map(([value, label]) => ({ value, label }))} />
           </>}
-          <button type="button" disabled={running || !note || note.note_type === 'canvas'} onClick={() => setAttach(!attach)} aria-label="Attach current note" aria-pressed={attach && !!note && note.note_type !== 'canvas'} title={note ? 'Include the current note' : 'Open a note to attach it'} className={`flex size-7 items-center justify-center rounded-md hover:bg-white/[0.07] disabled:opacity-30 ${attach && note && note.note_type !== 'canvas' ? 'text-zinc-200' : 'text-zinc-500'}`}><Paperclip size={14} /></button>
         </>}
       />
     </div>

@@ -169,7 +169,8 @@ async function execute(request: GuiRequest): Promise<unknown> {
     note = matches[0]!;
     if (!note && command === 'daily:read') fail('NOT_FOUND', 'Today’s daily note does not exist');
     if (!note) {
-      const daily = await create({ name: title, content: `# ${title}\n\n#daily\n\n## Intentions\n\n- \n\n## Notes\n`, ...(command === 'daily' ? { open: true } : {}) }) as { id: string };
+      const dailyFolder = await store.getState().ensureDailyFolder();
+      const daily = await create({ name: title, folderId: dailyFolder.id, content: `# ${title}\n\n#daily\n\n## Intentions\n\n- \n\n## Notes\n`, ...(command === 'daily' ? { open: true } : {}) }) as { id: string };
       note = fresh(daily.id);
     }
     command = command === 'daily:append' ? 'append' : command === 'daily:read' ? 'read' : 'open';

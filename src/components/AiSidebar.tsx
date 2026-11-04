@@ -1,25 +1,15 @@
 import { useNotesStore } from "@/store/notesStore";
 import type { Note } from "@/types/Note";
-import { SuggestionCard } from "./chat/SuggestionCard";
-import { EditApprovalPicker } from "./chat/EditApprovalPicker";
-import { parseEditorActions } from "../lib/parse-editor-actions";
-import { handleAiAction } from "../lib/editor-actions";
 import { countWordsInNoteContent } from "@/lib/note-utils";
 import useUiStore from "../store/UiStore";
 import { Resizable } from "re-resizable";
-import { useState, useEffect, useRef } from "react";
-import { activeProvider, friendlyAiError, streamChat } from "../lib/ai/client";
-import { isProviderReady } from "../store/settingsStore";
-import { ModelPicker } from "./ModelPicker";
+import { useState, useEffect } from "react";
 import { useSettingsStore } from "../store/settingsStore";
-import { AgentChooser, type AgentSelection } from "./agent/AgentChooser";
-import { AgentComposer } from "./agent/AgentComposer";
+import { AgentChooser } from "./agent/AgentChooser";
 import { AgentChatPane } from "./agent/AgentChatPane";
 import { closeAllAgentChats } from "./agent/agentChats";
 import { closeAllAgentSessions, refreshAgentDetection } from "./agent/agentSessions";
-import { AGENT_TOOLS } from "../lib/ai/agent-terminal";
-import Markdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { AGENT_TOOLS, type AgentTool } from "../lib/ai/agent-terminal";
 import {
   Sparkles,
   Calendar as CalendarIcon,
@@ -28,7 +18,6 @@ import {
   ChevronLeft,
   ChevronRight,
   FileText,
-  Plus,
   Star,
   Clock,
   Folder as FolderIcon,
@@ -38,7 +27,7 @@ import {
 import { AnimatePresence, motion } from "framer-motion";
 import { prefersReducedMotion } from "../lib/utils";
 import { IconButton } from "./ui/kit";
-import toast from "react-hot-toast";
+import { useWorkspaceStore } from "./workspace/workspaceStore";
 
 interface AiSidebarProps {
   isOpen: boolean;
@@ -51,84 +40,29 @@ interface AiSidebarProps {
 
 type Tab = "chat" | "calendar" | "info";
 
-interface LogiaMessage {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-  actionStatus?: "pending" | "approved" | "refused";
-  appliedCount?: number;
-  applying?: boolean;
-  actionError?: string;
-}
-
 /** Matches the app's narrow layout: too little room to dock beside the note. */
 const COMPACT_QUERY = "(max-width: 767px)";
-
-/** Terminal UIs need more room than chat, so opening an agent widens a narrow panel once. */
-const TERMINAL_WIDTH = 480;
 
 const noNotes: Note[] = [];
 
 const AiSidebar = ({ isOpen, peek = false, onPeekEnter, onPeekLeave, onClose }: AiSidebarProps) => {
-  const providerId = useSettingsStore((s) => s.activeProvider);
   const reduceMotion = prefersReducedMotion();
   const [activeTab, setActiveTab] = useState<Tab>("chat");
-  const [activeAgent, setActiveAgent] = useState<AgentSelection>("logia");
-  const [includeNote, setIncludeNote] = useState(true);
-  const [panelWidth, setPanelWidth] = useState(360);
-  // A closed panel stays mounted to keep its chats, but shouldn't react to every keystroke.
+  const chosenAgent = useSettingsStore((s) => s.activeAgent);
+  const firstDetected = useSettingsStore((s) => AGENT_TOOLS.find((tool) => s.cliStatus[tool.id]?.available)?.id);
+  const activeAgent: AgentTool = chosenAgent ?? firstDetected ?? "codex";
+  const panelWidth = useWorkspaceStore((s) => s.aiPanelWidth);
+  // A closed panel stays mounted to keep its sessions, but shouldn't react to every keystroke.
   const currentNote = useNotesStore((s) => (isOpen ? s.currentNote : null));
   const notes = useNotesStore((s) => (isOpen && activeTab === "calendar" ? s.notes : noNotes));
   const folders = useNotesStore((s) => s.folders);
   const selectNote = useNotesStore((s) => s.selectNote);
-  const setIsSettingsOpen = useUiStore((s) => s.setIsSettingsOpen);
-
-  // Chat State - includes actionStatus for persistence
-  const [messagesMap, setMessagesMap] = useState<Record<string, LogiaMessage[]>>({});
-  const applyingMessages = useRef(new Set<string>());
-  const [isLoading, setIsLoading] = useState(false);
+  const pendingAiPrompt = useUiStore((s) => s.pendingAiPrompt);
   const [isCompact, setIsCompact] = useState(() => window.matchMedia(COMPACT_QUERY).matches);
-  const [streamingMessage, setStreamingMessage] = useState<string>("");
-  const scrollableContainerRef = useRef<HTMLDivElement>(null);
-  const abortRef = useRef<AbortController | null>(null);
 
   // Calendar State
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState<Date>(new Date());
-
-  const messages = currentNote ? messagesMap[currentNote.id] || [] : [];
-
-  const patchMessage = (noteId: string, messageId: string, patch: Partial<LogiaMessage>) => {
-    setMessagesMap((prev) => ({ ...prev, [noteId]: (prev[noteId] || []).map((msg) =>
-      msg.id === messageId ? { ...msg, ...patch } : msg) }));
-  };
-
-  // Execution belongs to the thread, so remounting a card cannot replay its edits.
-  const applyMessageActions = async (noteId: string, message: LogiaMessage) => {
-    if (message.actionStatus === "approved" || message.actionStatus === "refused" || applyingMessages.current.has(message.id)) return;
-    applyingMessages.current.add(message.id);
-    patchMessage(noteId, message.id, { applying: true, actionError: undefined });
-    let appliedCount = message.appliedCount ?? 0;
-    const actions = parseEditorActions(message.content).actions;
-    const originalEditor = useUiStore.getState().editor;
-    try {
-      for (; appliedCount < actions.length;) {
-        const { editor, editorNoteId } = useUiStore.getState();
-        if (!editor || editor !== originalEditor || editorNoteId !== noteId || useNotesStore.getState().currentNote?.id !== noteId) {
-          throw new Error("Open the original note to apply these changes.");
-        }
-        await handleAiAction(editor, actions[appliedCount]);
-        appliedCount++;
-        patchMessage(noteId, message.id, { appliedCount });
-      }
-      patchMessage(noteId, message.id, { actionStatus: "approved" });
-    } catch (error) {
-      patchMessage(noteId, message.id, { actionError: error instanceof Error ? error.message : String(error) });
-    } finally {
-      applyingMessages.current.delete(message.id);
-      patchMessage(noteId, message.id, { applying: false });
-    }
-  };
 
   useEffect(() => {
     const query = window.matchMedia(COMPACT_QUERY);
@@ -152,164 +86,25 @@ const AiSidebar = ({ isOpen, peek = false, onPeekEnter, onPeekLeave, onClose }: 
     if (isOpen) void refreshAgentDetection();
   }, [isOpen]);
 
-  const selectAgent = (agent: AgentSelection) => {
-    setActiveAgent(agent);
+  // Prompts sent from elsewhere (the vim `:ai <prompt>` command) are sent by the chat view.
+  useEffect(() => {
+    if (pendingAiPrompt) setActiveTab("chat");
+  }, [pendingAiPrompt]);
+
+  const selectAgent = (agent: AgentTool) => {
+    useSettingsStore.getState().setActiveAgent(agent);
     setActiveTab("chat");
-    if (agent !== "logia") {
-      setPanelWidth((width) => Math.max(width, Math.min(TERMINAL_WIDTH, Math.floor(window.innerWidth * 0.55))));
-    }
+    requestAnimationFrame(() => {
+      document.querySelector<HTMLElement>('[data-workspace-pane="ai"] [data-agent-composer]')?.focus();
+    });
   };
 
-  useEffect(() => {
-    if (scrollableContainerRef.current) {
-      scrollableContainerRef.current.scrollTop =
-        scrollableContainerRef.current.scrollHeight;
-    }
-  }, [messages, streamingMessage, activeTab]);
-
-  const ensureProviderReady = () => {
-    const provider = activeProvider();
-    if (isProviderReady(provider.id)) return true;
-    toast.error(`${provider.label} isn't set up yet.`);
-    setIsSettingsOpen(true, 'ai');
-    return false;
-  };
-
-  const handleSendMessage = async (message: string) => {
-    if (!message.trim() || isLoading || !ensureProviderReady() || !currentNote) return;
-    const provider = activeProvider();
-    const autoAcceptEdits = useSettingsStore.getState().editApprovalMode === "auto-edits";
-    const userMessage: LogiaMessage = { id: crypto.randomUUID(), role: "user", content: message };
-    setMessagesMap((prev) => ({
-      ...prev,
-      [currentNote.id]: [...(prev[currentNote.id] || []), userMessage],
-    }));
-    setIsLoading(true);
-    setStreamingMessage("");
-
-    try {
-      const systemPrompt = `You are Logia, a helpful AI assistant in the note-taking app of the same name.
-
-CAPABILITIES:
-1. Chat: Answer questions normally.
-2. Edit: You can ADD, UPDATE, DELETE, or REPLACE content in the note.
-
-=== INSERT ACTIONS ===
-
-FOR CODE BLOCKS:
-{ "type": "editor_action", "action": "insertCode", "description": "Adding code example", "data": { "code": "your code here", "language": "rust" } }
-
-FOR HEADINGS (plain text only, no tables/lists inside):
-{ "type": "editor_action", "action": "insertHeading", "description": "Adding section", "data": { "text": "Heading Text", "level": 2 } }
-
-FOR PLAIN TEXT:
-{ "type": "editor_action", "action": "insertText", "description": "Adding paragraph", "data": { "text": "Your text here" } }
-
-FOR TABLES:
-{ "type": "editor_action", "action": "insertTable", "description": "Adding table", "data": { "headers": ["Column 1", "Column 2"], "rows": [["value1", "value2"], ["value3", "value4"]] } }
-
-FOR LISTS:
-{ "type": "editor_action", "action": "insertList", "description": "Adding list", "data": { "items": ["Item 1", "Item 2", "Item 3"], "ordered": false } }
-
-=== EDIT ACTIONS ===
-
-TO UPDATE EXISTING CONTENT (find by text, then change):
-{ "type": "editor_action", "action": "update", "description": "Fixing typo in X", "data": { "searchText": "text to find", "newContent": "corrected text" } }
-
-TO DELETE CONTENT:
-{ "type": "editor_action", "action": "delete", "description": "Removing section", "data": { "searchText": "text in block to delete" } }
-
-TO REPLACE CONTENT:
-{ "type": "editor_action", "action": "replace", "description": "Replacing X with Y", "data": { "searchText": "old text", "newContent": "new replacement text" } }
-
-=== RULES ===
-- Only output JSON when user asks to edit/add/delete/change the note
-- Use "searchText" to find existing content (a unique phrase from that block)
-- For regular chat, just respond normally without JSON
-- Keep descriptions short and clear
-- IMPORTANT: Headings can ONLY contain plain text - never put tables or lists inside headings
-- For tables, use insertTable action NOT insertHeading or insertText
-- Each action should be a separate JSON object
-`;
-      const noteContext = includeNote
-        ? `\n\nContext:\n---\n${currentNote.content}\n---`
-        : "";
-
-      const controller = new AbortController();
-      abortRef.current = controller;
-      let fullResponse = "";
-      for await (const text of streamChat({
-        system: systemPrompt + noteContext,
-        messages: [...messages, userMessage].map(({ role, content }) => ({ role, content })),
-        signal: controller.signal,
-        provider,
-      })) {
-        fullResponse = text;
-        setStreamingMessage(text);
-      }
-
-      if (controller.signal.aborted && !fullResponse.trim()) {
-        fullResponse = "_Stopped._";
-      }
-      const assistantMessage = {
-        id: crypto.randomUUID(),
-        role: "assistant" as const,
-        content: fullResponse,
-      };
-      setMessagesMap((prev) => ({
-        ...prev,
-        [currentNote.id]: [...(prev[currentNote.id] || []), assistantMessage],
-      }));
-      setStreamingMessage("");
-      // Only completed replies use auto-accept; stopping or returning to Supervised cancels it.
-      if (!controller.signal.aborted && autoAcceptEdits && useSettingsStore.getState().editApprovalMode === "auto-edits"
-        && parseEditorActions(fullResponse).actions.length) {
-        await applyMessageActions(currentNote.id, assistantMessage);
-      }
-    } catch (error: unknown) {
-      const aborted = abortRef.current?.signal.aborted;
-      if (!aborted) console.error("AI error:", error);
-      const errorMessage = aborted ? "_Stopped._" : friendlyAiError(error, provider);
-
-      setMessagesMap((prev) => ({
-        ...prev,
-        [currentNote.id]: [
-          ...(prev[currentNote.id] || []),
-          { id: crypto.randomUUID(), role: "assistant", content: errorMessage },
-        ],
-      }));
-      setStreamingMessage("");
-    } finally {
-      abortRef.current = null;
-      setIsLoading(false);
-    }
-  };
-
-  const stopGeneration = () => abortRef.current?.abort();
-
-  // Prompts sent from elsewhere (e.g. the vim `:ai <prompt>` command)
-  const pendingAiPrompt = useUiStore((s) => s.pendingAiPrompt);
-  useEffect(() => {
-    if (!pendingAiPrompt || !isOpen || !currentNote || isLoading) return;
-    useUiStore.getState().setPendingAiPrompt(null);
-    selectAgent("logia");
-    void handleSendMessage(pendingAiPrompt);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingAiPrompt, isOpen, currentNote?.id, isLoading]);
-
-  const threadTitle =
-    AGENT_TOOLS.find((tool) => tool.id === activeAgent)?.label ??
-    messages.find((m) => m.role === "user")?.content.split("\n")[0] ??
-    "New Logia thread";
+  const agentLabel = AGENT_TOOLS.find((tool) => tool.id === activeAgent)?.label ?? activeAgent;
 
   const folderName = currentNote?.folder_id
     ? folders.find((f) => f.id === currentNote.folder_id)?.name
     : undefined;
   const wordCount = currentNote ? countWordsInNoteContent(currentNote.content) : 0;
-  const clearChat = () => {
-    if (!currentNote) return;
-    setMessagesMap((prev) => ({ ...prev, [currentNote.id]: [] }));
-  };
 
   // Calendar Logic
   const getDaysInMonth = (date: Date) => {
@@ -377,7 +172,7 @@ TO REPLACE CONTENT:
         >
           <Resizable
             size={{ width: isCompact ? "100%" : panelWidth, height: "100%" }}
-            onResizeStop={(_event, _direction, element) => setPanelWidth(element.offsetWidth)}
+            onResizeStop={(_event, _direction, element) => useWorkspaceStore.getState().setAiPanelWidth(element.offsetWidth)}
             enable={{ left: !isCompact }}
             minWidth={isCompact ? undefined : 300}
             maxWidth={isCompact ? undefined : 900}
@@ -386,17 +181,7 @@ TO REPLACE CONTENT:
           >
             <div data-workspace-pane="ai" className="flex h-full flex-col border-l border-zinc-800 bg-zinc-950">
               <div className="flex h-9 flex-shrink-0 items-center gap-0.5 pl-1.5 pr-1">
-                <AgentChooser selected={activeAgent} title={threadTitle} onSelect={selectAgent} />
-                {activeAgent === "logia" && (
-                  <IconButton
-                    label="New thread"
-                    hint="New thread (clears this note's chat)"
-                    disabled={isLoading || messages.length === 0}
-                    onClick={clearChat}
-                  >
-                    <Plus size={15} />
-                  </IconButton>
-                )}
+                <AgentChooser selected={activeAgent} title={agentLabel} onSelect={selectAgent} />
                 <IconButton label="AI Chat" hint="Chat" active={activeTab === "chat"} aria-pressed={activeTab === "chat"} onClick={() => setActiveTab("chat")}>
                   <Sparkles size={14} />
                 </IconButton>
@@ -414,120 +199,8 @@ TO REPLACE CONTENT:
               {/* Content Area */}
               <div className="relative flex flex-1 flex-col overflow-hidden">
                 {/* --- CHAT VIEW --- */}
-                {activeTab === "chat" && activeAgent !== "logia" && (
-                  <AgentChatPane key={activeAgent} tool={activeAgent} />
-                )}
-                {activeTab === "chat" && activeAgent === "logia" && (
-                  <>
-                    <div
-                      ref={scrollableContainerRef}
-                      className="flex-1 space-y-5 overflow-y-auto px-4 py-3"
-                    >
-                      {!currentNote ? (
-                        <div className="flex h-full flex-col justify-center px-2 text-center">
-                          <h3 className="text-[13px] font-medium text-zinc-200">Open a note to chat</h3>
-                          <p className="mt-1 text-xs leading-5 text-zinc-500">Logia's chat is tied to the active note.</p>
-                        </div>
-                      ) : messages.length === 0 ? (
-                        <div className="flex h-full flex-col justify-end pb-2">
-                          <h3 className="px-1 text-[13px] font-medium text-zinc-200">Ask about this note</h3>
-                          <div className="mt-2 flex flex-col">
-                            {[
-                              { icon: <AlignLeft size={14} />, label: "Summarize this note", prompt: "Summarize this note" },
-                              { icon: <Sparkles size={14} />, label: "Brainstorm ideas", prompt: "Brainstorm ideas related to this note" },
-                            ].map((item) => (
-                              <button
-                                key={item.label}
-                                type="button"
-                                disabled={isLoading}
-                                onClick={() => handleSendMessage(item.prompt)}
-                                className="flex h-8 w-full items-center gap-2 rounded-md px-1 text-left text-[13px] text-zinc-400 hover:bg-white/[0.07] hover:text-zinc-100 disabled:opacity-50"
-                              >
-                                <span aria-hidden="true">{item.icon}</span>
-                                {item.label}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      ) : (
-                        messages.map((msg) => {
-                          const { actions: actionDataList, text: textContent } = msg.role === "assistant"
-                            ? parseEditorActions(msg.content) : { actions: [], text: msg.content };
-
-                          return (
-                            <div key={msg.id} className={msg.role === "user" ? "ml-8 rounded-lg bg-white/[0.06] px-3 py-2" : ""}>
-                              {textContent && (
-                                <div className={`chat-prose ${actionDataList.length > 0 ? "mb-3" : ""}`}>
-                                  <Markdown remarkPlugins={[remarkGfm]}>
-                                    {textContent}
-                                  </Markdown>
-                                </div>
-                              )}
-                              {actionDataList.length > 0 && (
-                                <SuggestionCard
-                                  actionDataList={actionDataList}
-                                  status={msg.actionStatus || "pending"}
-                                  appliedCount={msg.appliedCount ?? 0}
-                                  isProcessing={!!msg.applying}
-                                  error={msg.actionError}
-                                  onApprove={() => void applyMessageActions(currentNote.id, msg)}
-                                  onRefuse={() => patchMessage(currentNote.id, msg.id, { actionStatus: "refused" })}
-                                />
-                              )}
-                            </div>
-                          );
-                        })
-                      )}
-
-                      {isLoading && (
-                        <div className="chat-prose">
-                          {streamingMessage ? (
-                            // Check if streaming content looks like an action JSON
-                            streamingMessage.includes('"type": "editor_action"') ||
-                              streamingMessage.includes('"type":"editor_action"') ? (
-                              <span className="text-zinc-500 motion-safe:animate-pulse">Preparing edits…</span>
-                            ) : (
-                              <Markdown remarkPlugins={[remarkGfm]}>
-                                {streamingMessage}
-                              </Markdown>
-                            )
-                          ) : (
-                            <span className="text-zinc-500 motion-safe:animate-pulse">Thinking…</span>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                    {currentNote && (
-                      <AgentComposer
-                        draftKey="logia"
-                        label="Message Logia"
-                        placeholder="Message Logia…"
-                        busy={isLoading}
-                        onStop={stopGeneration}
-                        onSend={(text) => {
-                          if (!ensureProviderReady()) return false;
-                          void handleSendMessage(text);
-                          return true;
-                        }}
-                        leading={
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => setIncludeNote((on) => !on)}
-                              aria-pressed={includeNote}
-                              title={includeNote ? "This note is sent as context. Click to leave it out." : "This note isn't sent. Click to include it."}
-                              className={`flex h-7 max-w-[7rem] items-center gap-1 rounded-md px-1.5 text-xs hover:bg-white/[0.07] ${includeNote ? "text-zinc-300" : "text-zinc-500 line-through"}`}
-                            >
-                              <FileText size={12} className="flex-shrink-0" />
-                              <span className="truncate">{currentNote.title || "Untitled"}</span>
-                            </button>
-                            <ModelPicker providerId={providerId} scope="chat" disabled={isLoading} />
-                            <EditApprovalPicker />
-                          </>
-                        }
-                      />
-                    )}
-                  </>
+                {activeTab === "chat" && (
+                  <AgentChatPane key={activeAgent} tool={activeAgent} onSwitchAgent={selectAgent} />
                 )}
 
                 {/* --- CALENDAR VIEW --- */}

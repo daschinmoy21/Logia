@@ -79,6 +79,14 @@ pub(crate) fn build_args(
             // "-" makes codex read the prompt from stdin
             args.push("-".to_string());
         }
+        "grok" => {
+            // Tools aren't auto-approved: --always-approve would need its own explicit control.
+            args.extend(["--no-auto-update", "--output-format", "plain"].map(String::from));
+            if let Some(m) = model {
+                args.extend(["-m".to_string(), m.to_string()]);
+            }
+            args.extend(["-p".to_string(), prompt.to_string()]);
+        }
         "opencode" => {
             args.push("run".to_string());
             if let Some(m) = model {
@@ -123,6 +131,11 @@ mod tests {
             vec!["run", "hi"]
         );
         assert_eq!(build_args("gemini-cli", None, "hi", None), vec!["-p", "hi"]);
+        assert_eq!(
+            build_args("grok", Some("chosen-model"), "hi", None),
+            vec!["--no-auto-update", "--output-format", "plain", "-m", "chosen-model", "-p", "hi"]
+        );
+        assert!(!build_args("grok", None, "hi", None).contains(&"--always-approve".to_string()));
     }
 
     #[test]

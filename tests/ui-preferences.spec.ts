@@ -6,15 +6,13 @@ test('chat discovers CLI models, sends the selected model, and shares it with te
   await installAgentFixture(page);
   await page.getByRole('button', { name: 'Open AI sidebar', exact: true }).click();
   await expect.poll(async () => (await agentCalls(page)).some((c) => c.command === 'ai_cli_detect')).toBe(true);
-  await page.getByRole('button', { name: /^Choose chat model/ }).click();
+  await page.getByRole('button', { name: /^Choose model for Codex CLI/ }).click();
   await page.getByRole('menuitemradio', { name: 'Codex CLI: Fixture Model', exact: true }).click();
   await expect(page.getByTestId('model-dropdown')).toHaveCount(0);
-  await page.getByRole('textbox', { name: 'Message Logia', exact: true }).fill('hello');
-  await page.getByRole('button', { name: 'Send message', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Message Codex', exact: true }).fill('hello');
+  await page.getByRole('button', { name: 'Send to Codex', exact: true }).click();
   await expect(page.getByText('Fixture chat reply', { exact: true })).toBeVisible();
   expect((await agentCalls(page)).find((c) => c.command === 'ai_cli_run')?.args.model).toBe('fixture-model');
-  await page.getByRole('button', { name: /^Choose agent\. Current:/ }).click();
-  await page.getByRole('menuitemradio', { name: /^Codex / }).click();
   await page.getByRole('button', { name: 'Open agent terminal', exact: true }).click();
   await expect(page.getByRole('button', { name: /^Choose model for Codex CLI/ })).toContainText('fixture-model');
   await page.getByRole('button', { name: 'Start session', exact: true }).click();
@@ -40,7 +38,7 @@ test('failed discovery allows custom model IDs and remembers them across reload'
   await page.getByRole('button', { name: /^Choose agent\. Current:/ }).click();
   await page.getByRole('menuitemradio', { name: /^OpenCode / }).click();
   await page.getByRole('button', { name: /^Choose model for OpenCode/ }).click();
-  await expect(page.getByText('Fixture: model discovery unavailable', { exact: true })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'OpenCode models', exact: true }).getByText('Fixture: model discovery unavailable', { exact: true })).toBeVisible();
   await expect(page.getByRole('menuitemradio')).toHaveCount(0);
   await page.getByRole('button', { name: 'Use a custom model ID' }).click();
   const query = page.getByRole('textbox', { name: 'Custom model ID', exact: true });
@@ -104,7 +102,7 @@ test('model dropdown refreshes catalogs, filters favorites, and fits a mobile sc
   await installAgentFixture(page);
   await page.getByRole('button', { name: 'Open AI sidebar', exact: true }).click();
   await expect.poll(async () => (await agentCalls(page)).some((c) => c.command === 'ai_cli_detect')).toBe(true);
-  await page.getByRole('button', { name: /^Choose chat model/ }).click();
+  await page.getByRole('button', { name: /^Choose model for Codex CLI/ }).click();
   const codex = page.getByRole('region', { name: 'Codex CLI models', exact: true });
   await expect(codex.getByRole('menuitemradio', { name: 'Codex CLI: Fixture Model', exact: true })).toBeVisible();
   await codex.getByRole('button', { name: 'Favorite Codex CLI: Second Model', exact: true }).click();
@@ -131,6 +129,31 @@ test('model dropdown refreshes catalogs, filters favorites, and fits a mobile sc
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('logia-settings')!).state.favoriteModels.codex)).toContain('provider/second-model');
 });
 
+test('the agent model menu groups models by agent, shortens long lists, and switches agents', async ({ page }, testInfo) => {
+  await openAgentWorkspace(page);
+  await installAgentFixture(page);
+  await page.evaluate(() => { (window as any).__agentModels = { codex: Array.from({ length: 9 }, (_, i) => ({ id: `model-${i}`, label: `Model ${i}`, isDefault: i === 7 })) }; });
+  await page.getByRole('button', { name: 'Open AI sidebar', exact: true }).click();
+  await expect.poll(async () => (await agentCalls(page)).some((c) => c.command === 'ai_cli_detect')).toBe(true);
+  await page.getByRole('button', { name: /^Choose model for Codex CLI/ }).click();
+  const menu = page.getByTestId('model-dropdown');
+  await expect(menu.getByRole('region')).toHaveCount(1);
+  // Six, plus the current model that sorts further down.
+  await expect(menu.getByRole('menuitemradio')).toHaveCount(7);
+  await page.screenshot({ path: testInfo.outputPath('model-menu.png') });
+  await menu.getByRole('button', { name: 'Show 2 more', exact: true }).click();
+  await expect(menu.getByRole('menuitemradio')).toHaveCount(9);
+  await page.getByRole('textbox', { name: 'Find a model' }).fill('Fixture Model');
+  await expect(menu.getByRole('region')).toHaveCount(3);
+  await page.getByRole('textbox', { name: 'Find a model' }).fill('');
+  await page.getByRole('button', { name: 'Show Claude Code models', exact: true }).click();
+  await expect(menu.getByRole('region', { name: 'Codex CLI models', exact: true })).toHaveCount(0);
+  await menu.getByRole('menuitemradio', { name: 'Claude Code: Second Model', exact: true }).click();
+  await expect(page.getByRole('button', { name: /^Choose agent\. Current: Claude Code/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^Choose model for Claude Code/ })).toContainText('provider/second-model');
+  await expect(page.getByRole('textbox', { name: 'Message Claude Code', exact: true })).toBeFocused();
+});
+
 test('API model settings display refreshed server results without a static fallback', async ({ page }) => {
   let generation = 1;
   await page.route('**/catalog/v1/models', (route) => route.fulfill({ json: { data: [
@@ -140,8 +163,8 @@ test('API model settings display refreshed server results without a static fallb
     activeProvider: 'custom', addedProviders: ['custom'], baseUrls: { custom: 'http://127.0.0.1:3420/catalog/v1' },
   } })));
   await openAgentWorkspace(page);
-  await page.getByRole('button', { name: 'Open AI sidebar', exact: true }).click();
-  await page.getByRole('button', { name: /^Choose chat model/ }).click();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('button', { name: /^Choose model for / }).click();
   await expect(page.getByRole('menuitemradio', { name: /Server model 1$/ })).toBeVisible();
   generation = 2;
   await page.getByRole('button', { name: 'Refresh models', exact: true }).click();

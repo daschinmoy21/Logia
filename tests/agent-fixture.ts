@@ -48,6 +48,7 @@ export async function installAgentFixture(page: Page) {
           return win.__agentModels?.[args.tool] ?? [{ id: 'fixture-model', label: 'Fixture Model', isDefault: true, reasoningEfforts: ['low', 'medium', 'high'] }, { id: 'provider/second-model', label: 'Second Model' }];
         }
         if (command === 'plugin:webview|set_webview_zoom') return;
+        if (command === 'plugin:dialog|open') return win.__agentAttachPaths ?? null;
         if (command === 'plugin:event|listen') { const id = ++counter; listeners.set(id, args.handler); return id; }
         if (command === 'plugin:event|unlisten') return;
         if (command === 'ai_cli_run') {

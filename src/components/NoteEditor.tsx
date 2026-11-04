@@ -217,71 +217,71 @@ export function NoteEditor() {
     <div
       ref={rootRef}
       data-note-editor={currentNote?.id}
-      className="relative flex h-full min-h-0 w-full bg-zinc-950"
+      className="flex h-full min-h-0 w-full flex-col bg-zinc-950"
     >
-      <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex h-9 flex-shrink-0 items-center justify-between gap-2 pl-3 pr-1.5">
-          <nav aria-label="Note location" className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden text-xs text-zinc-500">
-            {breadcrumbs.map((folder) => (
-              <Fragment key={folder.id}>
-                <span className="hidden max-w-[10rem] truncate sm:inline" title={folder.name}>{folder.name}</span>
-                <span className="hidden text-zinc-700 sm:inline" aria-hidden="true">/</span>
-              </Fragment>
-            ))}
-            <span aria-current="page" className="truncate text-zinc-300">{currentNote?.title || "Untitled"}</span>
-          </nav>
+      <div className="flex h-9 flex-shrink-0 items-center justify-between gap-2 pl-3 pr-1.5">
+        <nav aria-label="Note location" className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden text-xs text-zinc-500">
+          {breadcrumbs.map((folder, index) => (
+            <Fragment key={folder.id}>
+              <span className="hidden max-w-[10rem] truncate sm:inline" title={folder.name}>{folder.name}</span>
+              {index < breadcrumbs.length - 1 && <span className="hidden text-zinc-700 sm:inline" aria-hidden="true">/</span>}
+            </Fragment>
+          ))}
+        </nav>
 
-          <div className="flex flex-shrink-0 items-center gap-0.5">
-            <Tip label="Notes that link here">
-              <button
-                type="button"
-                onClick={revealBacklinks}
-                className="flex h-7 items-center gap-1 rounded-md px-1.5 text-xs text-zinc-400 hover:bg-white/[0.07] hover:text-zinc-100"
-                aria-label={`Backlinks: ${backlinks.length} ${backlinks.length === 1 ? "note links" : "notes link"} here`}
-              >
-                <Link2 size={14} />
-                <span className="tabular-nums">{backlinks.length}</span>
-              </button>
-            </Tip>
-
-            <IconButton
-              label={panelOpen ? "Hide note context" : "Show note context"}
-              hint={`${panelOpen ? "Hide" : "Show"} outline, tags and links`}
-              shortcut={SHORTCUTS.contextPanel}
-              active={panelOpen}
-              aria-pressed={panelOpen}
-              aria-keyshortcuts={shortcutAria(SHORTCUTS.contextPanel)}
-              onClick={toggleContextPanel}
+        <div className="flex flex-shrink-0 items-center gap-0.5">
+          <Tip label="Notes that link here">
+            <button
+              type="button"
+              onClick={revealBacklinks}
+              className="flex h-7 items-center gap-1 rounded-md px-1.5 text-xs text-zinc-400 hover:bg-white/[0.07] hover:text-zinc-100"
+              aria-label={`Backlinks: ${backlinks.length} ${backlinks.length === 1 ? "note links" : "notes link"} here`}
             >
-              <PanelRightDashed size={15} />
-            </IconButton>
+              <Link2 size={14} />
+              <span className="tabular-nums">{backlinks.length}</span>
+            </button>
+          </Tip>
 
-            <IconButton
-              label={currentNote?.starred ? "Unstar note" : "Star note"}
-              hint={currentNote?.starred ? "Remove from favorites" : "Add to favorites"}
-              aria-pressed={!!currentNote?.starred}
-              className={currentNote?.starred ? "!text-amber-300" : ""}
-              onClick={() => currentNote && toggleStar(currentNote.id)}
-            >
-              <Star size={15} className={currentNote?.starred ? "fill-current" : ""} />
-            </IconButton>
+          <IconButton
+            label={panelOpen ? "Hide note context" : "Show note context"}
+            hint={`${panelOpen ? "Hide" : "Show"} outline, tags and links`}
+            shortcut={SHORTCUTS.contextPanel}
+            active={panelOpen}
+            aria-pressed={panelOpen}
+            aria-keyshortcuts={shortcutAria(SHORTCUTS.contextPanel)}
+            onClick={toggleContextPanel}
+          >
+            <PanelRightDashed size={15} />
+          </IconButton>
 
-            <Menu>
-              <MenuTrigger asChild>
-                <IconButton label="Export note" hint="Export">
-                  <Download size={15} />
-                </IconButton>
-              </MenuTrigger>
-              <MenuContent align="end">
-                <MenuItem icon={<FileText size={14} />} onSelect={() => void exportAsMarkdown()}>Markdown (.md)</MenuItem>
-                <MenuItem icon={<FileType size={14} />} onSelect={() => void exportAsPDF()}>PDF (Print)</MenuItem>
-              </MenuContent>
-            </Menu>
-          </div>
+          <IconButton
+            label={currentNote?.starred ? "Unstar note" : "Star note"}
+            hint={currentNote?.starred ? "Remove from favorites" : "Add to favorites"}
+            aria-pressed={!!currentNote?.starred}
+            className={currentNote?.starred ? "!text-amber-300" : ""}
+            onClick={() => currentNote && toggleStar(currentNote.id)}
+          >
+            <Star size={15} className={currentNote?.starred ? "fill-current" : ""} />
+          </IconButton>
+
+          <Menu>
+            <MenuTrigger asChild>
+              <IconButton label="Export note" hint="Export">
+                <Download size={15} />
+              </IconButton>
+            </MenuTrigger>
+            <MenuContent align="end">
+              <MenuItem icon={<FileText size={14} />} onSelect={() => void exportAsMarkdown()}>Markdown (.md)</MenuItem>
+              <MenuItem icon={<FileType size={14} />} onSelect={() => void exportAsPDF()}>PDF (Print)</MenuItem>
+            </MenuContent>
+          </Menu>
         </div>
+      </div>
 
+      {/* Below the toolbar, so opening the panel can't move the toolbar's buttons. */}
+      <div className="relative flex min-h-0 flex-1">
         {/* BlockNote Editor */}
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
           <BlockNoteView
             editor={editor}
             formattingToolbar={false}
@@ -299,19 +299,19 @@ export function NoteEditor() {
             <SuggestionMenuWithAI editor={editor} />
           </BlockNoteView>
         </div>
-      </div>
 
-      {panelOpen && currentNote && (
-        <NoteContextPanel
-          note={currentNote}
-          notes={notes}
-          folders={folders}
-          editor={editor}
-          backlinks={backlinks}
-          compact={compact}
-          onClose={() => setContextVisible(false)}
-        />
-      )}
+        {panelOpen && currentNote && (
+          <NoteContextPanel
+            note={currentNote}
+            notes={notes}
+            folders={folders}
+            editor={editor}
+            backlinks={backlinks}
+            compact={compact}
+            onClose={() => setContextVisible(false)}
+          />
+        )}
+      </div>
     </div>
   );
 }

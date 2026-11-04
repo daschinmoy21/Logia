@@ -151,6 +151,16 @@ export const PROVIDERS: ProviderDef[] = [
     hint: 'Runs `codex exec` in a read-only sandbox.',
   },
   {
+    id: 'grok',
+    label: 'Grok Build',
+    kind: 'cli',
+    group: 'cli',
+    needsKey: false,
+    binary: 'grok',
+    installHint: 'curl -fsSL https://x.ai/cli/install.sh | bash',
+    hint: 'Runs `grok -p` without auto-approving tools. Enter model IDs by hand: Grok Build has no documented machine-readable model list.',
+  },
+  {
     id: 'opencode',
     label: 'OpenCode',
     kind: 'cli',

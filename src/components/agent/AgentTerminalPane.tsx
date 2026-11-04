@@ -224,7 +224,7 @@ function AgentStartScreen({ tool, containerRef }: { tool: AgentTool; containerRe
 
       {!desktop && (
         <p className="mt-3 rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-xs text-zinc-400">
-          Terminal sessions only work in the Logia desktop app. Logia chat still works here.
+          Terminal sessions only work in the Logia desktop app.
         </p>
       )}
       {info?.available && info.path && (

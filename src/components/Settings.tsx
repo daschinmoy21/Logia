@@ -181,7 +181,7 @@ function AiSettings() {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-4">
-        <p className="text-xs text-zinc-500">Choose what powers chat and note edits.</p>
+        <p className="text-xs text-zinc-500">Set up agent CLIs, and choose what powers editor AI and transcription.</p>
         <Button size="sm" onClick={() => { setAdding(true); setSearch(''); }}><Plus size={13} /> Add provider</Button>
       </div>
       <div className="grid min-w-0 overflow-hidden rounded-lg border border-zinc-800 md:grid-cols-[12rem_minmax(0,1fr)]">

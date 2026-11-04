@@ -2,6 +2,7 @@ import { Server } from 'lucide-react';
 import openai from '../assets/providers/openai.svg';
 import claude from '../assets/providers/claude-color.svg';
 import gemini from '../assets/providers/gemini-color.svg';
+import grok from '../assets/providers/grok.svg';
 import opencode from '../assets/providers/opencode.svg';
 import pi from '../assets/providers/pi.svg';
 import openrouter from '../assets/providers/openrouter.svg';
@@ -15,7 +16,7 @@ const marks: Record<string, { src: string; mono?: boolean }> = {
   openai: { src: openai, mono: true }, codex: { src: openai, mono: true },
   anthropic: { src: claude }, 'claude-code': { src: claude },
   google: { src: gemini }, 'gemini-cli': { src: gemini },
-  opencode: { src: opencode, mono: true }, pi: { src: pi },
+  grok: { src: grok, mono: true }, opencode: { src: opencode, mono: true }, pi: { src: pi },
   openrouter: { src: openrouter, mono: true }, groq: { src: groq, mono: true },
   deepseek: { src: deepseek }, mistral: { src: mistral },
   ollama: { src: ollama, mono: true }, lmstudio: { src: lmstudio, mono: true },

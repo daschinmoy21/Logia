@@ -3,8 +3,8 @@ import { persist } from 'zustand/middleware';
 import { invoke } from '@tauri-apps/api/core';
 import { PROVIDERS, getProvider } from '../lib/ai/providers';
 import { normalizeUiScale } from '../lib/ui-scale';
+import type { AgentTool } from '../lib/ai/agent-terminal';
 
-export type EditApprovalMode = 'supervised' | 'auto-edits';
 
 export interface CliToolInfo {
   id: string;
@@ -26,7 +26,8 @@ interface SettingsState {
   composerVim: boolean | null;
   sidebarFloating: boolean;
   uiScale: number;
-  editApprovalMode: EditApprovalMode;
+  /** null until one is chosen: the panel then uses the first detected agent. */
+  activeAgent: AgentTool | null;
 
   // --- runtime status (not persisted) ---
   keyStatus: Record<string, boolean>;
@@ -42,7 +43,7 @@ interface SettingsState {
   setComposerVim: (enabled: boolean | null) => void;
   setSidebarFloating: (floating: boolean) => void;
   setUiScale: (scale: number) => void;
-  setEditApprovalMode: (mode: EditApprovalMode) => void;
+  setActiveAgent: (agent: AgentTool) => void;
 
   refreshKeyStatus: () => Promise<void>;
   refreshCliStatus: () => Promise<void>;
@@ -65,7 +66,7 @@ export const useSettingsStore = create<SettingsState>()(
       composerVim: null,
       sidebarFloating: false,
       uiScale: 1,
-      editApprovalMode: 'supervised',
+      activeAgent: null,
 
       keyStatus: {},
       cliStatus: {},
@@ -90,7 +91,7 @@ export const useSettingsStore = create<SettingsState>()(
       setComposerVim: (composerVim) => set({ composerVim }),
       setSidebarFloating: (sidebarFloating) => set({ sidebarFloating }),
       setUiScale: (scale) => set({ uiScale: normalizeUiScale(scale) }),
-      setEditApprovalMode: (editApprovalMode) => set({ editApprovalMode }),
+      setActiveAgent: (activeAgent) => set({ activeAgent }),
 
       refreshKeyStatus: async () => {
         try {
@@ -140,7 +141,7 @@ export const useSettingsStore = create<SettingsState>()(
         composerVim: s.composerVim,
         sidebarFloating: s.sidebarFloating,
         uiScale: s.uiScale,
-        editApprovalMode: s.editApprovalMode,
+        activeAgent: s.activeAgent,
       }),
     },
   ),

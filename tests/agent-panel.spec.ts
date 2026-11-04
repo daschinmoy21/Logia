@@ -26,7 +26,7 @@ test('external agent chooser is honest about browser capability and never starts
 test('composer Vim edits its draft and keeps Escape away from the note editor', async ({ page }) => {
   await openAgentWorkspace(page);
   await openPanel(page);
-  const composer = page.getByRole('textbox', { name: 'Message Logia', exact: true });
+  const composer = page.getByRole('textbox', { name: 'Message Codex', exact: true });
   await page.getByRole('button', { name: 'Enable vim mode', exact: true }).click();
   await composer.fill('alpha beta\nsecond line');
   await composer.press('Escape');
@@ -98,12 +98,12 @@ test('agent menu owns keyboard navigation even with note Vim enabled', async ({ 
   await openPanel(page);
   const chooser = page.getByRole('button', { name: /^Choose agent\. Current:/ });
   await chooser.click();
-  const logia = page.getByRole('menuitemradio', { name: 'Logia', exact: true });
-  await expect(logia).toBeFocused();
-  await logia.press('j');
   const codex = page.getByRole('menuitemradio', { name: /^Codex / });
   await expect(codex).toBeFocused();
-  await codex.press('Escape');
+  await codex.press('j');
+  const claude = page.getByRole('menuitemradio', { name: /^Claude Code / });
+  await expect(claude).toBeFocused();
+  await claude.press('Escape');
   await expect(page.getByRole('menu', { name: 'Agents', exact: true })).toHaveCount(0);
   await expect(chooser).toBeFocused();
 });
@@ -142,11 +142,11 @@ test('pane shortcuts move between tree, editor and agent composer with Vim off',
   await page.keyboard.press('Control+l');
   await expect.poll(async () => page.evaluate(() => !!document.activeElement?.closest('[data-note-editor]'))).toBe(true);
   await page.keyboard.press('Control+l');
-  await expect(page.getByRole('textbox', { name: 'Message Logia', exact: true })).toBeFocused();
+  await expect(page.getByRole('textbox', { name: 'Message Codex', exact: true })).toBeFocused();
   await page.keyboard.press('Control+h');
   await expect.poll(async () => page.evaluate(() => !!document.activeElement?.closest('[data-note-editor]'))).toBe(true);
   await page.keyboard.press('Control+j');
-  await expect(page.getByRole('textbox', { name: 'Message Logia', exact: true })).toBeFocused();
+  await expect(page.getByRole('textbox', { name: 'Message Codex', exact: true })).toBeFocused();
   await page.keyboard.press('Control+k');
   await expect.poll(async () => page.evaluate(() => !!document.activeElement?.closest('[data-note-editor]'))).toBe(true);
 });
@@ -175,7 +175,7 @@ test('early channel errors and failed writes close their native processes', asyn
 test('the right edge reveals the panel on hover without taking focus, and pinning replaces it', async ({ page }) => {
   await openAgentWorkspace(page);
   const editor = page.locator('[data-note-editor="agent-note"] [contenteditable="true"]').first();
-  const composer = page.getByRole('textbox', { name: 'Message Logia', exact: true });
+  const composer = page.getByRole('textbox', { name: 'Message Codex', exact: true });
   await editor.click();
   await expect(composer).toHaveCount(0);
   await page.mouse.move(1439, 500);
@@ -222,7 +222,7 @@ for (const variant of ['Vim on', 'mobile'] as const) {
     await page.keyboard.press('Control+l');
     await expect.poll(async () => page.evaluate(() => !!document.activeElement?.closest('[data-note-editor]'))).toBe(true);
     await page.keyboard.press('Control+l');
-    await expect(page.getByRole('textbox', { name: 'Message Logia', exact: true })).toBeFocused();
+    await expect(page.getByRole('textbox', { name: 'Message Codex', exact: true })).toBeFocused();
     await page.keyboard.press('Control+h');
     await expect.poll(async () => page.evaluate(() => !!document.activeElement?.closest('[data-note-editor]'))).toBe(true);
   });

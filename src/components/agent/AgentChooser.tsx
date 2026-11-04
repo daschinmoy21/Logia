@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { Check, ChevronDown, RefreshCw, Settings2, Sparkles } from 'lucide-react';
+import { Check, ChevronDown, RefreshCw, Settings2 } from 'lucide-react';
 import { AGENT_TOOLS, isDesktopAgentHost, type AgentTool } from '../../lib/ai/agent-terminal';
 import { ProviderIcon } from '../ProviderIcon';
 import { useSettingsStore } from '../../store/settingsStore';
@@ -12,8 +12,6 @@ import {
   useAgentSessions,
 } from './agentSessions';
 
-export type AgentSelection = 'logia' | AgentTool;
-
 const AVAILABILITY_TONE = {
   'desktop-only': 'text-zinc-500',
   checking: 'text-zinc-500',
@@ -23,12 +21,12 @@ const AVAILABILITY_TONE = {
 } as const;
 
 interface AgentChooserProps {
-  selected: AgentSelection;
+  selected: AgentTool;
   title: string;
-  onSelect: (agent: AgentSelection) => void;
+  onSelect: (agent: AgentTool) => void;
 }
 
-/** The panel's top chooser: Logia's own chat, or a terminal session with an external CLI. */
+/** The panel's top chooser between the external agent CLIs. */
 export function AgentChooser({ selected, title, onSelect }: AgentChooserProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -54,7 +52,7 @@ export function AgentChooser({ selected, title, onSelect }: AgentChooserProps) {
     triggerRef.current?.focus();
   };
 
-  const choose = (agent: AgentSelection) => {
+  const choose = (agent: AgentTool) => {
     setOpen(false);
     onSelect(agent);
   };
@@ -106,14 +104,10 @@ export function AgentChooser({ selected, title, onSelect }: AgentChooserProps) {
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label={`Choose agent. Current: ${selectedTool?.label ?? 'Logia'}, ${title}`}
+        aria-label={`Choose agent. Current: ${selectedTool?.label ?? selected}, ${title}`}
         className="flex h-7 w-full min-w-0 items-center gap-1.5 rounded-md px-1.5 text-left text-xs font-medium text-zinc-200 hover:bg-white/[0.07]"
       >
-        {selectedTool ? (
-          <ProviderIcon providerId={selectedTool.id} size={16} />
-        ) : (
-          <Sparkles size={14} className="flex-shrink-0 text-zinc-400" />
-        )}
+        <ProviderIcon providerId={selected} size={16} />
         <span className="truncate">{title}</span>
         <ChevronDown size={12} className="flex-shrink-0 text-zinc-500" />
       </button>
@@ -126,20 +120,7 @@ export function AgentChooser({ selected, title, onSelect }: AgentChooserProps) {
           onKeyDown={onMenuKeyDown}
           className="menu-surface absolute left-0 top-full z-50 mt-1 w-64 rounded-lg border border-zinc-800 bg-zinc-900 p-1 shadow-xl shadow-black/50"
         >
-          <button
-            type="button"
-            role="menuitemradio"
-            aria-checked={selected === 'logia'}
-            onClick={() => choose('logia')}
-            className={`${itemClass} ${itemTone(selected === 'logia')}`}
-          >
-            <Sparkles size={14} className="flex-shrink-0 text-zinc-400" />
-            <span className="flex-1 truncate">Logia</span>
-            {selected === 'logia' && <Check size={13} className="text-zinc-300" />}
-          </button>
-
-          <div className="-mx-1 my-1 h-px bg-zinc-800" />
-          <p className="px-2 pb-1 pt-1 text-[11px] font-medium text-zinc-500">External agents</p>
+          <p className="px-2 pb-1 pt-1 text-[11px] font-medium text-zinc-500">Agents</p>
           {AGENT_TOOLS.map((tool) => {
             const live = isLiveSession(sessions[tool.id]);
             const availability = agentAvailability(cliStatus[tool.id], detecting);

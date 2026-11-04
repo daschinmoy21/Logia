@@ -21,11 +21,13 @@ pub fn launch_spec(tool: &str, login: bool) -> Result<(&'static str, Vec<&'stati
         ("codex", true) => ("codex", vec!["login", "--device-auth"]),
         ("claude-code", true) => ("claude", vec!["auth", "login"]),
         ("opencode", true) => ("opencode", vec!["auth", "login"]),
+        ("grok", true) => ("grok", vec!["login"]),
         ("codex", false) => ("codex", vec![]),
         ("claude-code", false) => ("claude", vec![]),
         ("opencode", false) => ("opencode", vec![]),
+        ("grok", false) => ("grok", vec![]),
         ("pi", _) => ("pi", vec![]), // /login is interactive; no injected keystrokes.
-        _ => return Err("Unknown agent. Choose Codex, Claude Code, Pi, or OpenCode.".into()),
+        _ => return Err("Unknown agent. Choose Codex, Claude Code, Pi, OpenCode, or Grok Build.".into()),
     };
     Ok((binary, args))
 }
@@ -258,7 +260,8 @@ mod tests {
             ["auth", "login"]
         );
         assert_eq!(launch_spec("opencode", true).unwrap().1, ["auth", "login"]);
-        for tool in ["codex", "claude-code", "pi", "opencode"] {
+        assert_eq!(launch_spec("grok", true).unwrap().1, ["login"]);
+        for tool in ["codex", "claude-code", "pi", "opencode", "grok"] {
             assert!(launch_spec(tool, false).unwrap().1.is_empty());
         }
         assert!(launch_spec("sh", false).is_err());
@@ -267,7 +270,7 @@ mod tests {
 
     #[test]
     fn selected_model_is_an_argument_and_never_changes_login() {
-        for tool in ["codex", "claude-code", "pi", "opencode"] {
+        for tool in ["codex", "claude-code", "pi", "opencode", "grok"] {
             assert_eq!(launch_args(tool, false, Some(" provider/model ")).unwrap(), ["--model", "provider/model"]);
             assert_eq!(launch_args(tool, false, Some(" ")).unwrap(), Vec::<String>::new());
             assert!(!launch_args(tool, true, Some("custom-model")).unwrap().contains(&"custom-model".into()));

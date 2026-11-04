@@ -136,6 +136,24 @@ test('daily commands and background raw-block edits keep the active note and sur
     expect((await bridge.run(['files'])).data.data).toHaveLength(1);
     const daily = await bridge.run(['daily:append', 'content=- [ ] Added through the GUI']);
     expect(daily.code).toBe(0);
+    const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('logia.browser-workspace.v1')!));
+    const dailyFolders = stored.folders.filter((folder: any) => folder.name === 'Daily');
+    expect(dailyFolders).toHaveLength(1);
+    expect(stored.notes.find((note: any) => note.id === daily.data.data.id).folder_id).toBe(dailyFolders[0].id);
+    expect((await bridge.run(['daily:append', 'content=- [ ] And again'])).code).toBe(0);
+    await page.evaluate(async () => {
+      const { useNotesStore } = await import('/src/store/notesStore.ts');
+      await useNotesStore.getState().openDailyNote();
+    });
+    await expect(page.locator(`[data-note-editor="${daily.data.data.id}"]`)).toBeVisible();
+    const again = await page.evaluate(() => JSON.parse(localStorage.getItem('logia.browser-workspace.v1')!));
+    expect(again.folders.filter((folder: any) => folder.name === 'Daily')).toHaveLength(1);
+    expect(again.notes.filter((note: any) => note.folder_id === dailyFolders[0].id)).toHaveLength(1);
+    await page.evaluate(async () => {
+      const { useNotesStore } = await import('/src/store/notesStore.ts');
+      const { notes, selectNote } = useNotesStore.getState();
+      await selectNote(notes.find((note) => note.id === 'agent-note')!);
+    });
     await expect(page.locator('[data-note-editor="agent-note"]')).toBeVisible();
     expect((await bridge.run(['daily:read'])).data.data.markdown).toContain('Added through the GUI');
     expect((await bridge.run(['search', 'query=#daily'])).data.data.map((note: any) => note.id)).toContain(daily.data.data.id);
