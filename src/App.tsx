@@ -16,7 +16,7 @@ import { useVimStore } from "./store/vimStore";
 import { Toaster } from "react-hot-toast";
 import PreflightModal from "./components/PrereflightModal.tsx";
 import { prefersReducedMotion } from "./lib/utils";
-import { closeTabs, createTextNote, cycleTab, openPalette, openToday } from "./components/workspace/actions";
+import { closeTabs, createFolderIn, createTextNote, cycleTab, openPalette, openToday } from "./components/workspace/actions";
 import { useWorkspaceStore } from "./components/workspace/workspaceStore";
 import { hasMod, isBlockingModalOpen } from "./components/workspace/shortcuts";
 import { TabBar } from "./components/workspace/TabBar";
@@ -133,6 +133,7 @@ function App() {
       else if (event.altKey && !event.ctrlKey && !event.metaKey && event.code === "KeyP") action = () => openPalette("notes");
       else if (hasMod(event) && event.shiftKey && !event.altKey && key === "p") action = () => openPalette("commands");
       else if (plainMod && key === "n") action = () => createTextNote();
+      else if (hasMod(event) && event.shiftKey && !event.altKey && key === "n") action = () => void createFolderIn(useWorkspaceStore.getState().treeFolderId ?? undefined);
       else if (hasMod(event) && event.shiftKey && !event.altKey && key === "d") action = openToday;
       else if (event.ctrlKey && !event.altKey && event.key === "Tab") action = () => cycleTab(event.shiftKey ? -1 : 1);
       else if (plainMod && key === "w") {

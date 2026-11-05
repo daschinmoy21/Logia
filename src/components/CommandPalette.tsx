@@ -7,6 +7,7 @@ import {
   FilePlus2,
   FileText,
   FileUp,
+  FolderPlus,
   GitBranch,
   Home,
   Layout,
@@ -27,6 +28,7 @@ import { prefersReducedMotion } from '../lib/utils';
 import type { Note } from '../types/Note';
 import {
   createCanvas,
+  createFolderIn,
   createTextNote,
   folderPath,
   goHome,
@@ -71,8 +73,9 @@ function useCommands(isOpen: boolean): Command[] {
   const isTextNote = !!currentNote && currentNote.note_type !== 'canvas';
 
   const commands: Command[] = [
-    // Browsers keep Ctrl/Cmd+N for themselves, so only advertise it on desktop.
+    // Browsers keep Ctrl/Cmd+N and Ctrl/Cmd+Shift+N for themselves, so only advertise them on desktop.
     { id: 'new-note', title: 'New note', keywords: 'create add write page', icon: FilePlus2, shortcut: native ? SHORTCUTS.newNote : undefined, run: () => createTextNote(), movesFocus: true },
+    { id: 'new-folder', title: 'New folder', keywords: 'create add directory organize', icon: FolderPlus, shortcut: native ? SHORTCUTS.newFolder : undefined, run: () => void createFolderIn(useWorkspaceStore.getState().treeFolderId ?? undefined), movesFocus: true },
     { id: 'new-canvas', title: 'New canvas', keywords: 'create add draw sketch diagram whiteboard', icon: Layout, run: () => createCanvas(), movesFocus: true },
     { id: 'daily', title: "Open today's daily note", keywords: 'date journal calendar', icon: CalendarDays, shortcut: SHORTCUTS.dailyNote, run: openToday, movesFocus: true },
     { id: 'home', title: 'Go home', keywords: 'notes list start overview', icon: Home, run: goHome, movesFocus: true },

@@ -6,6 +6,7 @@ export const SHORTCUTS = {
   quickSwitch: ['Mod', 'P'],
   commands: ['Mod', 'Shift', 'P'],
   newNote: ['Mod', 'N'],
+  newFolder: ['Mod', 'Shift', 'N'],
   dailyNote: ['Mod', 'Shift', 'D'],
   toggleAi: ['Mod', 'Shift', 'L'],
   contextPanel: ['Mod', '.'],

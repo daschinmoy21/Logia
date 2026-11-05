@@ -172,7 +172,7 @@ export const Sidebar = () => {
             <div className="flex items-center opacity-60 group-hover:opacity-100">
               <Tip label="New note"><button type="button" aria-label="New note in tree" onClick={() => void createIn("text", folderTarget())} className="flex size-5 items-center justify-center rounded text-zinc-400 hover:bg-white/10 hover:text-zinc-100"><FilePlus2 size={13} /></button></Tip>
               <Tip label="New canvas"><button type="button" aria-label="New canvas" onClick={() => void createIn("canvas", folderTarget())} className="flex size-5 items-center justify-center rounded text-zinc-400 hover:bg-white/10 hover:text-zinc-100"><PenTool size={12} /></button></Tip>
-              <Tip label="New folder"><button type="button" aria-label="New folder" onClick={() => void createFolderIn(folderTarget())} className="flex size-5 items-center justify-center rounded text-zinc-400 hover:bg-white/10 hover:text-zinc-100"><FolderPlus size={13} /></button></Tip>
+              <Tip label="New folder" shortcut={native ? SHORTCUTS.newFolder : undefined}><button type="button" aria-label="New folder" onClick={() => void createFolderIn(folderTarget())} className="flex size-5 items-center justify-center rounded text-zinc-400 hover:bg-white/10 hover:text-zinc-100"><FolderPlus size={13} /></button></Tip>
               <Tip label="Collapse all folders"><button type="button" aria-label="Collapse all folders" onClick={() => ui.setExpandedFolders(new Set())} className="flex size-5 items-center justify-center rounded text-zinc-400 hover:bg-white/10 hover:text-zinc-100"><ChevronsDownUp size={13} /></button></Tip>
             </div>
           </div>
