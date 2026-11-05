@@ -19,7 +19,6 @@ import {
 import { isTauri } from "@tauri-apps/api/core";
 import { useNotesStore } from "../store/notesStore";
 import useUiStore from "../store/UiStore";
-import KanbanBoardContainer from "./KanbanBoard";
 import { IconButton, Tip } from "./ui/kit";
 import { createFolderIn, createIn, goHome, openPalette, openToday, selectNoteQuietly } from "./workspace/actions";
 import { FileTree } from "./workspace/FileTree";
@@ -113,7 +112,6 @@ function Favorites() {
 export const Sidebar = () => {
   const currentNoteId = useNotesStore((s) => s.currentNote?.id ?? null);
   const currentNoteType = useNotesStore((s) => s.currentNote?.note_type);
-  const isKanbanOpen = useUiStore((s) => s.isKanbanOpen);
   const isRecording = useUiStore((s) => s.isRecording);
   const width = useWorkspaceStore((s) => s.sidebarWidth);
   const native = isTauri();
@@ -185,7 +183,6 @@ export const Sidebar = () => {
         </div>
       </Resizable>
 
-      <KanbanBoardContainer isOpen={isKanbanOpen} onClose={() => ui.setIsKanbanOpen(false)} />
     </>
   );
 };

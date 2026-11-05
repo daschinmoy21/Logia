@@ -11,6 +11,7 @@ import {
   GitBranch,
   Home,
   Layout,
+  ListTodo,
   PanelLeft,
   PanelRight,
   PanelRightDashed,
@@ -79,6 +80,8 @@ function useCommands(isOpen: boolean): Command[] {
     { id: 'new-canvas', title: 'New canvas', keywords: 'create add draw sketch diagram whiteboard', icon: Layout, run: () => createCanvas(), movesFocus: true },
     { id: 'daily', title: "Open today's daily note", keywords: 'date journal calendar', icon: CalendarDays, shortcut: SHORTCUTS.dailyNote, run: openToday, movesFocus: true },
     { id: 'home', title: 'Go home', keywords: 'notes list start overview', icon: Home, run: goHome, movesFocus: true },
+    // The board is stored natively, so a browser preview has nothing to open.
+    ...(native ? [{ id: 'tasks', title: 'Open tasks', keywords: 'todo kanban board', icon: ListTodo, run: () => useUiStore.getState().setIsKanbanOpen(true), movesFocus: true }] : []),
     { id: 'import', title: 'Import Markdown files', keywords: 'md upload obsidian add', icon: FileUp, run: importMarkdown, movesFocus: true },
   ];
 

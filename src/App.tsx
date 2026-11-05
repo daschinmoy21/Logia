@@ -7,6 +7,7 @@ import { Tooltip } from "radix-ui";
 import useUiStore from "./store/UiStore.ts";
 import { CommandPalette } from "./components/CommandPalette.tsx";
 import AiSidebar from "./components/AiSidebar.tsx";
+import KanbanBoardContainer from "./components/KanbanBoard.tsx";
 import { Settings } from "./components/Settings.tsx";
 import { VimController } from "./components/vim/VimController.tsx";
 
@@ -42,6 +43,8 @@ function App() {
   useUiScale();
   const isAiSidebarOpen = useUiStore((s) => s.isAiSidebarOpen);
   const setIsAiSidebarOpen = useUiStore((s) => s.setIsAiSidebarOpen);
+  const isKanbanOpen = useUiStore((s) => s.isKanbanOpen);
+  const setIsKanbanOpen = useUiStore((s) => s.setIsKanbanOpen);
   const sidebarFloatingSetting = useSettingsStore((s) => s.sidebarFloating);
   const [isNarrow, setIsNarrow] = useState(() => window.matchMedia(NARROW_QUERY).matches);
   const isSidebarFloating = sidebarFloatingSetting || isNarrow;
@@ -190,6 +193,8 @@ function App() {
         <CommandPalette />
         <VimController />
         <WorkspaceMenus />
+        {/* Mounted here so it outlives an auto-hiding sidebar. */}
+        <KanbanBoardContainer isOpen={isKanbanOpen} onClose={() => setIsKanbanOpen(false)} />
 
         <div className="relative flex min-h-0 flex-1 overflow-hidden">
           {!isSidebarFloating && (
