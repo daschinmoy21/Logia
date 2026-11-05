@@ -33,7 +33,7 @@ function Editor() {
             <div className="size-5 animate-spin rounded-full border-2 border-zinc-700 border-t-zinc-300"></div>
           </div>
         }>
-          <Canvas />
+          <Canvas key={currentNote.id} />
         </Suspense>
       </div>
     );

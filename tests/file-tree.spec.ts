@@ -112,6 +112,25 @@ test('the context menu opens at the pointer and drives star, new folder rename, 
   await expect(row(page, 'Inner')).toHaveAttribute('aria-level', '2');
 });
 
+test('the new-folder shortcut and command create inside the selected folder and start renaming', async ({ page }) => {
+  await open(page);
+  await row(page, 'Docs').click();
+  await page.keyboard.press('Control+Shift+N');
+  const input = page.getByRole('textbox', { name: 'New name' });
+  await expect(input).toBeFocused();
+  await input.fill('From shortcut');
+  await input.press('Enter');
+  await expect(row(page, 'From shortcut')).toHaveAttribute('aria-level', '2');
+
+  await page.keyboard.press('Control+Shift+P');
+  await page.keyboard.type('New folder');
+  await page.keyboard.press('Enter');
+  await expect(input).toBeFocused();
+  await input.fill('From palette');
+  await input.press('Enter');
+  await expect(row(page, 'From palette')).toBeVisible();
+});
+
 test('a huge tree mounts only what is on screen and keyboard scrolling keeps focus', async ({ page }) => {
   const many = Array.from({ length: 3000 }, (_, i) => note(`n${i}`, `Note ${String(i).padStart(4, '0')}`));
   await open(page, many, []);

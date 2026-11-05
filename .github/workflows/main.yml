@@ -6,7 +6,53 @@ on:
       - "v*"
 
 jobs:
+  # Catches the two ways a tag can ship the wrong thing, before any build time is spent.
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Tag matches every version number
+        run: |
+          want="${GITHUB_REF_NAME#v}"
+          status=0
+          check() {
+            if [ "$2" != "$want" ]; then
+              echo "::error file=$1::$1 says $2, tag says $want"
+              status=1
+            fi
+          }
+          check package.json "$(jq -r .version package.json)"
+          check src-tauri/tauri.conf.json "$(jq -r .version src-tauri/tauri.conf.json)"
+          check src-tauri/Cargo.toml "$(sed -n 's/^version = "\(.*\)"/\1/p' src-tauri/Cargo.toml | head -1)"
+          check flake.nix "$(sed -n 's/^ *version = "\(.*\)";/\1/p' flake.nix | head -1)"
+          exit $status
+
+      # The Nix package serves the committed dist/, so a stale one ships an old interface.
+      - name: Committed dist is at least as new as src
+        run: |
+          src=$(git log -1 --format=%ct -- src)
+          dist=$(git log -1 --format=%ct -- dist)
+          if [ "$src" -gt "$dist" ]; then
+            echo "::error::src/ changed after dist/ was last rebuilt. Run bun run build and commit dist/."
+            exit 1
+          fi
+
+  # Proves `nix run github:daschinmoy21/Logia/<tag>` works before the release goes public.
+  nix:
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - run: nix build .#default --no-link --print-build-logs
+
   build:
+    needs: verify
     permissions:
       contents: write
 
@@ -80,3 +126,17 @@ jobs:
           releaseDraft: true
           prerelease: false
           args: --target ${{ matrix.target }}
+
+  # Builds publish to a draft. It goes public only if every platform and Nix succeeded, so a
+  # partial failure can't become the latest release.
+  publish:
+    needs: [nix, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Publish the draft
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: gh release edit "$GITHUB_REF_NAME" --draft=false --latest

@@ -7,6 +7,7 @@ import { Tooltip } from "radix-ui";
 import useUiStore from "./store/UiStore.ts";
 import { CommandPalette } from "./components/CommandPalette.tsx";
 import AiSidebar from "./components/AiSidebar.tsx";
+import KanbanBoardContainer from "./components/KanbanBoard.tsx";
 import { Settings } from "./components/Settings.tsx";
 import { VimController } from "./components/vim/VimController.tsx";
 
@@ -16,7 +17,7 @@ import { useVimStore } from "./store/vimStore";
 import { Toaster } from "react-hot-toast";
 import PreflightModal from "./components/PrereflightModal.tsx";
 import { prefersReducedMotion } from "./lib/utils";
-import { closeTabs, createTextNote, cycleTab, openPalette, openToday } from "./components/workspace/actions";
+import { closeTabs, createFolderIn, createTextNote, cycleTab, openPalette, openToday } from "./components/workspace/actions";
 import { useWorkspaceStore } from "./components/workspace/workspaceStore";
 import { hasMod, isBlockingModalOpen } from "./components/workspace/shortcuts";
 import { TabBar } from "./components/workspace/TabBar";
@@ -42,6 +43,8 @@ function App() {
   useUiScale();
   const isAiSidebarOpen = useUiStore((s) => s.isAiSidebarOpen);
   const setIsAiSidebarOpen = useUiStore((s) => s.setIsAiSidebarOpen);
+  const isKanbanOpen = useUiStore((s) => s.isKanbanOpen);
+  const setIsKanbanOpen = useUiStore((s) => s.setIsKanbanOpen);
   const sidebarFloatingSetting = useSettingsStore((s) => s.sidebarFloating);
   const [isNarrow, setIsNarrow] = useState(() => window.matchMedia(NARROW_QUERY).matches);
   const isSidebarFloating = sidebarFloatingSetting || isNarrow;
@@ -133,6 +136,7 @@ function App() {
       else if (event.altKey && !event.ctrlKey && !event.metaKey && event.code === "KeyP") action = () => openPalette("notes");
       else if (hasMod(event) && event.shiftKey && !event.altKey && key === "p") action = () => openPalette("commands");
       else if (plainMod && key === "n") action = () => createTextNote();
+      else if (hasMod(event) && event.shiftKey && !event.altKey && key === "n") action = () => void createFolderIn(useWorkspaceStore.getState().treeFolderId ?? undefined);
       else if (hasMod(event) && event.shiftKey && !event.altKey && key === "d") action = openToday;
       else if (event.ctrlKey && !event.altKey && event.key === "Tab") action = () => cycleTab(event.shiftKey ? -1 : 1);
       else if (plainMod && key === "w") {
@@ -189,6 +193,8 @@ function App() {
         <CommandPalette />
         <VimController />
         <WorkspaceMenus />
+        {/* Mounted here so it outlives an auto-hiding sidebar. */}
+        <KanbanBoardContainer isOpen={isKanbanOpen} onClose={() => setIsKanbanOpen(false)} />
 
         <div className="relative flex min-h-0 flex-1 overflow-hidden">
           {!isSidebarFloating && (

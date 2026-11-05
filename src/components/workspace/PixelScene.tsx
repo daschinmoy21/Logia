@@ -143,9 +143,14 @@ function createPanel(canvas: HTMLCanvasElement, width: number, height: number) {
   const scale = window.devicePixelRatio || 1;
   canvas.width = Math.round(width * scale);
   canvas.height = Math.round(height * scale);
-  context.scale(scale, scale);
   context.fillStyle = PANEL;
-  context.fillRect(0, 0, width, height);
+  context.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Bars are drawn on whole device pixels. At a fractional scale (125%, 150%) a bar's edge would
+  // otherwise be anti-aliased, and repainting a bird's cell in a darker colour leaves that soft
+  // edge behind, which reads as a trail.
+  const barWidth = Math.max(1, Math.round(BAR_WIDTH * scale));
+  const barHeight = Math.max(1, Math.round(BAR_HEIGHT * scale));
 
   const columns = Math.ceil(width / CELL_WIDTH);
   const rows = Math.ceil(height / CELL_HEIGHT);
@@ -180,7 +185,7 @@ function createPanel(canvas: HTMLCanvasElement, width: number, height: number) {
         if (index === previous[i]) continue;
         previous[i] = index;
         context.fillStyle = PALETTE[index];
-        context.fillRect(column * CELL_WIDTH, row * CELL_HEIGHT, BAR_WIDTH, BAR_HEIGHT);
+        context.fillRect(Math.round(column * CELL_WIDTH * scale), Math.round(row * CELL_HEIGHT * scale), barWidth, barHeight);
       }
     }
   };

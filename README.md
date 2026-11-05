@@ -172,7 +172,7 @@ bun run build
 
 ### Workspace and agent tools
 
-The home screen offers note previews, tag discovery, type/star filters, sorting, daily notes, and Markdown import. Use `Ctrl/Cmd+P` to find notes and `Ctrl/Cmd+Shift+P` for commands; `Alt+P` remains available. The note context panel provides headings, tags, outgoing wikilinks, and backlinks. Markdown import copies selected files; YAML is preserved visibly, while vault attachments, folder layouts, and community plugins are not imported.
+The home screen offers note previews, tag discovery, type/star filters, sorting, daily notes, and Markdown import. Use `Ctrl/Cmd+P` to find notes and `Ctrl/Cmd+Shift+P` for commands; `Alt+P` remains available. `Ctrl/Cmd+N` creates a note and `Ctrl/Cmd+Shift+N` a folder, inside the folder selected in the tree. The note context panel provides headings, tags, outgoing wikilinks, and backlinks. Markdown import copies selected files; YAML is preserved visibly, while vault attachments, folder layouts, and community plugins are not imported.
 
 The GUI owns live note state. Agents use the separate CLI to read unsaved content and apply edits through the running app, following Obsidian’s GUI/CLI split:
 

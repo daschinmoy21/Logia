@@ -19,7 +19,6 @@ import {
 import { isTauri } from "@tauri-apps/api/core";
 import { useNotesStore } from "../store/notesStore";
 import useUiStore from "../store/UiStore";
-import KanbanBoardContainer from "./KanbanBoard";
 import { IconButton, Tip } from "./ui/kit";
 import { createFolderIn, createIn, goHome, openPalette, openToday, selectNoteQuietly } from "./workspace/actions";
 import { FileTree } from "./workspace/FileTree";
@@ -113,7 +112,6 @@ function Favorites() {
 export const Sidebar = () => {
   const currentNoteId = useNotesStore((s) => s.currentNote?.id ?? null);
   const currentNoteType = useNotesStore((s) => s.currentNote?.note_type);
-  const isKanbanOpen = useUiStore((s) => s.isKanbanOpen);
   const isRecording = useUiStore((s) => s.isRecording);
   const width = useWorkspaceStore((s) => s.sidebarWidth);
   const native = isTauri();
@@ -172,7 +170,7 @@ export const Sidebar = () => {
             <div className="flex items-center opacity-60 group-hover:opacity-100">
               <Tip label="New note"><button type="button" aria-label="New note in tree" onClick={() => void createIn("text", folderTarget())} className="flex size-5 items-center justify-center rounded text-zinc-400 hover:bg-white/10 hover:text-zinc-100"><FilePlus2 size={13} /></button></Tip>
               <Tip label="New canvas"><button type="button" aria-label="New canvas" onClick={() => void createIn("canvas", folderTarget())} className="flex size-5 items-center justify-center rounded text-zinc-400 hover:bg-white/10 hover:text-zinc-100"><PenTool size={12} /></button></Tip>
-              <Tip label="New folder"><button type="button" aria-label="New folder" onClick={() => void createFolderIn(folderTarget())} className="flex size-5 items-center justify-center rounded text-zinc-400 hover:bg-white/10 hover:text-zinc-100"><FolderPlus size={13} /></button></Tip>
+              <Tip label="New folder" shortcut={native ? SHORTCUTS.newFolder : undefined}><button type="button" aria-label="New folder" onClick={() => void createFolderIn(folderTarget())} className="flex size-5 items-center justify-center rounded text-zinc-400 hover:bg-white/10 hover:text-zinc-100"><FolderPlus size={13} /></button></Tip>
               <Tip label="Collapse all folders"><button type="button" aria-label="Collapse all folders" onClick={() => ui.setExpandedFolders(new Set())} className="flex size-5 items-center justify-center rounded text-zinc-400 hover:bg-white/10 hover:text-zinc-100"><ChevronsDownUp size={13} /></button></Tip>
             </div>
           </div>
@@ -185,7 +183,6 @@ export const Sidebar = () => {
         </div>
       </Resizable>
 
-      <KanbanBoardContainer isOpen={isKanbanOpen} onClose={() => ui.setIsKanbanOpen(false)} />
     </>
   );
 };
