@@ -21,6 +21,9 @@ export default defineConfig(async () => ({
     alias: {
       '@': path.resolve(__dirname, 'src'),
     },
+    // BlockNote and tldraw each pull in their own ProseMirror. Plugin keys come from a counter in
+    // prosemirror-state, so two copies hand out the same key and tldraw's text editor throws.
+    dedupe: ['prosemirror-state', 'prosemirror-view', 'prosemirror-model', 'prosemirror-transform'],
   },
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
