@@ -5,6 +5,8 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   timeout: 30_000,
+  // Hosted runners occasionally stall. A test that passes on retry is still reported as flaky.
+  retries: process.env.CI ? 1 : 0,
   use: {
     baseURL: 'http://127.0.0.1:3420',
     viewport: { width: 1440, height: 1000 },
