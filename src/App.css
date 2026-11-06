@@ -393,6 +393,89 @@ body.vim-visual-active .bn-formatting-toolbar {
   background: var(--color-zinc-925);
 }
 
+/* Mermaid and artifact code blocks: rendered output below, source shown only while editing. */
+.note-editor-view .bn-block-content[data-content-type="codeBlock"].logia-live-collapsed {
+  display: none;
+}
+
+.note-editor-view .bn-block-content.logia-live-editing {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.logia-live-preview {
+  border: 1px solid var(--color-zinc-800);
+  border-radius: 8px;
+  background: var(--color-zinc-925);
+  overflow: hidden;
+  user-select: none;
+}
+
+.bn-block-content.logia-live-editing + .logia-live-preview {
+  border-top: 0;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+.logia-live-preview-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px 6px 14px;
+  font-size: 12px;
+  color: var(--color-zinc-500);
+}
+
+.logia-live-preview-status {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.logia-live-preview.has-error .logia-live-preview-status {
+  color: var(--color-red-400);
+}
+
+.logia-live-preview-bar button {
+  border-radius: 6px;
+  padding: 2px 8px;
+  color: var(--color-zinc-400);
+}
+
+.logia-live-preview-bar button:hover {
+  background: var(--color-zinc-800);
+  color: var(--color-zinc-100);
+}
+
+.logia-live-preview-body {
+  padding: 4px 16px 16px;
+}
+
+.logia-live-preview[data-language="mermaid"] .logia-live-preview-body {
+  display: flex;
+  justify-content: center;
+  overflow-x: auto;
+  cursor: text;
+}
+
+.logia-live-preview[data-language="mermaid"] svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.logia-live-preview[data-language="artifact"] .logia-live-preview-body {
+  padding: 0;
+}
+
+.logia-live-preview iframe {
+  display: block;
+  width: 100%;
+  border: 0;
+  background: transparent;
+}
+
 /* Chat transcripts */
 .chat-prose {
   overflow-wrap: anywhere;

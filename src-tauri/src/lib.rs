@@ -774,6 +774,20 @@ async fn prereflight_check(app_handle: tauri::AppHandle) -> Result<serde_json::V
     Ok(serde_json::Value::Object(map))
 }
 
+/// Blank page that HTML artifacts in notes render into. It is served from its own
+/// scheme so it can carry a CSP for artifacts: the app's own CSP blocks inline
+/// scripts, and the editor loads it in a sandboxed frame with no app origin.
+fn artifact_shell() -> tauri::http::Response<Vec<u8>> {
+    const SHELL: &str = "<!doctype html><meta charset=\"utf-8\"><script>addEventListener('message',e=>{if(e.source!==parent||!e.data||e.data.type!=='logia-artifact-render')return;document.open();document.write(String(e.data.html));document.close()})</script>";
+    const CSP: &str = "default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com https://cdn.tailwindcss.com; style-src 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com; font-src https://fonts.gstatic.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net data:; img-src data: blob: https:; media-src data: blob:; connect-src 'none'; form-action 'none'";
+    tauri::http::Response::builder()
+        .header("Content-Type", "text/html; charset=utf-8")
+        .header("Content-Security-Policy", CSP)
+        .header("Cache-Control", "no-store")
+        .body(SHELL.as_bytes().to_vec())
+        .unwrap()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Load .env file
@@ -785,6 +799,7 @@ pub fn run() {
         .manage(agent_terminal::AgentTerminalState::default())
         .manage(cli_bridge::CliBridgeState::default())
         .setup(|app| { cli_bridge::start(app.handle().clone()); Ok(()) })
+        .register_uri_scheme_protocol("logia-artifact", |_ctx, _request| artifact_shell())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_fs::init())

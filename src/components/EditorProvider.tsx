@@ -1,7 +1,7 @@
-import { BlockNoteEditor, filterSuggestionItems } from "@blocknote/core";
+import { BlockNoteEditor, filterSuggestionItems, insertOrUpdateBlock } from "@blocknote/core";
 import { useCreateBlockNote } from "@blocknote/react";
 import { ReactNode, createContext, useContext, useRef, useEffect } from "react";
-import { codeBlock } from "@blocknote/code-block";
+import { logiaCodeBlock, LiveCodeBlocksExtension } from "../lib/live-code-blocks";
 import {
   createAIExtension,
   getAISlashMenuItems,
@@ -25,6 +25,34 @@ import {
 import { Note } from "../types/Note";
 import type { LanguageModel } from 'ai';
 import { useNotesStore } from '../store/notesStore';
+import { Workflow, AppWindow } from "lucide-react";
+
+const MERMAID_STARTER = "flowchart TD\n  A[Start] --> B{Decision}\n  B -->|Yes| C[Do it]\n  B -->|No| D[Skip]";
+const ARTIFACT_STARTER = "<div id=\"app\"></div>\n<script>\n  document.getElementById('app').textContent = 'Hello from an artifact';\n</script>";
+
+/** Slash items that insert code blocks which render live (see live-code-blocks.ts). */
+function liveBlockSlashItems(editor: BlockNoteEditor<any, any, any>) {
+  const insert = (language: string, text: string) => () =>
+    insertOrUpdateBlock(editor, { type: "codeBlock", props: { language }, content: text } as any);
+  return [
+    {
+      title: "Mermaid diagram",
+      subtext: "Flowchart, sequence, gantt and more, rendered from text",
+      aliases: ["mermaid", "diagram", "flowchart", "chart", "graph"],
+      group: "Advanced",
+      icon: <Workflow size={18} />,
+      onItemClick: insert("mermaid", MERMAID_STARTER),
+    },
+    {
+      title: "Artifact",
+      subtext: "HTML, CSS and JS that runs in a sandboxed frame",
+      aliases: ["artifact", "html", "embed", "visualization", "widget"],
+      group: "Advanced",
+      icon: <AppWindow size={18} />,
+      onItemClick: insert("artifact", ARTIFACT_STARTER),
+    },
+  ];
+}
 
 
 type EditorContextType = {
@@ -88,16 +116,15 @@ export function EditorProvider({
       cellTextColor: true,
       headers: true
     },
-    codeBlock,
+    codeBlock: logiaCodeBlock,
     dictionary: {
       ...en,
       ai: aiEn,
     },
-    extensions: model ? [
-      createAIExtension({
-        model: model as any,
-      }),
-    ] : [],
+    extensions: [
+      () => new LiveCodeBlocksExtension(),
+      ...(model ? [createAIExtension({ model: model as any })] : []),
+    ],
     initialContent: currentNote?.content ? JSON.parse(currentNote.content) : undefined,
     uploadFile: async (file: File) => {
       console.log("uploadFile triggered for:", file);
@@ -186,6 +213,12 @@ export function EditorProvider({
   );
 }
 
+// The menu draws a header each time the group changes, so keep "Advanced" contiguous.
+function withLiveBlockItems<T extends { group?: string }>(items: T[], editor: BlockNoteEditor<any, any, any>) {
+  const at = items.map((item) => item.group).lastIndexOf("Advanced") + 1 || items.length;
+  return [...items.slice(0, at), ...(liveBlockSlashItems(editor) as unknown as T[]), ...items.slice(at)];
+}
+
 // Formatting toolbar with all standard buttons explicitly defined
 export function FormattingToolbarWithAI() {
   return (
@@ -226,7 +259,7 @@ export function SuggestionMenuWithAI({ editor }: { editor: BlockNoteEditor<any, 
       getItems={async (query) =>
         filterSuggestionItems(
           [
-            ...getDefaultReactSlashMenuItems(editor),
+            ...withLiveBlockItems(getDefaultReactSlashMenuItems(editor), editor),
             // add the default AI slash menu items only if an AI model is available
             ...(hasAI ? getAISlashMenuItems(editor) : []),
           ],

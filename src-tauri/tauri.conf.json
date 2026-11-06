@@ -22,7 +22,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: blob: asset:; connect-src 'self' https://generativelanguage.googleapis.com; font-src 'self' data:"
+      "csp": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: blob: asset:; connect-src 'self' https://generativelanguage.googleapis.com; font-src 'self' data:; frame-src logia-artifact: http://logia-artifact.localhost"
     }
   },
   "bundle": {
