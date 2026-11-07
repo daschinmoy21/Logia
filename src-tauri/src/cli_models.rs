@@ -24,6 +24,19 @@ fn parse_text_models(tool: &str, output: &str) -> Vec<CliModel> {
         .lines()
         .filter_map(|line| {
             let fields: Vec<_> = line.split_whitespace().collect();
+            // grok: "  * grok-4.7 (default)" / "  - grok-4.6" under "Available models:"
+            if tool == "grok" {
+                let (marker, id) = match fields.as_slice() {
+                    [m @ ("*" | "-"), id] | [m @ ("*" | "-"), id, "(default)"] => (*m, *id),
+                    _ => return None,
+                };
+                return Some(CliModel {
+                    id: id.into(),
+                    label: id.into(),
+                    is_default: marker == "*" || fields.len() == 3,
+                    reasoning_efforts: Vec::new(),
+                });
+            }
             let id = match tool {
                 "opencode" if fields.len() == 1 && fields[0].contains('/') => fields[0].to_string(),
                 "pi" if fields.len() == 6
@@ -123,6 +136,7 @@ pub async fn discover(
     let args: &[&str] = match tool {
         "codex" => &["app-server"],
         "opencode" => &["models"],
+        "grok" => &["models"],
         "pi" => &["--list-models"],
         "gemini-cli" => &["--list-models", "--output-format", "json"],
         "claude-code" => &[
@@ -305,6 +319,8 @@ mod tests {
         );
         assert_eq!(parse_text_models("pi", "provider model context max-out thinking images\nanthropic claude-example 200K 32K yes yes\n")[0].id, "anthropic/claude-example");
         assert!(parse_text_models("pi", "No models available").is_empty());
+        let grok = parse_text_models("grok", "You are logged in with grok.com.\n\nDefault model: grok-4.7\n\nAvailable models:\n  * grok-4.7 (default)\n  - grok-4.6\n");
+        assert_eq!(grok.iter().map(|m| (m.id.as_str(), m.is_default)).collect::<Vec<_>>(), vec![("grok-4.7", true), ("grok-4.6", false)]);
     }
 
     #[test]
