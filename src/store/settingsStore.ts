@@ -28,6 +28,10 @@ interface SettingsState {
   uiScale: number;
   /** null until one is chosen: the panel then uses the first detected agent. */
   activeAgent: AgentTool | null;
+  /** Look for a new release on launch and every few hours. */
+  autoCheckUpdates: boolean;
+  /** A release the user chose to skip; it isn't offered again until a newer one ships. */
+  skippedUpdateVersion: string | null;
 
   // --- runtime status (not persisted) ---
   keyStatus: Record<string, boolean>;
@@ -44,6 +48,8 @@ interface SettingsState {
   setSidebarFloating: (floating: boolean) => void;
   setUiScale: (scale: number) => void;
   setActiveAgent: (agent: AgentTool) => void;
+  setAutoCheckUpdates: (enabled: boolean) => void;
+  setSkippedUpdateVersion: (version: string | null) => void;
 
   refreshKeyStatus: () => Promise<void>;
   refreshCliStatus: () => Promise<void>;
@@ -67,6 +73,8 @@ export const useSettingsStore = create<SettingsState>()(
       sidebarFloating: false,
       uiScale: 1,
       activeAgent: null,
+      autoCheckUpdates: true,
+      skippedUpdateVersion: null,
 
       keyStatus: {},
       cliStatus: {},
@@ -92,6 +100,8 @@ export const useSettingsStore = create<SettingsState>()(
       setSidebarFloating: (sidebarFloating) => set({ sidebarFloating }),
       setUiScale: (scale) => set({ uiScale: normalizeUiScale(scale) }),
       setActiveAgent: (activeAgent) => set({ activeAgent }),
+      setAutoCheckUpdates: (autoCheckUpdates) => set({ autoCheckUpdates }),
+      setSkippedUpdateVersion: (skippedUpdateVersion) => set({ skippedUpdateVersion }),
 
       refreshKeyStatus: async () => {
         try {
@@ -142,6 +152,8 @@ export const useSettingsStore = create<SettingsState>()(
         sidebarFloating: s.sidebarFloating,
         uiScale: s.uiScale,
         activeAgent: s.activeAgent,
+        autoCheckUpdates: s.autoCheckUpdates,
+        skippedUpdateVersion: s.skippedUpdateVersion,
       }),
     },
   ),

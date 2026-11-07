@@ -17,6 +17,7 @@ import { ConfirmDialog } from './workspace/WorkspaceMenus';
 import { ModelPicker } from './ModelPicker';
 import { ProviderIcon } from './ProviderIcon';
 import { openExternal } from '../lib/utils';
+import { RELEASES_URL, useUpdateStore } from '../store/updateStore';
 import { EDITOR_KEYS, EXPLORER_KEYS, EX_COMMANDS, GLOBAL_KEYS, LEADER_BINDINGS, type KeyDoc } from '../lib/vim/keymap';
 import {
   X,
@@ -527,14 +528,59 @@ function EditorSettings() {
 
 function AboutSettings() {
   return (
+    <div className="space-y-4">
+      <div className={settingGroup}>
+        <SettingRow title="Logia" description={`Version ${__APP_VERSION__}`}>
+          <img src="/logo.png" alt="" className="size-7 rounded-md" />
+        </SettingRow>
+        <SettingRow title="Source code" description="Logia is open source under the AGPL-3.0.">
+          <Button size="sm" onClick={() => void openExternal('https://github.com/daschinmoy21/Logia')}>
+            <ExternalLink size={12} /> GitHub
+          </Button>
+        </SettingRow>
+      </div>
+      {isTauri() && <UpdateSettings />}
+    </div>
+  );
+}
+
+function UpdateSettings() {
+  const autoCheck = useSettingsStore((s) => s.autoCheckUpdates);
+  const setAutoCheck = useSettingsStore((s) => s.setAutoCheckUpdates);
+  const { status, update, error, check } = useUpdateStore();
+  const checking = status === 'checking';
+
+  const description =
+    status === 'checking'
+      ? 'Checking…'
+      : status === 'up-to-date'
+        ? "You're on the latest version."
+        : status === 'error'
+          ? `Couldn't check for updates: ${error}`
+          : update
+            ? `Version ${update.version} is available.`
+            : 'Look for a new release on GitHub.';
+
+  return (
     <div className={settingGroup}>
-      <SettingRow title="Logia" description={`Version ${__APP_VERSION__}`}>
-        <img src="/logo.png" alt="" className="size-7 rounded-md" />
+      <SettingRow title="Updates" description={description}>
+        <div className="flex gap-2">
+          <Button size="sm" variant="ghost" onClick={() => void openExternal(RELEASES_URL)}>
+            <ExternalLink size={12} /> Releases
+          </Button>
+          {update && status !== 'checking' ? (
+            <Button size="sm" variant="primary" onClick={() => useUpdateStore.setState({ promptOpen: true })}>
+              <Download size={12} /> Update
+            </Button>
+          ) : (
+            <Button size="sm" onClick={() => void check({ manual: true })} disabled={checking}>
+              {checking ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />} Check now
+            </Button>
+          )}
+        </div>
       </SettingRow>
-      <SettingRow title="Source code" description="Logia is open source under the AGPL-3.0.">
-        <Button size="sm" onClick={() => void openExternal('https://github.com/daschinmoy21/Logia')}>
-          <ExternalLink size={12} /> GitHub
-        </Button>
+      <SettingRow title="Check automatically" description="On launch and every few hours while Logia is open.">
+        <Toggle checked={autoCheck} onChange={setAutoCheck} label="Check for updates automatically" />
       </SettingRow>
     </div>
   );

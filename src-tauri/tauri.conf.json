@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "logia",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "identifier": "com.logia.app",
   "build": {
     "beforeDevCommand": "bun run dev",
@@ -45,6 +45,18 @@
     "resources": {
       "src/audio/transcription/*": "src/audio/transcription/",
       "../scripts/logia-cli.mjs": "cli/logia-cli.mjs"
+    },
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDVGNEQxRDhGNzFDQ0I1NjgKUldSb3RjeHhqeDFOWDZVWHpuaExBMzFwMmwrTUdDYVFkbzVJL1RDUzRNaE1YWkVDdEszRFV6WWsK",
+      "endpoints": [
+        "https://github.com/daschinmoy21/Logia/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
     }
   }
 }

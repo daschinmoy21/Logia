@@ -16,6 +16,7 @@ import { useSettingsStore } from "./store/settingsStore";
 import { useVimStore } from "./store/vimStore";
 import { Toaster } from "react-hot-toast";
 import PreflightModal from "./components/PrereflightModal.tsx";
+import { UpdatePrompt } from "./components/UpdatePrompt.tsx";
 import { prefersReducedMotion } from "./lib/utils";
 import { closeTabs, createFolderIn, createTextNote, cycleTab, openPalette, openToday } from "./components/workspace/actions";
 import { useWorkspaceStore } from "./components/workspace/workspaceStore";
@@ -190,6 +191,7 @@ function App() {
       <div className="flex h-full flex-col overflow-hidden bg-zinc-950">
         <PreflightModal />
         <Settings />
+        <UpdatePrompt />
         <CommandPalette />
         <VimController />
         <WorkspaceMenus />

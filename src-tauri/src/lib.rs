@@ -774,6 +774,24 @@ async fn prereflight_check(app_handle: tauri::AppHandle) -> Result<serde_json::V
     Ok(serde_json::Value::Object(map))
 }
 
+/// How this copy can be updated: "auto" when the updater can replace it in place,
+/// "nix" for a Nix store build, "manual" for anything else it can't safely overwrite
+/// (an unbundled Linux binary, e.g. `tauri dev`). Without a bundle type the updater
+/// treats the running binary as an AppImage and would try to overwrite it.
+#[tauri::command]
+fn update_install_mode() -> &'static str {
+    #[cfg(target_os = "linux")]
+    {
+        if std::env::current_exe().is_ok_and(|exe| exe.starts_with("/nix/store")) {
+            return "nix";
+        }
+        if tauri::utils::platform::bundle_type().is_none() {
+            return "manual";
+        }
+    }
+    "auto"
+}
+
 /// Blank page that HTML artifacts in notes render into. It is served from its own
 /// scheme so it can carry a CSP for artifacts: the app's own CSP blocks inline
 /// scripts, and the editor loads it in a sandboxed frame with no app origin.
@@ -804,6 +822,8 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .invoke_handler(tauri::generate_handler![
             get_notes_path,
             create_note,
@@ -847,6 +867,7 @@ pub fn run() {
             transcribe_audio,
             prereflight_check,
             read_install_log,
+            update_install_mode,
             git_sync::git_sync_status,
             git_sync::git_sync_configure,
             git_sync::git_sync_now,
