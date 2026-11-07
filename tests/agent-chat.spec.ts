@@ -212,3 +212,34 @@ test('model choices open in an anchored dropdown and support keyboard selection 
   await page.getByRole('log').click();
   await expect(menu).toHaveCount(0);
 });
+
+test('finished sessions are kept in history and can be reopened after a reload', async ({ page }) => {
+  await openChat(page);
+  const composer = page.getByRole('textbox', { name: 'Message Codex', exact: true });
+  await composer.fill('Plan the rate limiter note');
+  await page.getByRole('button', { name: 'Send to Codex', exact: true }).click();
+  await expect(page.getByRole('log')).toContainText('Fixture chat reply');
+  await page.getByRole('button', { name: 'New session', exact: true }).click();
+  await expect(page.getByRole('log')).not.toContainText('Fixture chat reply');
+
+  await page.reload();
+  await installAgentFixture(page);
+  await page.getByRole('button', { name: 'Open AI sidebar', exact: true }).click();
+  await page.getByRole('button', { name: 'History', exact: true }).click();
+  await page.getByRole('menuitem', { name: /Plan the rate limiter note/ }).click();
+  await expect(page.getByRole('log')).toContainText('Plan the rate limiter note');
+  await expect(page.getByRole('log')).toContainText('Fixture chat reply');
+
+  // A follow-up continues the reopened session and resends its transcript.
+  await composer.fill('Add a diagram');
+  await page.getByRole('button', { name: 'Send to Codex', exact: true }).click();
+  await expect(page.getByRole('log').getByText('Fixture chat reply', { exact: true })).toHaveCount(2);
+  const runs = (await agentCalls(page)).filter((call) => call.command === 'ai_cli_run');
+  expect(runs.at(-1)!.args.prompt).toContain('Plan the rate limiter note');
+
+  await page.getByRole('button', { name: 'History', exact: true }).click();
+  await expect(page.getByRole('menuitem', { name: /Plan the rate limiter note/ })).toHaveCount(1);
+  await page.getByRole('menuitem', { name: 'Clear Codex history' }).click();
+  await page.getByRole('button', { name: 'History', exact: true }).click();
+  await expect(page.getByText('No past sessions yet')).toBeVisible();
+});

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Brain, FileText, Loader2, LockKeyhole, Paperclip, Plus, Settings2, Terminal, X } from 'lucide-react';
+import { ArrowLeft, Brain, Check, FileText, History, Loader2, LockKeyhole, Paperclip, Plus, Settings2, Terminal, Trash2, X } from 'lucide-react';
 import { open as openFileDialog } from '@tauri-apps/plugin-dialog';
 import toast from 'react-hot-toast';
 import Markdown from 'react-markdown';
@@ -12,11 +12,11 @@ import { useSettingsStore } from '../../store/settingsStore';
 import useUiStore from '../../store/UiStore';
 import { ModelPicker } from '../ModelPicker';
 import { Button, IconButton } from '../ui/kit';
-import { PillSelect } from '../ui/menu';
+import { Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger, PillSelect } from '../ui/menu';
 import { ProviderIcon } from '../ProviderIcon';
 import { AgentComposer } from './AgentComposer';
 import { AgentTerminalPane } from './AgentTerminalPane';
-import { newAgentChat, sendAgentChat, setAgentChatIncludeNote, setAgentChatOptions, stopAgentChat, useAgentChats } from './agentChats';
+import { deleteAgentHistory, newAgentChat, resumeAgentChat, sendAgentChat, setAgentChatIncludeNote, setAgentChatOptions, stopAgentChat, useAgentChats, useAgentHistory } from './agentChats';
 
 const accessLabels = { 'read-only': 'Read only', 'workspace-write': 'Workspace', 'danger-full-access': 'Full access' };
 const effortLabels: Record<string, string> = { none: 'None', minimal: 'Minimal', low: 'Low', medium: 'Medium', high: 'High', xhigh: 'Extra high', max: 'Max' };
@@ -24,10 +24,17 @@ const terminalViews = new Set<AgentTool>();
 /** Chosen files wait for the next send, even across closing the panel or switching agents. */
 const pendingFiles = new Map<AgentTool, string[]>();
 const fileName = (path: string) => path.split(/[\\/]/).pop() || path;
+const when = (iso: string) => {
+  const date = new Date(iso);
+  return date.toDateString() === new Date().toDateString()
+    ? date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+    : date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+};
 
 export function AgentChatPane({ tool, onSwitchAgent }: { tool: AgentTool; onSwitchAgent: (agent: AgentTool) => void }) {
   const def = AGENT_TOOLS.find((t) => t.id === tool)!;
   const chat = useAgentChats((s) => s.chats[tool]);
+  const history = useAgentHistory((s) => s[tool]) ?? [];
   const model = useSettingsStore((s) => s.models[tool]);
   const binary = useSettingsStore((s) => s.cliBinaries[tool]);
   const info = useSettingsStore((s) => s.cliStatus[tool]);
@@ -112,7 +119,24 @@ export function AgentChatPane({ tool, onSwitchAgent }: { tool: AgentTool; onSwit
 
   return <div className="flex h-full min-h-0 flex-col" data-testid="agent-chat">
     <div className="flex h-8 shrink-0 items-center justify-between gap-2 px-1.5">
-      <Button variant="ghost" size="sm" onClick={() => newAgentChat(tool)}><Plus size={13} /> New session</Button>
+      <div className="flex items-center">
+        <Button variant="ghost" size="sm" onClick={() => newAgentChat(tool)}><Plus size={13} /> New session</Button>
+        <Menu>
+          <MenuTrigger asChild>
+            <Button variant="ghost" size="sm" disabled={running}><History size={13} /> History</Button>
+          </MenuTrigger>
+          <MenuContent className="w-72" aria-label={`${def.label} session history`}>
+            {history.length === 0 && <MenuLabel>No past sessions yet</MenuLabel>}
+            {history.map((item) => <MenuItem key={item.id} icon={item.id === chat?.id ? <Check size={13} /> : undefined} onSelect={() => resumeAgentChat(tool, item.id)}>
+              <span className="flex items-baseline gap-2"><span className="min-w-0 flex-1 truncate">{item.title}</span><span className="shrink-0 text-[11px] text-zinc-500">{when(item.updatedAt)}</span></span>
+            </MenuItem>)}
+            {history.length > 0 && <>
+              <MenuSeparator />
+              <MenuItem danger icon={<Trash2 size={13} />} onSelect={() => deleteAgentHistory(tool)}>Clear {def.label} history</MenuItem>
+            </>}
+          </MenuContent>
+        </Menu>
+      </div>
       <div className="flex items-center gap-1">
         {running && <span role="status" className="mr-2 inline-flex items-center gap-1.5 text-[11px] text-zinc-400"><Loader2 size={12} className="animate-spin" /> Working</span>}
         <IconButton label="Agent provider settings" hint="Provider settings" onClick={() => useUiStore.getState().setIsSettingsOpen(true, 'ai')}><Settings2 size={14} /></IconButton>
