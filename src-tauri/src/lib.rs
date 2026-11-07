@@ -778,8 +778,8 @@ async fn prereflight_check(app_handle: tauri::AppHandle) -> Result<serde_json::V
 /// scheme so it can carry a CSP for artifacts: the app's own CSP blocks inline
 /// scripts, and the editor loads it in a sandboxed frame with no app origin.
 fn artifact_shell() -> tauri::http::Response<Vec<u8>> {
-    const SHELL: &str = "<!doctype html><meta charset=\"utf-8\"><script>addEventListener('message',e=>{if(e.source!==parent||!e.data||e.data.type!=='logia-artifact-render')return;document.open();document.write(String(e.data.html));document.close()})</script>";
-    const CSP: &str = "default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com https://cdn.tailwindcss.com; style-src 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com; font-src https://fonts.gstatic.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net data:; img-src data: blob: https:; media-src data: blob:; connect-src 'none'; form-action 'none'";
+    const SHELL: &str = "<!doctype html><meta charset=\"utf-8\"><style>:root{color-scheme:dark;background:transparent}</style><script>addEventListener('message',e=>{if(e.source!==parent||!e.data||e.data.type!=='logia-artifact-render')return;document.open();document.write(String(e.data.html));document.close()})</script>";
+    const CSP: &str = "default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com https://cdn.tailwindcss.com; style-src 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com; font-src https://fonts.gstatic.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net data:; img-src data: blob: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com; media-src data: blob:; connect-src 'none'; form-action 'none'";
     tauri::http::Response::builder()
         .header("Content-Type", "text/html; charset=utf-8")
         .header("Content-Security-Policy", CSP)

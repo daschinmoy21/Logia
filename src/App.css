@@ -394,8 +394,16 @@ body.vim-visual-active .bn-formatting-toolbar {
 }
 
 /* Mermaid and artifact code blocks: rendered output below, source shown only while editing. */
+/* Collapsed to zero height rather than display:none: BlockNote places the drag
+   handle from this element's box, so it must keep a position at the preview's top. */
 .note-editor-view .bn-block-content[data-content-type="codeBlock"].logia-live-collapsed {
-  display: none;
+  height: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  visibility: hidden;
 }
 
 .note-editor-view .bn-block-content.logia-live-editing {
@@ -457,7 +465,7 @@ body.vim-visual-active .bn-formatting-toolbar {
   display: flex;
   justify-content: center;
   overflow-x: auto;
-  cursor: text;
+  cursor: zoom-in;
 }
 
 .logia-live-preview[data-language="mermaid"] svg {
@@ -474,6 +482,110 @@ body.vim-visual-active .bn-formatting-toolbar {
   width: 100%;
   border: 0;
   background: transparent;
+}
+
+/* Artifact not yet trusted: shown instead of the frame until Run. */
+.logia-artifact-gate {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px 14px;
+  font-size: 13px;
+  color: var(--color-zinc-400);
+}
+
+.logia-artifact-gate span {
+  flex: 1;
+}
+
+.logia-artifact-gate button {
+  border: 1px solid var(--color-zinc-700);
+  border-radius: 6px;
+  padding: 3px 12px;
+  color: var(--color-zinc-100);
+}
+
+.logia-artifact-gate button:hover {
+  background: var(--color-zinc-800);
+}
+
+/* See installDragGuard in live-code-blocks.ts. */
+.logia-dragging .logia-live-preview iframe {
+  pointer-events: none;
+}
+
+/* BlockNote leaves its drag image (an invisible clone of the dragged block) in
+   <body> at the top-left. A tall live block's clone would otherwise eat clicks. */
+.bn-drag-preview {
+  pointer-events: none;
+}
+
+/* Full-window pan/zoom viewer for Mermaid diagrams. */
+.logia-diagram-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  background: color-mix(in srgb, var(--color-zinc-950) 94%, transparent);
+  outline: none;
+}
+
+.logia-diagram-viewer-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px 8px 16px;
+  border-bottom: 1px solid var(--color-zinc-800);
+  font-size: 12px;
+  color: var(--color-zinc-400);
+}
+
+.logia-diagram-viewer-bar > span:first-child {
+  flex: 1;
+}
+
+.logia-diagram-viewer-level {
+  min-width: 48px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  margin-right: 4px;
+}
+
+.logia-diagram-viewer-bar button {
+  min-width: 28px;
+  border-radius: 6px;
+  padding: 3px 8px;
+  color: var(--color-zinc-300);
+}
+
+.logia-diagram-viewer-bar button:hover {
+  background: var(--color-zinc-800);
+  color: var(--color-zinc-100);
+}
+
+.logia-diagram-viewer-stage {
+  position: relative;
+  flex: 1;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+}
+
+.logia-diagram-viewer-stage.is-dragging {
+  cursor: grabbing;
+}
+
+.logia-diagram-viewer-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+}
+
+.logia-diagram-viewer-canvas svg {
+  display: block;
+  max-width: none;
 }
 
 /* Chat transcripts */

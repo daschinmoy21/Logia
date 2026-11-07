@@ -1,7 +1,7 @@
 import { BlockNoteEditor, filterSuggestionItems, insertOrUpdateBlock } from "@blocknote/core";
 import { useCreateBlockNote } from "@blocknote/react";
 import { ReactNode, createContext, useContext, useRef, useEffect } from "react";
-import { logiaCodeBlock, LiveCodeBlocksExtension } from "../lib/live-code-blocks";
+import { logiaCodeBlock, LiveCodeBlocksExtension, trustArtifact } from "../lib/live-code-blocks";
 import {
   createAIExtension,
   getAISlashMenuItems,
@@ -32,8 +32,11 @@ const ARTIFACT_STARTER = "<div id=\"app\"></div>\n<script>\n  document.getElemen
 
 /** Slash items that insert code blocks which render live (see live-code-blocks.ts). */
 function liveBlockSlashItems(editor: BlockNoteEditor<any, any, any>) {
-  const insert = (language: string, text: string) => () =>
+  const insert = (language: string, text: string) => () => {
+    // The starter is the user's own insert, so it may run without asking.
+    if (language === "artifact") void trustArtifact(text);
     insertOrUpdateBlock(editor, { type: "codeBlock", props: { language }, content: text } as any);
+  };
   return [
     {
       title: "Mermaid diagram",
