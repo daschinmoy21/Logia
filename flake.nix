@@ -115,7 +115,7 @@
         // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
           logia = pkgs.rustPlatform.buildRustPackage rec {
             pname = "logia";
-            version = "0.11.0";
+            version = "0.12.0";
 
             src = ./.;
 
