@@ -41,6 +41,12 @@ logia-cli write id=NOTE_ID ifRevision=sha256-REVISION --stdin < replacement.md
 logia-cli write id=NOTE_ID ifRevision=sha256-REVISION --blocks-json < blocks.json
 ```
 
+`--content-file PATH` (or `contentFile=PATH`) reads literal content from a file, up to 1 MiB, and can't be combined with stdin or inline content. Agents that can't pipe or redirect without approval (such as Claude Code in Logia's chat pane, which may only write files in its own session directory) stage large Markdown in a file and pass it this way:
+
+```sh
+logia-cli append id=NOTE_ID --content-file ./section.md
+```
+
 Every read returns a SHA-256 revision over the note’s content and relevant metadata. Full replacement (`write`) requires `ifRevision`; append, prepend, and rename accept it optionally. Stale replacements fail with `REVISION_CONFLICT` and make no edit. Appends merge with the latest GUI content after Markdown parsing so newly typed text is retained. Existing rich blocks and IDs remain intact; prepend inserts after the title and imported YAML frontmatter. Markdown is parsed with the same BlockNote schema as the GUI. `--blocks-json` supplies raw BlockNote JSON through stdin and validates it against that schema. Canvas content can be read as JSON but is not writable through the text CLI.
 
 Responses use `{ "schemaVersion": 1, "data": ... }` or `{ "schemaVersion": 1, "error": { "code": "...", "message": "..." } }`. Errors exit nonzero. `--format markdown` emits plain Markdown for `read` and `daily:read`. A `dirty` field reports unsaved state. `SAVE_FAILED` means an edit can be visible but unsaved: restore storage access and use `save`, rather than repeating an append. Background save failures follow the note and appear in the GUI when opened. A `TIMEOUT` or lost connection can have an unknown outcome after dispatch: read before retrying. Sent edits are never automatically retried. Queue-expired requests are rejected before execution.

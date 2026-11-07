@@ -3,6 +3,7 @@
 import net from 'node:net';
 import process from 'node:process';
 import { spawn } from 'node:child_process';
+import { readFile, stat } from 'node:fs/promises';
 
 export const COMMANDS = ['status', 'active', 'files', 'list', 'folders', 'search', 'read', 'links', 'backlinks', 'tags', 'open', 'create', 'append', 'prepend', 'write', 'rename', 'save', 'daily', 'daily:read', 'daily:append'];
 const envelopeError = (code, message) => ({ schemaVersion: 1, error: { code, message } });
@@ -10,15 +11,16 @@ const help = {
   model: 'Commands operate on the running Logia GUI. No direct writes to note files.',
   commands: COMMANDS,
   targeting: 'id=<id>, file=<title or wikilink>, or path=<exact folder/note.md>. Omit to use the active note.',
-  parameters: 'name, path, file, id, query, content, blocks, ifRevision, folderId, limit; flags: open, silent, stdin, raw, help',
+  parameters: 'name, path, file, id, query, content, contentFile, blocks, ifRevision, folderId, limit; flags: open, silent, stdin, raw, help',
   examples: [
     'logia-cli read', 'logia-cli search query="meeting notes"',
     'logia-cli create path="Projects/Plan.md" content="# Plan\\n\\nNext steps" open',
     'logia-cli append file="Plan" content="- [ ] Review"',
     'logia-cli write id=NOTE_ID ifRevision=REVISION --stdin',
+    'logia-cli append id=NOTE_ID --content-file ./section.md',
     'logia-cli open file="Plan"', 'logia-cli daily:append content="- [ ] Follow up"',
   ],
-  options: { '--socket': 'Override local IPC endpoint; also LOGIA_CLI_SOCKET.', '--format': 'json (default) or markdown (read commands only).', '--stdin': 'Read literal content from stdin; --blocks-json reads BlockNote JSON instead.', '--if-revision': 'Revision from read; required by write, optional on other edits.', '--launch': 'Launch installed logia (or LOGIA_APP_BINARY) if it is not running.', '--timeout': 'Request deadline in milliseconds, 100–120000; default 30000.' },
+  options: { '--socket': 'Override local IPC endpoint; also LOGIA_CLI_SOCKET.', '--format': 'json (default) or markdown (read commands only).', '--stdin': 'Read literal content from stdin; --blocks-json reads BlockNote JSON instead.', '--content-file': 'Read literal Markdown content from a file (max 1 MiB). Use for large content instead of long inline arguments.', '--if-revision': 'Revision from read; required by write, optional on other edits.', '--launch': 'Launch installed logia (or LOGIA_APP_BINARY) if it is not running.', '--timeout': 'Request deadline in milliseconds, 100–120000; default 30000.' },
   offline: 'Use logia-agent for read-only access and export while the GUI is closed.',
 };
 
@@ -33,7 +35,7 @@ function parse(args) {
   const params = {};
   const options = { socket: endpoint(), format: 'json', timeout: 30000, launch: false };
   const flags = new Set(['open', 'silent', 'stdin', 'raw', 'help']);
-  const valued = new Set(['socket', 'format', 'timeout', 'id', 'file', 'path', 'name', 'query', 'content', 'blocks', 'ifRevision', 'folderId', 'limit']);
+  const valued = new Set(['socket', 'format', 'timeout', 'id', 'file', 'path', 'name', 'query', 'content', 'blocks', 'ifRevision', 'folderId', 'limit', 'contentFile']);
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === '--launch') { options.launch = true; continue; }
@@ -48,7 +50,7 @@ function parse(args) {
     } else if (!command) { command = arg; continue; }
     else if (flags.has(arg)) { key = arg; value = true; }
     else throw new Error(`Unexpected argument: ${arg}. Use key=value parameters.`);
-    key = ({ 'if-revision': 'ifRevision', 'folder-id': 'folderId' })[key] || key;
+    key = ({ 'if-revision': 'ifRevision', 'folder-id': 'folderId', 'content-file': 'contentFile' })[key] || key;
     if (!valued.has(key) && !flags.has(key)) throw new Error(`Unknown parameter: ${key}`);
     if (['socket', 'format', 'timeout'].includes(key)) options[key] = value;
     else params[key] = value;
@@ -96,6 +98,15 @@ async function main() {
   const { command, params, options } = parse(process.argv.slice(2));
   if (!command || command === 'help' || params.help) { console.log(JSON.stringify({ schemaVersion: 1, data: help }, null, 2)); return; }
   if (!COMMANDS.includes(command)) throw new Error(`Unknown command: ${command}`);
+  if (params.contentFile !== undefined) {
+    if (params.stdin || params.content !== undefined || params.blocks !== undefined) throw new Error('Use one of --content-file, stdin, or an inline payload');
+    const file = String(params.contentFile);
+    const info = await stat(file).catch(error => { throw new Error(`Cannot read content file ${file}: ${error.code || error.message}`); });
+    if (!info.isFile()) throw new Error(`Content file is not a regular file: ${file}`);
+    if (info.size > 1024 * 1024) throw new Error('Input exceeds 1 MiB');
+    params.content = await readFile(file, 'utf8');
+    delete params.contentFile;
+  }
   if (params.stdin) {
     if (params.content !== undefined || params.blocks !== undefined) throw new Error('Use stdin or an inline payload, not both');
     const chunks = []; let size = 0;

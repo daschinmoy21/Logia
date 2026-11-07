@@ -6,6 +6,8 @@ const LIVE_CLI: &str = include_str!("../../scripts/logia-cli.mjs");
 
 pub struct AgentWorkspace {
     pub script: PathBuf,
+    /// The exact shell command agents are told to run for live note access.
+    pub command: String,
     pub instructions: String,
 }
 
@@ -24,7 +26,26 @@ fn quote(value: &Path) -> String {
 pub fn prepare(cwd: &Path, node: &Path, endpoint: &Path) -> Result<AgentWorkspace, String> {
     std::fs::create_dir_all(cwd).map_err(|e| e.to_string())?;
     let cwd = std::fs::canonicalize(cwd).map_err(|e| e.to_string())?;
-    let script = cwd.join("logia-cli.mjs");
+    // The agent may write files inside its cwd (to stage large note content), and
+    // it is pre-approved to run this script. Keep the script outside the cwd so the
+    // agent can't rewrite it into arbitrary code.
+    let _ = std::fs::remove_file(cwd.join("logia-cli.mjs"));
+    let tools = cwd
+        .parent()
+        .ok_or("Agent workspace has no parent directory")?
+        .join(".logia-tools");
+    std::fs::create_dir_all(&tools).map_err(|e| e.to_string())?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&tools, std::fs::Permissions::from_mode(0o700))
+            .map_err(|e| e.to_string())?;
+    }
+    let name = cwd
+        .file_name()
+        .map(|n| n.to_string_lossy().replace(|c: char| !c.is_ascii_alphanumeric() && c != '-', "_"))
+        .unwrap_or_else(|| "session".into());
+    let script = tools.join(format!("{name}-logia-cli.mjs"));
     // Bake in the parent GUI endpoint: agent shell environment filtering and
     // private temporary directories must not redirect calls to another socket.
     let socket = serde_json::to_string(&endpoint.to_string_lossy()).map_err(|e| e.to_string())?;
@@ -40,10 +61,11 @@ pub fn prepare(cwd: &Path, node: &Path, endpoint: &Path) -> Result<AgentWorkspac
     let command = format!("& {} {}", quote(node), quote(&script));
     #[cfg(not(windows))]
     let command = format!("{} {}", quote(node), quote(&script));
-    let instructions = format!("# Logia agent workspace\n\nYou are inside the running Logia desktop app. Use this exact command for live note access; it includes the correct runtime and GUI endpoint and does not depend on shell environment variables:\n\n```\n{command} status\n{command} active\n{command} read id=NOTE_ID\n{command} help\n```\n\nCommands include files, search, read, create, append, prepend, write, rename, open, save, and daily:append. Read a note to obtain its revision before a full replacement with ifRevision. Writes go through the GUI and its save queue. Never rewrite Logia note JSON directly. After a timeout, read before retrying a write. note-context.md, if present, is a static snapshot; editing it does not update the live note.\n\nIf a command fails, report its actual error. A missing command or a denied socket connection does not mean the Logia app is closed.\n");
+    let instructions = format!("# Logia agent workspace\n\nYou are inside the running Logia desktop app. Use this exact command for live note access; it includes the correct runtime and GUI endpoint and does not depend on shell environment variables:\n\n```\n{command} status\n{command} active\n{command} read id=NOTE_ID\n{command} help\n```\n\nCommands include files, search, read, create, append, prepend, write, rename, open, save, and daily:append. Read a note to obtain its revision before a full replacement with ifRevision. For anything longer than a line or two (code, tables, ```artifact or ```mermaid blocks), write the Markdown to a file in this working directory with your file-writing tool, then pass it with `--content-file ./FILE.md`, e.g. `{command} append id=NOTE_ID --content-file ./section.md` or `{command} write id=NOTE_ID ifRevision=REVISION --content-file ./note.md`. Don't put long content inline or use pipes, heredocs or redirects; those need approval and will be denied. Writes go through the GUI and its save queue. Never rewrite Logia note JSON directly. Notes render fenced ```mermaid blocks as diagrams and fenced ```artifact blocks (self-contained HTML/CSS/JS, sandboxed, no network) as live interactive views; to add a diagram or visualizer, append it to the note in one of those fences instead of writing a separate file. After a timeout, read before retrying a write. note-context.md, if present, is a static snapshot; editing it does not update the live note.\n\nIf a command fails, report its actual error. A missing command or a denied socket connection does not mean the Logia app is closed.\n");
     std::fs::write(cwd.join("AGENTS.md"), &instructions).map_err(|e| e.to_string())?;
     Ok(AgentWorkspace {
         script,
+        command,
         instructions,
     })
 }
@@ -104,6 +126,12 @@ mod tests {
         let workspace = prepare(&dir.join("agent's workspace"), &node, &socket).unwrap();
         assert!(workspace.instructions.contains(&quote(&node)));
         assert!(!workspace.instructions.contains("$LOGIA_CLI_SOCKET"));
+        assert!(workspace.instructions.contains("--content-file"));
+        // The agent can write inside its cwd, so the pre-approved script must not live there.
+        let cwd = std::fs::canonicalize(dir.join("agent's workspace")).unwrap();
+        assert!(!workspace.script.starts_with(&cwd));
+        assert!(!cwd.join("logia-cli.mjs").exists());
+        assert!(workspace.script.is_file());
         let server = tokio::spawn(async move {
             for expected in ["status", "active", "append"] {
                 let (stream, _) = listener.accept().await.unwrap();

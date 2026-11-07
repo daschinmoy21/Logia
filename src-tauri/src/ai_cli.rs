@@ -302,11 +302,12 @@ pub async fn ai_cli_run(
         return Err("Conversation and live-note instructions exceed the CLI prompt limit. Start a new session.".into());
     }
     let mut cmd = tokio::process::Command::new(&resolved);
+    let live_cli = workspace.as_ref().map(|w| w.command.clone());
     if let Some(workspace) = workspace {
         cmd.env("LOGIA_CLI_SOCKET", crate::cli_transport::endpoint());
         cmd.env("LOGIA_CLI_SCRIPT", workspace.script);
     }
-    cmd.args(build_args(&tool, model.as_deref(), &prompt, options.as_ref()))
+    cmd.args(build_args(&tool, model.as_deref(), &prompt, options.as_ref(), live_cli.as_deref()))
         .current_dir(cwd)
         .env("PATH", &path_var)
         .env("NO_COLOR", "1")

@@ -29,12 +29,14 @@ impl ChatAccess {
     }
 }
 
-/// Build the argument list for a tool invocation.
+/// Build the argument list for a tool invocation. `live_cli` is the exact
+/// logia-cli command from the agent workspace, when one was prepared.
 pub(crate) fn build_args(
     tool: &str,
     model: Option<&str>,
     prompt: &str,
     options: Option<&ChatSessionOptions>,
+    live_cli: Option<&str>,
 ) -> Vec<String> {
     let model = model.map(str::trim).filter(|m| !m.is_empty());
     let mut args: Vec<String> = Vec::new();
@@ -43,6 +45,18 @@ pub(crate) fn build_args(
             args.extend(["-p", "--output-format", "text"].map(String::from));
             if let Some(m) = model {
                 args.extend(["--model".to_string(), m.to_string()]);
+            }
+            // Print mode can't ask for approval, so unlisted tools are denied.
+            // Pre-approve only the live note command, plus file edits inside the
+            // private session directory (acceptEdits is scoped to the cwd), so large
+            // content can be staged in a file and passed with --content-file.
+            if let Some(command) = live_cli {
+                args.extend([
+                    "--permission-mode".to_string(),
+                    "acceptEdits".to_string(),
+                    "--allowedTools".to_string(),
+                    format!("Bash({command} *)"),
+                ]);
             }
         }
         "codex" => {
@@ -119,23 +133,38 @@ mod tests {
     #[test]
     fn builds_args_per_tool() {
         assert_eq!(
-            build_args("claude-code", Some("sonnet"), "hi", None),
+            build_args("claude-code", Some("sonnet"), "hi", None, None),
             vec!["-p", "--output-format", "text", "--model", "sonnet"]
         );
-        let codex = build_args("codex", None, "hi", None);
+        let codex = build_args("codex", None, "hi", None, None);
         assert_eq!(codex.first().map(String::as_str), Some("exec"));
         assert_eq!(codex.last().map(String::as_str), Some("-"));
         assert!(codex.contains(&"read-only".to_string()));
         assert_eq!(
-            build_args("opencode", Some(" "), "hi", None),
+            build_args("opencode", Some(" "), "hi", None, None),
             vec!["run", "hi"]
         );
-        assert_eq!(build_args("gemini-cli", None, "hi", None), vec!["-p", "hi"]);
+        assert_eq!(build_args("gemini-cli", None, "hi", None, None), vec!["-p", "hi"]);
         assert_eq!(
-            build_args("grok", Some("chosen-model"), "hi", None),
+            build_args("grok", Some("chosen-model"), "hi", None, None),
             vec!["--no-auto-update", "--output-format", "plain", "-m", "chosen-model", "-p", "hi"]
         );
-        assert!(!build_args("grok", None, "hi", None).contains(&"--always-approve".to_string()));
+        assert!(!build_args("grok", None, "hi", None, None).contains(&"--always-approve".to_string()));
+    }
+
+    #[test]
+    fn claude_pre_approves_only_the_live_note_command() {
+        let cli = "'/bin/node' '/data/s/logia-cli.mjs'";
+        let args = build_args("claude-code", Some("sonnet"), "hi", None, Some(cli));
+        assert_eq!(
+            args,
+            vec![
+                "-p", "--output-format", "text", "--model", "sonnet",
+                "--permission-mode", "acceptEdits",
+                "--allowedTools", "Bash('/bin/node' '/data/s/logia-cli.mjs' *)",
+            ]
+        );
+        assert!(!build_args("codex", None, "hi", None, Some(cli)).contains(&"--allowedTools".to_string()));
     }
 
     #[test]
@@ -145,7 +174,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(options.session_id, "chat-session");
-        let args = build_args("codex", Some("chosen-model"), "hi", Some(&options));
+        let args = build_args("codex", Some("chosen-model"), "hi", Some(&options), None);
         assert!(args
             .windows(2)
             .any(|a| a == ["--sandbox", "workspace-write"]));
@@ -158,8 +187,8 @@ mod tests {
         assert!(args.windows(2).any(|a| a == ["-m", "chosen-model"]));
         assert_eq!(args.last().unwrap(), "-");
         assert_eq!(
-            build_args("claude-code", None, "hi", Some(&options)),
-            build_args("claude-code", None, "hi", None)
+            build_args("claude-code", None, "hi", Some(&options), None),
+            build_args("claude-code", None, "hi", None, None)
         );
         assert!(serde_json::from_str::<ChatSessionOptions>(
             r#"{"sessionId":"x","access":"anything"}"#
