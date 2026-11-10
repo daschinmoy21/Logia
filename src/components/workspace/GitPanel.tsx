@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import toast from 'react-hot-toast';
 import { invoke } from '@tauri-apps/api/core';
-import { openPath } from '@tauri-apps/plugin-opener';
+import { revealItemInDir } from '@tauri-apps/plugin-opener';
 import {
   ArrowDownToLine,
   ArrowUpFromLine,
@@ -27,6 +27,7 @@ import { useNotesStore } from '../../store/notesStore';
 import { useGitStore, type GitFileChange } from '../../store/gitStore';
 import { IconButton, Tip } from '../ui/kit';
 import { openNote } from './actions';
+import { ConfirmDialog } from './WorkspaceMenus';
 
 const DEFAULT_MESSAGE = 'logia backup: {{date}}';
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
@@ -104,13 +105,6 @@ async function reloadFromDisk(paths: string[] | 'all') {
   if (fresh) useNotesStore.setState({ currentNote: fresh });
 }
 
-function confirmDiscard(count: number) {
-  return window.confirm(
-    count === 1
-      ? 'Discard changes to this file? New files are deleted. This can’t be undone.'
-      : `Discard changes to ${count} files? New files are deleted. This can’t be undone.`,
-  );
-}
 
 function FileRow({
   change,
@@ -200,6 +194,7 @@ export function GitPanel() {
   const run = useGitStore((s) => s.run);
   const describe = useDescribe();
   const [message, setMessage] = useState(DEFAULT_MESSAGE);
+  const [pendingDiscard, setPendingDiscard] = useState<string[] | null>(null);
 
   useEffect(() => { void refresh(); }, [refresh]);
 
@@ -276,7 +271,7 @@ export function GitPanel() {
   };
 
   const discard = async (paths: string[]) => {
-    if (!confirmDiscard(paths.length)) return;
+    setPendingDiscard(null);
     await flushSaves();
     const done = await attempt('discard', async () => { await invoke('git_panel_discard', { paths }); return true; });
     if (done) await reloadFromDisk(paths);
@@ -305,7 +300,7 @@ export function GitPanel() {
         <IconButton label="Pull" disabled={isBusy || !remote} onClick={() => void pull()}>
           <ArrowDownToLine size={15} />
         </IconButton>
-        <IconButton label="Open notes folder" onClick={() => void openPath(status.root).catch((err) => toast.error(errorText(err)))}>
+        <IconButton label="Show notes folder" onClick={() => void revealItemInDir(status.root).catch((err) => toast.error(errorText(err)))}>
           <FolderOpen size={15} />
         </IconButton>
         <IconButton label="Refresh" disabled={isBusy} onClick={() => void refresh()}>
@@ -362,7 +357,7 @@ export function GitPanel() {
           count={unstaged.length}
           actions={unstaged.length > 0 && (
             <>
-              <Tip label="Discard all"><button type="button" aria-label="Discard all changes" disabled={isBusy} onClick={() => void discard(unstaged.map((c) => c.path))} className="flex size-5 items-center justify-center rounded hover:bg-white/10 hover:text-zinc-100"><Undo2 size={13} /></button></Tip>
+              <Tip label="Discard all"><button type="button" aria-label="Discard all changes" disabled={isBusy} onClick={() => setPendingDiscard(unstaged.map((c) => c.path))} className="flex size-5 items-center justify-center rounded hover:bg-white/10 hover:text-zinc-100"><Undo2 size={13} /></button></Tip>
               <Tip label="Stage all"><button type="button" aria-label="Stage all" disabled={isBusy} onClick={() => void attempt('stage', () => invoke('git_panel_stage_all'))} className="flex size-5 items-center justify-center rounded hover:bg-white/10 hover:text-zinc-100"><Plus size={13} /></button></Tip>
             </>
           )}
@@ -376,12 +371,20 @@ export function GitPanel() {
               disabled={isBusy}
               onStage={() => void attempt('stage', () => invoke('git_panel_stage', { paths: [change.path] }))}
               onUnstage={() => {}}
-              onDiscard={() => void discard([change.path])}
+              onDiscard={() => setPendingDiscard([change.path])}
             />
           ))}
         </Section>
         {!anyChanges && <p className="px-3 py-3 text-[12px] text-zinc-600">No changes. Everything is committed.</p>}
       </div>
+      <ConfirmDialog
+        open={!!pendingDiscard}
+        title={pendingDiscard?.length === 1 ? 'Discard changes to this file?' : `Discard changes to ${pendingDiscard?.length ?? 0} files?`}
+        body="Changed files go back to their last committed or staged version, and new files are deleted. This can’t be undone."
+        confirmLabel="Discard"
+        onConfirm={() => { if (pendingDiscard) void discard(pendingDiscard); }}
+        onClose={() => setPendingDiscard(null)}
+      />
     </div>
   );
 }
