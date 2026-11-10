@@ -657,8 +657,11 @@ fn has_head(root: &PathBuf) -> bool {
     run_git_raw(root, &["rev-parse", "--verify", "-q", "HEAD"]).0
 }
 
+/// Build `git --literal-pathspecs <args> -- <paths>`, so a path like `*` or `:(glob)**`
+/// names that one file instead of matching everything.
 fn with_paths<'a>(args: &[&'a str], paths: &'a [String]) -> Vec<&'a str> {
-    let mut all: Vec<&str> = args.to_vec();
+    let mut all: Vec<&str> = vec!["--literal-pathspecs"];
+    all.extend_from_slice(args);
     all.push("--");
     all.extend(paths.iter().map(String::as_str));
     all
@@ -781,7 +784,7 @@ pub async fn git_panel_discard(paths: Vec<String>, app_handle: tauri::AppHandle)
     let root = panel_repo(&app_handle)?;
     check_paths(&paths)?;
     let (tracked, untracked): (Vec<String>, Vec<String>) = paths.into_iter().partition(|p| {
-        run_git_raw(&root, &["ls-files", "--error-unmatch", "--", p]).0
+        run_git_raw(&root, &["--literal-pathspecs", "ls-files", "--error-unmatch", "--", p]).0
     });
     if !tracked.is_empty() {
         run_git(&root, &with_paths(&["checkout"], &tracked))?;
@@ -887,5 +890,11 @@ mod tests {
         assert!(check_paths(&["/etc/passwd".into()]).is_err());
         assert!(check_paths(&["notes/../../x".into()]).is_err());
         assert!(check_paths(&[]).is_err());
+    }
+
+    #[test]
+    fn pathspecs_are_literal() {
+        let paths = vec!["*".to_string()];
+        assert_eq!(with_paths(&["clean", "-f"], &paths), ["--literal-pathspecs", "clean", "-f", "--", "*"]);
     }
 }
