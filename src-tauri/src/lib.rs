@@ -876,7 +876,17 @@ pub fn run() {
             git_sync::git_sync_now,
             git_sync::git_sync_force_pull,
             git_sync::git_sync_force_push,
-            git_sync::git_sync_disconnect
+            git_sync::git_sync_disconnect,
+            git_sync::git_panel_status,
+            git_sync::git_panel_init,
+            git_sync::git_panel_stage,
+            git_sync::git_panel_unstage,
+            git_sync::git_panel_stage_all,
+            git_sync::git_panel_unstage_all,
+            git_sync::git_panel_discard,
+            git_sync::git_panel_commit,
+            git_sync::git_panel_pull,
+            git_sync::git_panel_push
         ])
         .plugin(tauri_plugin_opener::init())
         .build(tauri::generate_context!())

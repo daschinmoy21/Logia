@@ -30,6 +30,8 @@ interface WorkspaceUiState {
   sidebarWidth: number;
   aiPanelWidth: number;
   favoritesOpen: boolean;
+  /** Which tab the right-hand panel shows. Not persisted: it opens on chat. */
+  aiTab: AiTab;
 
   setReady: (ready: boolean) => void;
   setHome: (home: Partial<HomeState>) => void;
@@ -46,7 +48,10 @@ interface WorkspaceUiState {
   setSidebarWidth: (width: number) => void;
   setAiPanelWidth: (width: number) => void;
   setFavoritesOpen: (open: boolean) => void;
+  setAiTab: (tab: AiTab) => void;
 }
+
+export type AiTab = 'chat' | 'calendar' | 'info' | 'git';
 
 const defaultHome: HomeState = { query: '', filter: 'all', tag: null, sort: null };
 
@@ -64,6 +69,7 @@ export const useWorkspaceStore = create<WorkspaceUiState>()(
       sidebarWidth: 264,
       aiPanelWidth: 380,
       favoritesOpen: true,
+      aiTab: 'chat',
 
       setReady: (ready) => set({ ready }),
       setHome: (home) => set((s) => ({ home: { ...s.home, ...home } })),
@@ -107,6 +113,7 @@ export const useWorkspaceStore = create<WorkspaceUiState>()(
       setSidebarWidth: (sidebarWidth) => set({ sidebarWidth }),
       setAiPanelWidth: (aiPanelWidth) => set({ aiPanelWidth }),
       setFavoritesOpen: (favoritesOpen) => set({ favoritesOpen }),
+      setAiTab: (aiTab) => set({ aiTab }),
     }),
     {
       name: 'logia-workspace-ui',

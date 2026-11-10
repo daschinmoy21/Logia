@@ -3,7 +3,7 @@ import { isTauri } from '@tauri-apps/api/core';
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS as DndCss } from '@dnd-kit/utilities';
-import { FileText, Home, Maximize2, Minus, PanelLeft, PanelLeftDashed, PanelRight, PenTool, Search, X } from 'lucide-react';
+import { FileText, GitBranch, Home, Maximize2, Minus, PanelLeft, PanelLeftDashed, PanelRight, PenTool, Search, X } from 'lucide-react';
 import useUiStore from '../../store/UiStore';
 import { useNotesStore } from '../../store/notesStore';
 import { useSettingsStore } from '../../store/settingsStore';
@@ -13,6 +13,8 @@ import { closeTabs, goHome, openNote, openPalette } from './actions';
 import { findNote, useNoteMeta, type NoteMeta } from './noteMeta';
 import { SHORTCUTS } from './shortcuts';
 import { useWorkspaceStore } from './workspaceStore';
+import { useGitPolling } from './GitPanel';
+import { changeCount, useGitStore } from '../../store/gitStore';
 
 /** Keeps the tab list in step with what's open, and makes a tab permanent on the first edit. */
 function useTabSync() {
@@ -143,6 +145,10 @@ export function TabBar({
   const [menu, setMenu] = useState<{ x: number; y: number; id: string } | null>(null);
   const stripRef = useRef<HTMLDivElement>(null);
   const native = isTauri();
+  const aiTab = useWorkspaceStore((s) => s.aiTab);
+  const gitChanges = useGitStore((s) => changeCount(s.status));
+  const showGit = native && isAiSidebarOpen && aiTab === 'git';
+  useGitPolling(native);
 
   const byId = useMemo(() => new Map(notes.map((note) => [note.id, note])), [notes]);
   const shown = tabs.map((id) => byId.get(id)).filter((note): note is NoteMeta => !!note);
@@ -203,9 +209,31 @@ export function TabBar({
       <div className="min-w-4 flex-1" data-tauri-drag-region={native || undefined} />
       <div className="flex flex-shrink-0 items-center gap-0.5 px-1.5">
         {children}
-        <IconButton label="Search notes and commands" hint="Search" shortcut={SHORTCUTS.quickSwitch} onClick={() => openPalette('notes')}>
-          <Search size={15} />
-        </IconButton>
+        {native ? (
+          <IconButton
+            label={showGit ? 'Close source control' : 'Open source control'}
+            hint={gitChanges ? `Source control · ${gitChanges} changed` : 'Source control'}
+            aria-pressed={showGit}
+            active={showGit}
+            className="relative"
+            onClick={() => {
+              if (showGit) return setIsAiSidebarOpen(false);
+              useWorkspaceStore.getState().setAiTab('git');
+              setIsAiSidebarOpen(true);
+            }}
+          >
+            <GitBranch size={15} />
+            {gitChanges > 0 && (
+              <span className="absolute -right-0.5 -top-0.5 min-w-3.5 rounded-full bg-accent px-1 font-mono text-[9px] leading-[14px] text-zinc-950" aria-hidden="true">
+                {gitChanges > 99 ? '99+' : gitChanges}
+              </span>
+            )}
+          </IconButton>
+        ) : (
+          <IconButton label="Search notes and commands" hint="Search" shortcut={SHORTCUTS.quickSwitch} onClick={() => openPalette('notes')}>
+            <Search size={15} />
+          </IconButton>
+        )}
         <IconButton
           label={isAiSidebarOpen ? 'Close AI sidebar' : 'Open AI sidebar'}
           hint={isAiSidebarOpen ? 'Close AI panel' : 'Open AI panel'}
