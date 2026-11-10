@@ -206,6 +206,28 @@ function artifactDocument(source: string, token: string) {
   return artifactBase + source + sizeReporter(token);
 }
 
+/**
+ * Points a sandboxed frame at the artifact HTML. The app's CSP blocks inline
+ * scripts and srcdoc frames inherit it, so under Tauri the shell page comes from
+ * its own scheme with a CSP meant for artifacts and receives the HTML by message.
+ * The HTML is sent on every load: moving the block re-attaches the frame, which
+ * reloads the blank shell.
+ */
+function loadArtifactFrame(frame: HTMLIFrameElement, html: string) {
+  // No allow-same-origin: the artifact gets an opaque origin, so it can't reach
+  // the app, its storage, or Tauri's IPC.
+  frame.setAttribute('sandbox', 'allow-scripts');
+  frame.setAttribute('referrerpolicy', 'no-referrer');
+  if (isTauri()) {
+    frame.addEventListener('load', () => {
+      frame.contentWindow?.postMessage({ type: 'logia-artifact-render', html }, '*');
+    });
+    frame.src = convertFileSrc('', ARTIFACT_SCHEME);
+  } else {
+    frame.srcdoc = html;
+  }
+}
+
 // While anything is dragged, artifact frames ignore the pointer. Otherwise a drag
 // that passes over a frame enters its separate document, the editor never sees
 // drop/dragend, and WebKitGTK stays stuck mid-drag, swallowing clicks and scrolls.
@@ -478,10 +500,6 @@ class LivePreview {
     this.rendered = source;
     const token = crypto.randomUUID();
     const frame = document.createElement('iframe');
-    // No allow-same-origin: the artifact gets an opaque origin, so it can't reach
-    // the app, its storage, or Tauri's IPC.
-    frame.setAttribute('sandbox', 'allow-scripts');
-    frame.setAttribute('referrerpolicy', 'no-referrer');
     frame.title = 'Artifact preview';
     frame.style.height = `${this.lastHeight}px`;
     const html = artifactDocument(source, token);
@@ -494,19 +512,7 @@ class LivePreview {
       frame.style.height = `${this.lastHeight}px`;
     };
     window.addEventListener('message', this.onMessage);
-
-    if (isTauri()) {
-      // The app's CSP blocks inline scripts, and srcdoc frames inherit it. The
-      // shell page comes from its own scheme with a CSP meant for artifacts.
-      // Send the HTML on every load: moving the block re-attaches the frame,
-      // which reloads the blank shell.
-      frame.addEventListener('load', () => {
-        frame.contentWindow?.postMessage({ type: 'logia-artifact-render', html }, '*');
-      });
-      frame.src = convertFileSrc('', ARTIFACT_SCHEME);
-    } else {
-      frame.srcdoc = html;
-    }
+    loadArtifactFrame(frame, html);
     this.body.replaceChildren(frame);
     this.setStatus('');
   }
@@ -524,6 +530,204 @@ class LivePreview {
     this.unobserve = null;
     this.destroyed = true;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Print / PDF export
+
+/** Mermaid is initialised with the dark theme; a printed page is white. */
+function lightMermaidSource(source: string) {
+  const trimmed = source.trimStart();
+  // Frontmatter must stay first, and an explicit init directive wins anyway.
+  if (trimmed.startsWith('---') || trimmed.startsWith('%%{')) return source;
+  return `%%{init: {"theme": "default"}}%%\n${source}`;
+}
+
+function preLanguage(pre: Element) {
+  const el = pre.matches('[data-language]') ? pre : pre.querySelector('[data-language]') ?? pre.querySelector('code');
+  const language = el?.getAttribute('data-language')
+    ?? [...(el?.classList ?? [])].find((c) => c.startsWith('language-'))?.slice('language-'.length);
+  return language?.toLowerCase();
+}
+
+/** Exported HTML writes code newlines as <br>, which textContent would drop. */
+function preSource(pre: Element) {
+  const clone = pre.cloneNode(true) as Element;
+  for (const br of Array.from(clone.querySelectorAll('br'))) br.replaceWith('\n');
+  return clone.textContent ?? '';
+}
+
+/**
+ * Runs inside an artifact frame (stringified into it, so it must be
+ * self-contained). On request it copies the page with every computed style
+ * inlined, canvases as images and form state kept, scripts and styles dropped,
+ * and replies with an SVG of it. The SVG is shown as an <img>, which runs no
+ * scripts and loads nothing, so an artifact can't do more than draw itself.
+ */
+function artifactSnapshotAgent(token: string) {
+  const copy = (src: Element): Element | null => {
+    const tag = src.tagName.toLowerCase();
+    if (['script', 'style', 'link', 'noscript', 'template', 'meta'].includes(tag)) return null;
+    let out: Element;
+    if (src instanceof HTMLCanvasElement) {
+      out = document.createElement('img');
+      try { out.setAttribute('src', src.toDataURL()); } catch { /* tainted canvas */ }
+    } else if (src instanceof HTMLIFrameElement || src instanceof HTMLVideoElement || src instanceof HTMLObjectElement) {
+      out = document.createElement('div');
+    } else {
+      out = src.cloneNode(false) as Element;
+    }
+    for (const attr of Array.from(out.attributes)) {
+      if (attr.name.startsWith('on') || attr.name === 'class' || attr.name === 'id') out.removeAttribute(attr.name);
+    }
+    const computed = getComputedStyle(src);
+    let style = '';
+    for (let i = 0; i < computed.length; i++) {
+      const prop = computed[i];
+      style += `${prop}:${computed.getPropertyValue(prop)};`;
+    }
+    out.setAttribute('style', style);
+    if (src instanceof HTMLInputElement) {
+      if (src.type === 'checkbox' || src.type === 'radio') {
+        if (src.checked) out.setAttribute('checked', ''); else out.removeAttribute('checked');
+      } else {
+        out.setAttribute('value', src.value);
+      }
+    } else if (src instanceof HTMLOptionElement) {
+      if (src.selected) out.setAttribute('selected', ''); else out.removeAttribute('selected');
+    } else if (src instanceof HTMLTextAreaElement) {
+      out.textContent = src.value;
+      return out;
+    }
+    if (out.tagName.toLowerCase() === 'img' && src instanceof HTMLCanvasElement) return out;
+    for (const child of Array.from(src.childNodes)) {
+      if (child.nodeType === Node.TEXT_NODE) out.appendChild(document.createTextNode(child.nodeValue || ''));
+      else if (child.nodeType === Node.ELEMENT_NODE) {
+        const next = copy(child as Element);
+        if (next) out.appendChild(next);
+      }
+    }
+    return out;
+  };
+
+  addEventListener('message', (event) => {
+    if (event.source !== parent || event.data?.logiaArtifactSnapshot !== token) return;
+    let snapshot: string | null = null;
+    const root = document.documentElement;
+    const width = Math.ceil(Math.max(root.scrollWidth, document.body.scrollWidth));
+    const height = Math.ceil(Math.max(root.scrollHeight, document.body.scrollHeight));
+    try {
+      const body = copy(document.body)!;
+      body.setAttribute('style', `${body.getAttribute('style')}width:${width}px;height:${height}px;margin:0;overflow:hidden;box-sizing:border-box;`);
+      const html = new XMLSerializer().serializeToString(body);
+      snapshot = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><foreignObject x="0" y="0" width="100%" height="100%">${html}</foreignObject></svg>`;
+    } catch {
+      snapshot = null;
+    }
+    parent.postMessage({ logiaArtifact: token, snapshot, width, height }, '*');
+  });
+}
+
+/** Width artifacts are laid out at for print, about the printed text column. */
+const SNAPSHOT_WIDTH = 760;
+/** After the last size report, give scripts this long to draw (canvas, charts, sims). */
+const SNAPSHOT_SETTLE = 1200;
+const SNAPSHOT_TIMEOUT = 6000;
+
+type ArtifactSnapshot = { svg: string; width: number; height: number };
+
+/** Runs the artifact in an invisible frame and asks it for a picture of itself. */
+function snapshotArtifact(source: string): Promise<ArtifactSnapshot | null> {
+  const token = crypto.randomUUID();
+  const host = document.createElement('div');
+  // On screen but invisible: off-screen frames may be throttled and never draw.
+  host.style.cssText = `position:fixed;left:0;top:0;width:${SNAPSHOT_WIDTH}px;opacity:0;pointer-events:none;z-index:-1;`;
+  const frame = document.createElement('iframe');
+  frame.title = 'Artifact snapshot';
+  frame.style.cssText = 'display:block;width:100%;height:200px;border:0;';
+  host.append(frame);
+  document.body.append(host);
+
+  return new Promise((resolve) => {
+    let settle: ReturnType<typeof setTimeout> | undefined;
+    let requested = false;
+    const finish = (result: ArtifactSnapshot | null) => {
+      clearTimeout(settle);
+      clearTimeout(timeout);
+      window.removeEventListener('message', onMessage);
+      host.remove();
+      resolve(result);
+    };
+    const request = () => {
+      requested = true;
+      frame.contentWindow?.postMessage({ logiaArtifactSnapshot: token }, '*');
+    };
+    const onMessage = (event: MessageEvent) => {
+      const data = event.data;
+      if (event.source !== frame.contentWindow || data?.logiaArtifact !== token) return;
+      if ('snapshot' in data) {
+        const ok = typeof data.snapshot === 'string' && data.width > 0 && data.height > 0;
+        finish(ok ? { svg: data.snapshot, width: data.width, height: data.height } : null);
+        return;
+      }
+      const height = Number(data.height);
+      if (Number.isFinite(height)) frame.style.height = `${Math.max(40, height)}px`;
+      if (requested) return;
+      clearTimeout(settle);
+      settle = setTimeout(request, SNAPSHOT_SETTLE);
+    };
+    const timeout = setTimeout(() => finish(null), SNAPSHOT_TIMEOUT);
+    window.addEventListener('message', onMessage);
+    const agent = `<script>(${artifactSnapshotAgent.toString()})(${JSON.stringify(token)})</script>`;
+    loadArtifactFrame(frame, artifactDocument(source, token) + agent);
+  });
+}
+
+function artifactPrintFrame(doc: Document, snapshot: ArtifactSnapshot | null) {
+  const frame = doc.createElement('div');
+  frame.className = 'logia-print-artifact';
+  if (snapshot) {
+    const img = doc.createElement('img');
+    img.alt = 'Artifact';
+    img.width = snapshot.width;
+    img.height = snapshot.height;
+    img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(snapshot.svg)}`;
+    frame.append(img);
+  }
+  return frame;
+}
+
+/**
+ * Replaces Mermaid and artifact code blocks in exported HTML for printing:
+ * diagrams become SVGs and artifacts a snapshot of their running output (their
+ * sandboxed frames don't print). A diagram that fails to parse keeps its source;
+ * an artifact that isn't trusted or can't be captured becomes an empty frame.
+ */
+export async function renderLiveBlocksForPrint(root: HTMLElement, onProgress?: (done: number, total: number) => void) {
+  const jobs: Promise<void>[] = [];
+  let done = 0;
+  for (const pre of Array.from(root.querySelectorAll('pre'))) {
+    const language = preLanguage(pre);
+    if (!isLive(language)) continue;
+    const source = preSource(pre);
+    if (!source.trim()) continue;
+    if (language === 'artifact') {
+      // Only artifacts this user already runs here are run for the export.
+      jobs.push(isArtifactTrusted(source).catch(() => false)
+        .then((ok) => (ok ? snapshotArtifact(source) : null))
+        .then((snapshot) => pre.replaceWith(artifactPrintFrame(pre.ownerDocument, snapshot)))
+        .then(() => onProgress?.(++done, jobs.length)));
+      continue;
+    }
+    jobs.push(renderMermaid(lightMermaidSource(source)).then((svg) => {
+      const figure = pre.ownerDocument.createElement('div');
+      figure.className = 'logia-print-diagram';
+      figure.innerHTML = svg;
+      pre.replaceWith(figure);
+    }, () => undefined).then(() => onProgress?.(++done, jobs.length)));
+  }
+  if (jobs.length) onProgress?.(0, jobs.length);
+  await Promise.all(jobs);
 }
 
 // ---------------------------------------------------------------------------
