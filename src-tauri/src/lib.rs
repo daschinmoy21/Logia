@@ -15,6 +15,7 @@ mod ai_cli;
 mod cli_models;
 mod cli_invocation;
 mod agent_workspace;
+mod agent_attachments;
 mod agent_terminal;
 mod terminal_process;
 mod cli_transport;
@@ -825,6 +826,8 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .invoke_handler(tauri::generate_handler![
+            agent_attachments::save_agent_attachment,
+            agent_attachments::read_attachment_preview,
             get_notes_path,
             create_note,
             get_all_notes,

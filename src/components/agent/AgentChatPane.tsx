@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ClipboardEvent } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import { ArrowLeft, Brain, Check, FileText, History, Loader2, LockKeyhole, Paperclip, Plus, Settings2, Terminal, Trash2, X } from 'lucide-react';
 import { open as openFileDialog } from '@tauri-apps/plugin-dialog';
 import toast from 'react-hot-toast';
@@ -24,6 +25,71 @@ const terminalViews = new Set<AgentTool>();
 /** Chosen files wait for the next send, even across closing the panel or switching agents. */
 const pendingFiles = new Map<AgentTool, string[]>();
 const fileName = (path: string) => path.split(/[\\/]/).pop() || path;
+const IMAGE_PATH = /\.(png|jpe?g|gif|webp|bmp|avif)$/i;
+const IMAGE_EXTENSIONS: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp', 'image/bmp': 'bmp', 'image/avif': 'avif' };
+
+/** Thumbnail object URLs by file path, kept while the file is attached. */
+const previewUrls = new Map<string, Promise<string | null>>();
+
+function previewUrl(path: string) {
+  let url = previewUrls.get(path);
+  if (!url) {
+    url = invoke<ArrayBuffer>('read_attachment_preview', { path })
+      .then((bytes) => URL.createObjectURL(new Blob([bytes])), () => null);
+    previewUrls.set(path, url);
+  }
+  return url;
+}
+
+function forgetPreview(path: string) {
+  const url = previewUrls.get(path);
+  previewUrls.delete(path);
+  void url?.then((value) => value && URL.revokeObjectURL(value));
+}
+
+/** Agents read attachments by path, so a pasted image is saved to disk first. */
+async function savePastedImage(image: Blob) {
+  const path = await invoke<string>('save_agent_attachment', new Uint8Array(await image.arrayBuffer()), {
+    headers: { 'x-extension': IMAGE_EXTENSIONS[image.type] ?? 'png' },
+  });
+  previewUrls.set(path, Promise.resolve(URL.createObjectURL(image)));
+  return path;
+}
+
+/** Clipboard images from a paste event, or from the async clipboard where WebKitGTK leaves the event empty. */
+async function clipboardImages(event: ClipboardEvent): Promise<Blob[] | null> {
+  const data = event.clipboardData;
+  const files = Array.from(data?.items ?? [])
+    .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
+    .map((item) => item.getAsFile())
+    .filter((file): file is File => !!file);
+  if (files.length) return files;
+  // Text pastes stay with the textarea.
+  if (Array.from(data?.types ?? []).some((type) => type.startsWith('text/')) || !navigator.clipboard?.read) return null;
+  const items = await navigator.clipboard.read().catch(() => []);
+  const blobs = await Promise.all(items.map((item) => {
+    const type = item.types.find((t) => t.startsWith('image/'));
+    return type ? item.getType(type) : null;
+  }));
+  return blobs.filter((blob): blob is Blob => !!blob);
+}
+
+function AttachmentChip({ path, onRemove }: { path: string; onRemove: () => void }) {
+  const image = IMAGE_PATH.test(path);
+  const [src, setSrc] = useState<string | null>(null);
+  useEffect(() => {
+    if (!image) return;
+    let current = true;
+    void previewUrl(path).then((url) => { if (current) setSrc(url); });
+    return () => { current = false; };
+  }, [path, image]);
+  const remove = <button type="button" onClick={onRemove} aria-label={`Remove ${fileName(path)}`} className="flex size-5 shrink-0 items-center justify-center rounded text-zinc-500 hover:bg-white/10 hover:text-zinc-100"><X size={12} /></button>;
+  if (image && src) return <span title={path} className="group relative block size-14 shrink-0 overflow-hidden rounded-md border border-white/10 bg-white/[0.04]">
+    <img src={src} alt={fileName(path)} className="size-full object-cover" />
+    <span className="absolute right-0.5 top-0.5 rounded bg-zinc-950/80 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">{remove}</span>
+  </span>;
+  return <span title={path} className="flex h-6 max-w-48 items-center gap-1.5 rounded-md bg-white/[0.06] pl-1.5 pr-0.5 text-xs text-zinc-300"><Paperclip size={12} className="shrink-0 text-zinc-500" /><span className="min-w-0 truncate">{fileName(path)}</span>{remove}</span>;
+}
 const when = (iso: string) => {
   const date = new Date(iso);
   return date.toDateString() === new Date().toDateString()
@@ -49,9 +115,12 @@ export function AgentChatPane({ tool, onSwitchAgent }: { tool: AgentTool; onSwit
   const setAttach = (includeNote: boolean) => setAgentChatIncludeNote(tool, includeNote);
   const [files, setFilesState] = useState<string[]>(() => pendingFiles.get(tool) ?? []);
   const setFiles = (next: string[]) => {
+    for (const path of pendingFiles.get(tool) ?? []) if (!next.includes(path)) forgetPreview(path);
     pendingFiles.set(tool, next);
     setFilesState(next);
   };
+  /** Adds to whatever is attached now, which may have changed while a paste was saving. */
+  const addFiles = (paths: string[]) => setFiles([...new Set([...(pendingFiles.get(tool) ?? []), ...paths])]);
   const pendingPrompt = useUiStore((s) => s.pendingAiPrompt);
   const [catalog, setCatalog] = useState<CatalogModel[]>([]);
   const effort = chat?.options.reasoningEffort ?? '';
@@ -104,10 +173,22 @@ export function AgentChatPane({ tool, onSwitchAgent }: { tool: AgentTool; onSwit
   const chooseFiles = async () => {
     try {
       const chosen = await openFileDialog({ multiple: true });
-      if (chosen?.length) setFiles([...new Set([...files, ...chosen])]);
+      if (chosen?.length) addFiles(chosen);
     } catch (error) {
       toast.error(`Couldn't attach files: ${error instanceof Error ? error.message : String(error)}`);
     }
+  };
+
+  const pasteImages = (event: ClipboardEvent<HTMLDivElement>) => {
+    if (!desktop) return;
+    const hasImageFile = Array.from(event.clipboardData?.items ?? []).some((item) => item.kind === 'file' && item.type.startsWith('image/'));
+    const hasText = Array.from(event.clipboardData?.types ?? []).some((type) => type.startsWith('text/'));
+    if (!hasImageFile && hasText) return;
+    event.preventDefault();
+    void clipboardImages(event).then(async (images) => {
+      if (!images?.length) return;
+      addFiles(await Promise.all(images.map(savePastedImage)));
+    }).catch((error) => toast.error(`Couldn't paste image: ${error instanceof Error ? error.message : String(error)}`));
   };
 
   if (terminalOpen) return <div className="flex min-h-0 flex-1 flex-col">
@@ -164,18 +245,18 @@ export function AgentChatPane({ tool, onSwitchAgent }: { tool: AgentTool; onSwit
 
     {!desktop && <p className="px-4 py-2 text-xs text-zinc-500">Open the desktop app to chat with {def.label}.</p>}
     {desktop && info?.available === false && <p className="px-4 py-2 text-xs text-amber-300">{def.label} wasn’t found. <button type="button" onClick={() => useUiStore.getState().setIsSettingsOpen(true, 'ai')} className="underline underline-offset-2">Set its binary path</button>.</p>}
-    <div ref={composer} className="shrink-0">
+    <div ref={composer} className="shrink-0" onPaste={pasteImages}>
       {(noteAttachable || files.length > 0) && <div className="mx-2.5 flex flex-wrap items-center gap-1 pt-1">
         {noteAttachable && (attach
           ? <span className="flex h-6 max-w-full items-center gap-1.5 rounded-md bg-white/[0.06] pl-1.5 pr-0.5 text-xs text-zinc-300"><FileText size={12} className="shrink-0 text-zinc-500" /><span className="min-w-0 truncate">Current note: {note.title || 'Untitled'}</span><button type="button" onClick={() => setAttach(false)} aria-label="Remove attached note" className="flex size-5 shrink-0 items-center justify-center rounded text-zinc-500 hover:bg-white/10 hover:text-zinc-100"><X size={12} /></button></span>
           : <button type="button" disabled={running} onClick={() => setAttach(true)} aria-label="Attach current note" className="flex h-6 items-center gap-1 rounded-md border border-dashed border-zinc-700 px-1.5 text-xs text-zinc-500 hover:border-zinc-600 hover:text-zinc-200 disabled:opacity-40"><Plus size={12} /> Current note</button>)}
-        {files.map((path) => <span key={path} title={path} className="flex h-6 max-w-48 items-center gap-1.5 rounded-md bg-white/[0.06] pl-1.5 pr-0.5 text-xs text-zinc-300"><Paperclip size={12} className="shrink-0 text-zinc-500" /><span className="min-w-0 truncate">{fileName(path)}</span><button type="button" onClick={() => setFiles(files.filter((item) => item !== path))} aria-label={`Remove ${fileName(path)}`} className="flex size-5 shrink-0 items-center justify-center rounded text-zinc-500 hover:bg-white/10 hover:text-zinc-100"><X size={12} /></button></span>)}
+        {files.map((path) => <AttachmentChip key={path} path={path} onRemove={() => setFiles(files.filter((item) => item !== path))} />)}
       </div>}
       <AgentComposer key={chat?.id ?? tool} draftKey={`chat:${tool}:${chat?.id ?? 'new'}`} label={`Message ${def.label}`} placeholder="Ask for changes or send a follow-up" busy={running} canSend={desktop && info?.available !== false}
         sendLabel={`Send to ${def.label}`} onStop={() => stopAgentChat(tool)}
         onSend={send}
         leading={<>
-          <IconButton label="Attach files" hint={desktop ? 'Attach files or images' : 'Attaching files needs the desktop app'} side="top" disabled={running || !desktop} onClick={() => void chooseFiles()}><Paperclip size={14} /></IconButton>
+          <IconButton label="Attach files" hint={desktop ? 'Attach files or images (or paste an image)' : 'Attaching files needs the desktop app'} side="top" disabled={running || !desktop} onClick={() => void chooseFiles()}><Paperclip size={14} /></IconButton>
           <ModelPicker providerId={tool} scope="agents" onSwitchAgent={onSwitchAgent} disabled={running} defaultModelLabel={selected?.label} />
           {tool === 'codex' && <>
             <PillSelect label="Reasoning effort" icon={<Brain size={13} />} side="top" value={selectedEffort} disabled={running} onChange={(value) => setAgentChatOptions(tool, { reasoningEffort: value || undefined })}
