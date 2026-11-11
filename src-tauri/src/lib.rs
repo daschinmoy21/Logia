@@ -7,19 +7,38 @@ use tauri::path::BaseDirectory;
 use tauri::Manager;
 use fs2::FileExt;
 
+#[cfg(desktop)]
 mod audio;
+#[cfg(desktop)]
 mod git_sync;
 mod notes;
 mod config_crypto;
+#[cfg(desktop)]
 mod ai_cli;
+#[cfg(desktop)]
 mod cli_models;
+#[cfg(desktop)]
 mod cli_invocation;
+#[cfg(desktop)]
 mod agent_workspace;
 mod agent_attachments;
+#[cfg(desktop)]
 mod agent_terminal;
+#[cfg(desktop)]
 mod terminal_process;
+#[cfg(desktop)]
 mod cli_transport;
+#[cfg(desktop)]
 mod cli_bridge;
+
+// Mobile builds swap the desktop-only modules for stubs with the same command
+// names, so the handler list in `run()` is identical on every platform.
+#[cfg(mobile)]
+mod mobile;
+#[cfg(mobile)]
+use mobile::{agent_terminal, ai_cli, cli_bridge, git_sync};
+#[cfg(mobile)]
+use mobile::transcription::*;
 
 use notes::*;
 use config_crypto::*;
@@ -76,11 +95,13 @@ fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
 
+#[cfg(desktop)]
 #[tauri::command]
 async fn start_recording(app_handle: tauri::AppHandle) -> Result<(), String> {
     audio::os_capture::start_capture(&app_handle)
 }
 
+#[cfg(desktop)]
 #[tauri::command]
 async fn stop_recording(app_handle: tauri::AppHandle) -> Result<String, String> {
     // Stop capture and get the WAV file path
@@ -96,6 +117,7 @@ async fn stop_recording(app_handle: tauri::AppHandle) -> Result<String, String> 
 }
 
 // Helper to find the python executable inside a venv across platforms
+#[cfg(desktop)]
 fn python_executable_in_venv(venv_path: &std::path::PathBuf) -> std::path::PathBuf {
     // Check for explicit override from environment (e.g. NixOS)
     if let Ok(path) = std::env::var("LOGIA_PYTHON_PATH") {
@@ -129,6 +151,7 @@ fn python_executable_in_venv(venv_path: &std::path::PathBuf) -> std::path::PathB
     }
 }
 
+#[cfg(desktop)]
 async fn ensure_transcription_dependencies(app_handle: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
     use std::process::Command;
     use tauri::path::BaseDirectory;
@@ -527,6 +550,7 @@ async fn ensure_transcription_dependencies(app_handle: &tauri::AppHandle) -> Res
     }
 }
 
+#[cfg(desktop)]
 #[tauri::command]
 async fn transcribe_audio(audio_path: String, app_handle: tauri::AppHandle) -> Result<String, String> {
     use std::process::Command;
@@ -584,6 +608,7 @@ async fn transcribe_audio(audio_path: String, app_handle: tauri::AppHandle) -> R
     }
 }
 
+#[cfg(desktop)]
 #[tauri::command]
 async fn install_transcription_dependencies(app_handle: tauri::AppHandle) -> Result<(), String> {
     let _venv_path = ensure_transcription_dependencies(&app_handle).await?;
@@ -812,7 +837,7 @@ pub fn run() {
     // Load .env file
     dotenvy::dotenv().ok();
 
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .manage(git_sync::GitSyncState::new())
         .manage(ai_cli::AiCliState::default())
         .manage(agent_terminal::AgentTerminalState::default())
@@ -822,9 +847,15 @@ pub fn run() {
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_fs::init())
-        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_dialog::init());
+    // Self-update and relaunch only make sense for desktop installs; on mobile
+    // the store (or `adb install`) replaces the app.
+    #[cfg(desktop)]
+    let builder = builder
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_process::init());
+
+    builder
         .invoke_handler(tauri::generate_handler![
             agent_attachments::save_agent_attachment,
             agent_attachments::read_attachment_preview,

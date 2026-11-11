@@ -4,12 +4,22 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
+    # Android toolchain only: the default shells keep the main nixpkgs pin.
+    # The Tauri CLI's Android template wants compileSdk 37 (AGP 9), which
+    # needs a newer androidenv repo than the main pin carries.
+    nixpkgs-android.url = "github:NixOS/nixpkgs/nixos-unstable";
+    rust-overlay = {
+      url = "github:oxalica/rust-overlay";
+      inputs.nixpkgs.follows = "nixpkgs-android";
+    };
   };
 
   outputs = {
     self,
     nixpkgs,
     flake-utils,
+    nixpkgs-android,
+    rust-overlay,
   }:
     flake-utils.lib.eachDefaultSystem (system: let
       # Apply overlay to fix ctranslate2 build (missing cstdint header)
@@ -106,6 +116,66 @@
               export LOGIA_PYTHON_PATH="${pythonEnv}/bin/python"
             '';
         };
+      # ── Android (Tauri mobile) ──────────────────────────────────────────
+      pkgsAndroid = import nixpkgs-android {
+        inherit system;
+        overlays = [rust-overlay.overlays.default];
+        config = {
+          allowUnfree = true;
+          android_sdk.accept_license = true;
+        };
+      };
+
+      androidBuildToolsVersion = "36.0.0";
+      androidNdkVersion = "27.3.13750724";
+
+      androidComposition = pkgsAndroid.androidenv.composeAndroidPackages {
+        platformVersions = ["35" "36" "37.0"];
+        buildToolsVersions = ["35.0.0" androidBuildToolsVersion "37.0.0"];
+        includeNDK = true;
+        ndkVersions = [androidNdkVersion];
+        includeCmake = true;
+        cmakeVersions = ["3.22.1"];
+        includeEmulator = true;
+        includeSystemImages = true;
+        systemImageTypes = ["google_apis"];
+        abiVersions = ["x86_64"];
+      };
+      androidSdk = androidComposition.androidsdk;
+      androidSdkRoot = "${androidSdk}/libexec/android-sdk";
+
+      androidRust = pkgsAndroid.rust-bin.stable.latest.default.override {
+        extensions = ["rust-src" "rustfmt" "clippy"];
+        targets = [
+          "aarch64-linux-android"
+          "armv7-linux-androideabi"
+          "i686-linux-android"
+          "x86_64-linux-android"
+        ];
+      };
+
+      androidShell = pkgsAndroid.mkShell {
+        nativeBuildInputs =
+          frontendTools
+          ++ [
+            androidSdk
+            androidRust
+            pkgsAndroid.jdk17
+            pkgsAndroid.pkg-config
+          ];
+        buildInputs = [pkgsAndroid.openssl];
+        ANDROID_HOME = androidSdkRoot;
+        ANDROID_SDK_ROOT = androidSdkRoot;
+        NDK_HOME = "${androidSdkRoot}/ndk/${androidNdkVersion}";
+        ANDROID_NDK_HOME = "${androidSdkRoot}/ndk/${androidNdkVersion}";
+        JAVA_HOME = pkgsAndroid.jdk17.home;
+        # AGP downloads a generic-Linux aapt2 from Maven that can't run on
+        # NixOS; point it at the patched one from the Nix SDK instead.
+        GRADLE_OPTS = "-Dorg.gradle.project.android.aapt2FromMavenOverride=${androidSdkRoot}/build-tools/${androidBuildToolsVersion}/aapt2";
+        shellHook = ''
+          export PATH="${androidSdkRoot}/emulator:${androidSdkRoot}/platform-tools:${androidSdkRoot}/cmdline-tools/latest/bin:$PATH"
+        '';
+      };
     in {
       packages =
         {
@@ -246,6 +316,7 @@
         }
         // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
           audio = mkDevShell true;
+          android = androidShell;
           browser = pkgs.mkShell {
             packages = frontendTools ++ [pkgs.chromium];
             PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH = "${pkgs.chromium}/bin/chromium";

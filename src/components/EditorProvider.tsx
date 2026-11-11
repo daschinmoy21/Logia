@@ -99,15 +99,19 @@ export function EditorProvider({
   aiModel,
   updateCurrentNoteContent,
   updateCurrentNoteTitle,
+  variant = "desktop",
 }: {
   children: ReactNode;
   currentNote: Note;
   aiModel: LanguageModel | null;
   updateCurrentNoteContent: (content: string) => void;
   updateCurrentNoteTitle: (title: string) => void;
+  /** The phone editor leaves out live code blocks and AI, and words its hints for touch. */
+  variant?: "desktop" | "mobile";
 }) {
+  const mobile = variant === "mobile";
   // The model is fixed for the editor's lifetime; the parent remounts us when it changes.
-  const model = aiModel;
+  const model = mobile ? null : aiModel;
 
   const hasAI = Boolean(model);
 
@@ -122,10 +126,11 @@ export function EditorProvider({
     codeBlock: logiaCodeBlock,
     dictionary: {
       ...en,
+      ...(mobile ? { placeholders: { ...en.placeholders, default: "Start writing, or type / for blocks" } } : {}),
       ai: aiEn,
     },
     extensions: [
-      () => new LiveCodeBlocksExtension(),
+      ...(mobile ? [] : [() => new LiveCodeBlocksExtension()]),
       ...(model ? [createAIExtension({ model: model as any })] : []),
     ],
     initialContent: currentNote?.content ? JSON.parse(currentNote.content) : undefined,

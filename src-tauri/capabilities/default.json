@@ -15,8 +15,6 @@
     "opener:default",
     "opener:allow-open-url",
     "dialog:default",
-    "updater:default",
-    "process:allow-restart",
     "fs:default",
     "fs:allow-read-text-file",
     "fs:allow-write-text-file",

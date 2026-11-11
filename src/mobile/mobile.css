@@ -1,0 +1,327 @@
+/* Phone shell. Loaded only by MobileApp, so nothing here reaches the desktop workspace. */
+
+html[data-shell="mobile"] {
+  --m-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --m-safe-top: max(env(safe-area-inset-top, 0px), var(--android-safe-top, 0px));
+  --m-safe-bottom: max(env(safe-area-inset-bottom, 0px), var(--android-safe-bottom, 0px));
+  --m-safe-left: max(env(safe-area-inset-left, 0px), var(--android-safe-left, 0px));
+  --m-safe-right: max(env(safe-area-inset-right, 0px), var(--android-safe-right, 0px));
+  --m-nav-h: 56px;
+  --m-editor-size: 17px;
+}
+
+/* Warm ink, the desktop palette. */
+html[data-shell="mobile"][data-theme="dark"] {
+  color-scheme: dark;
+  --m-bg: #121110;
+  --m-surface: #1a1816;
+  --m-raised: #24211d;
+  --m-fill: #2a2722;
+  --m-line: #2e2b26;
+  --m-text: #f8f5ef;
+  --m-muted: #b3ada2;
+  --m-faint: #807a6f;
+  --m-accent: #f47a35;
+  --m-on-accent: #1a0e07;
+  --m-accent-soft: rgb(244 122 53 / 0.16);
+  --m-danger: #f0776b;
+  --m-star: #f5b942;
+  --m-press: rgb(255 255 255 / 0.06);
+  --m-snack-action: #b84a12;
+  --m-seg: #3b3731;
+  --m-scrim: rgb(0 0 0 / 0.55);
+  --m-shadow: 0 10px 30px rgb(0 0 0 / 0.5), 0 2px 6px rgb(0 0 0 / 0.35);
+}
+
+/* Warm paper. */
+html[data-shell="mobile"][data-theme="light"] {
+  color-scheme: light;
+  --m-bg: #fbf8f3;
+  --m-surface: #ffffff;
+  --m-raised: #ffffff;
+  --m-fill: #f0ebe3;
+  --m-line: #e7e1d7;
+  --m-text: #1d1b18;
+  --m-muted: #645f56;
+  --m-faint: #948e83;
+  --m-accent: #c9561a;
+  --m-on-accent: #ffffff;
+  --m-accent-soft: rgb(212 98 36 / 0.12);
+  --m-danger: #c8372d;
+  --m-star: #c98a0c;
+  --m-press: rgb(29 27 24 / 0.06);
+  --m-snack-action: #ffab78;
+  --m-seg: #ffffff;
+  --m-scrim: rgb(29 27 24 / 0.4);
+  --m-shadow: 0 10px 30px rgb(60 45 30 / 0.16), 0 2px 6px rgb(60 45 30 / 0.08);
+}
+
+html[data-shell="mobile"],
+html[data-shell="mobile"] body,
+html[data-shell="mobile"] #root {
+  background: var(--m-bg);
+  overscroll-behavior: none;
+}
+
+html[data-shell="mobile"] body {
+  color: var(--m-text);
+  font-size: 16px;
+  line-height: 1.4;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+html[data-shell="mobile"] * {
+  scrollbar-width: none;
+}
+
+html[data-shell="mobile"] *::-webkit-scrollbar {
+  display: none;
+}
+
+html[data-shell="mobile"] :focus-visible {
+  outline: 2px solid var(--m-accent);
+  outline-offset: 2px;
+}
+
+/* The caret shows where the editor is; a ring around the whole note would only frame it. */
+html[data-shell="mobile"] .bn-editor:focus-visible,
+html[data-shell="mobile"] .bn-editor:focus {
+  outline: none;
+}
+
+html[data-shell="mobile"] ::selection {
+  background: var(--m-accent-soft);
+}
+
+/* The shell follows the visible viewport, so the keyboard pushes the bottom edge up. */
+.m-root {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: var(--m-vtop, 0px);
+  height: var(--m-vh, 100dvh);
+  overflow: hidden;
+  background: var(--m-bg);
+  color: var(--m-text);
+  font-family: var(--font-sans);
+}
+
+/* App chrome isn't text to select; the editor and inputs are. */
+.m-chrome {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.m-scroll {
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.m-press {
+  transition: background-color 120ms ease, transform 120ms ease, opacity 120ms ease;
+}
+
+.m-press:active {
+  background-color: var(--m-press);
+}
+
+.m-press-scale:active {
+  transform: scale(0.96);
+}
+
+/* Long lists stay cheap: offscreen rows skip layout and paint. */
+.m-note-row {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 68px;
+  touch-action: pan-y;
+}
+
+.m-chips {
+  scroll-snap-type: x proximity;
+  scroll-padding-inline: 16px;
+}
+
+.m-divided > li {
+  position: relative;
+}
+
+/* Hairlines between rows, inset to the text like native lists. */
+.m-divided > li + li::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: calc(var(--m-divider-start, 20px) + var(--m-safe-left));
+  right: 0;
+  height: 1px;
+  background: var(--m-line);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.m-line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+@keyframes m-sheet-in {
+  from { transform: translateY(100%); }
+}
+
+@keyframes m-fade-in {
+  from { opacity: 0; }
+}
+
+@keyframes m-pop-in {
+  from { opacity: 0; transform: scale(0.94) translateY(-4px); }
+}
+
+@keyframes m-snack-in {
+  from { opacity: 0; transform: translateY(16px); }
+}
+
+@keyframes m-spin {
+  to { transform: rotate(360deg); }
+}
+
+.m-anim-sheet { animation: m-sheet-in 260ms var(--m-ease); }
+.m-anim-fade { animation: m-fade-in 180ms ease-out; }
+.m-anim-pop { animation: m-pop-in 160ms var(--m-ease); transform-origin: top right; }
+.m-anim-snack { animation: m-snack-in 220ms var(--m-ease); }
+.m-spin { animation: m-spin 800ms linear infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .m-anim-sheet,
+  .m-anim-fade,
+  .m-anim-pop,
+  .m-anim-snack {
+    animation: none;
+  }
+  .m-press,
+  .m-press-scale:active {
+    transition: none;
+    transform: none;
+  }
+}
+
+/* ---------- Editor ---------- */
+
+.m-editor-view.bn-container[data-color-scheme] {
+  --bn-colors-editor-text: var(--m-text);
+  --bn-colors-editor-background: var(--m-bg);
+  --bn-colors-menu-text: var(--m-text);
+  --bn-colors-menu-background: var(--m-raised);
+  --bn-colors-tooltip-text: var(--m-text);
+  --bn-colors-tooltip-background: var(--m-raised);
+  --bn-colors-hovered-text: var(--m-text);
+  --bn-colors-hovered-background: var(--m-fill);
+  --bn-colors-selected-text: var(--m-on-accent);
+  --bn-colors-selected-background: var(--m-accent);
+  --bn-colors-disabled-text: var(--m-faint);
+  --bn-colors-disabled-background: var(--m-fill);
+  --bn-colors-shadow: rgb(0 0 0 / 0.25);
+  --bn-colors-border: var(--m-line);
+  --bn-colors-side-menu: var(--m-faint);
+  --bn-border-radius: 12px;
+  --bn-font-family: var(--font-sans);
+}
+
+.m-editor-view .bn-editor {
+  padding-inline: calc(20px + var(--m-safe-left)) calc(20px + var(--m-safe-right));
+  padding-block: 0;
+}
+
+.m-editor-view .bn-block-content {
+  font-size: var(--m-editor-size);
+  line-height: 1.6;
+}
+
+.m-editor-view .bn-block-content[data-content-type="heading"] {
+  --level: 1.5em;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  line-height: 1.25;
+}
+
+.m-editor-view .bn-block-content[data-content-type="heading"][data-level="2"] {
+  --level: 1.3em;
+  font-weight: 620;
+}
+
+.m-editor-view .bn-block-content[data-content-type="heading"][data-level="3"] {
+  --level: 1.12em;
+  font-weight: 600;
+}
+
+/* The first heading is the note's title. */
+.m-editor-view .bn-block-group > .bn-block-outer:first-child > .bn-block > .bn-block-content[data-content-type="heading"] {
+  --level: 1.75em;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.m-editor-view .bn-block-group > .bn-block-outer:first-child > .bn-block > .bn-block-content[data-content-type="heading"] .bn-inline-content:has(> .ProseMirror-trailingBreak:only-child)::before {
+  content: "Title" !important;
+  font-style: normal;
+  color: var(--m-faint);
+}
+
+.m-editor-view .bn-inline-content:has(> .ProseMirror-trailingBreak:only-child)::before {
+  font-style: normal;
+  color: var(--m-faint);
+}
+
+.m-editor-view .bn-block-outer:has(> .bn-block > .bn-block-content[data-content-type="heading"]) {
+  margin-top: 0.6em;
+}
+
+.m-editor-view .bn-block-group > .bn-block-outer:first-child:has(> .bn-block > .bn-block-content[data-content-type="heading"]) {
+  margin-top: 0;
+}
+
+.m-editor-view .bn-block-content[data-content-type="checkListItem"] > div > input[type="checkbox"],
+.m-editor-view .bn-block-content[data-content-type="checkListItem"] input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--m-accent);
+}
+
+.m-editor-view .bn-block-content[data-content-type="codeBlock"] {
+  border: 1px solid var(--m-line);
+  background: var(--m-fill);
+  color: var(--m-text);
+  border-radius: 10px;
+  font-size: 14px;
+}
+
+.m-editor-view .bn-block-content[data-content-type="codeBlock"] select {
+  font-size: 14px;
+}
+
+.m-editor-view a {
+  color: var(--m-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* Suggestion menus are thumb-sized and stay inside the screen. */
+.m-root .bn-suggestion-menu {
+  max-width: calc(100vw - 24px);
+  max-height: min(320px, 45vh);
+  border-radius: 14px;
+}
+
+.m-root .bn-suggestion-menu-item {
+  min-height: 48px;
+}
+
+/* Keyboard shortcut badges mean nothing on a phone keyboard. */
+.m-root .bn-mt-suggestion-menu-item-section[data-position="right"] {
+  display: none;
+}

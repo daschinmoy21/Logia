@@ -11,6 +11,8 @@ node_modules
 # dist is tracked for Nix reproducible builds (pre-built frontend)
 # Run 'bun run build' to update it before committing
 dist-ssr
+# Android builds bundle their own frontend build so the tracked dist/ stays untouched
+dist-mobile
 *.local
 
 # Environment variables

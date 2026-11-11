@@ -1,0 +1,10 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "build": {
+    "beforeBuildCommand": "bun run build:mobile",
+    "frontendDist": "../dist-mobile"
+  },
+  "bundle": {
+    "resources": []
+  }
+}
