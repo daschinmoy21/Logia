@@ -2,7 +2,32 @@ use std::fs;
 use std::path::PathBuf;
 use tauri::path::BaseDirectory;
 use tauri::Manager;
+#[cfg(desktop)]
 use keyring::Entry;
+#[cfg(mobile)]
+use no_keyring::Entry;
+
+/// Mobile has no OS keyring backend in the `keyring` crate, so every keyring
+/// call fails and the code below falls back to the encrypted `config.json`
+/// and `.encryption_key` files in the app's private config dir.
+#[cfg(mobile)]
+mod no_keyring {
+    pub struct Entry;
+    impl Entry {
+        pub fn new(_service: &str, _username: &str) -> Result<Self, ()> {
+            Err(())
+        }
+        pub fn get_password(&self) -> Result<String, ()> {
+            Err(())
+        }
+        pub fn set_password(&self, _secret: &str) -> Result<(), ()> {
+            Err(())
+        }
+        pub fn delete_credential(&self) -> Result<(), ()> {
+            Err(())
+        }
+    }
+}
 use aes_gcm::{Aes256Gcm, Key, Nonce};
 use aes_gcm::aead::{Aead, KeyInit};
 use base64::{Engine as _, engine::general_purpose};

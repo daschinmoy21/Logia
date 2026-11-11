@@ -71,6 +71,24 @@
   --color-sidebar-ring: var(--sidebar-ring);
 }
 
+/* Phone shell tokens (src/mobile/mobile.css), light and dark. Unused by the desktop workspace. */
+@theme inline {
+  --color-m-bg: var(--m-bg);
+  --color-m-surface: var(--m-surface);
+  --color-m-raised: var(--m-raised);
+  --color-m-fill: var(--m-fill);
+  --color-m-line: var(--m-line);
+  --color-m-text: var(--m-text);
+  --color-m-muted: var(--m-muted);
+  --color-m-faint: var(--m-faint);
+  --color-m-accent: var(--m-accent);
+  --color-m-on-accent: var(--m-on-accent);
+  --color-m-accent-soft: var(--m-accent-soft);
+  --color-m-danger: var(--m-danger);
+  --color-m-star: var(--m-star);
+  --color-m-press: var(--m-press);
+}
+
 :root {
   color-scheme: dark;
   --radius: 0.5rem;

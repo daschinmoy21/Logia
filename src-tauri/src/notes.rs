@@ -75,9 +75,16 @@ pub struct TrashItem {
 
 fn resolve_logia_dir(app_handle: &tauri::AppHandle, subdir: &str) -> Result<PathBuf, String> {
     // Try standard XDG documents directory first
+    #[cfg(desktop)]
     let dir_result = app_handle
         .path()
         .resolve(format!("Logia/{}", subdir), BaseDirectory::Document);
+    // Android/iOS apps can't write to the shared Documents folder by path;
+    // keep the workspace in the app's private data dir instead.
+    #[cfg(mobile)]
+    let dir_result = app_handle
+        .path()
+        .resolve(format!("Logia/{}", subdir), BaseDirectory::AppData);
 
     let target_dir = match dir_result {
         Ok(path) => path,

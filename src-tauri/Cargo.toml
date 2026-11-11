@@ -30,7 +30,6 @@ chrono = { version = "0.4", features = ["serde"] }
 tauri-plugin-fs = "2"
 libc = "0.2.175"
 dotenvy = "0.15"
-keyring = "3.6.3"
 tauri-plugin-shell = "2"
 tauri-plugin-http = "2"
 aes-gcm = "0.10"
@@ -39,7 +38,6 @@ tokio = { version = "1", features = ["full"] }
 dirs = "5"
 rand = "0.8"
 fs2 = "0.4"
-portable-pty = "0.9"
 
 
 [target.'cfg(target_os = "macos")'.dependencies]
@@ -51,3 +49,6 @@ cocoa = "0.26.1"
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-process = "2"
 tauri-plugin-updater = "2"
+# No mobile backend (keyring) / no PTYs or agent CLIs in the app sandbox.
+keyring = "3.6.3"
+portable-pty = "0.9"

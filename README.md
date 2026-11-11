@@ -275,6 +275,12 @@ git push
 
 > **Note**: This is required because Nix builds are sandboxed and cannot access the network to run `bun install`. Pre-building ensures reproducible builds for all users.
 
+## Android
+
+Android builds use the `android` dev shell (`nix develop .#android`). See
+[docs/android.md](docs/android.md) for building the APK, running it on the
+emulator and installing it on a phone.
+
 ## Packaging and Dependencies (Windows)
 
 When distributing the Windows installer, include this checklist so users have the required runtime components for audio capture and transcription to work.

@@ -15,7 +15,12 @@
     "agent": "node --experimental-strip-types scripts/logia-agent.ts",
     "test:agent": "node --experimental-strip-types --test scripts/*.test.ts",
     "test:browser": "playwright test",
-    "cli": "node scripts/logia-cli.mjs"
+    "cli": "node scripts/logia-cli.mjs",
+    "build:mobile": "tsc && vite build --outDir dist-mobile --emptyOutDir",
+    "android:emulator": "scripts/android-emulator.sh",
+    "android:dev": "tauri android dev",
+    "android:build": "tauri android build --debug --apk --target x86_64",
+    "android:build:arm64": "tauri android build --debug --apk --target aarch64"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^2",
