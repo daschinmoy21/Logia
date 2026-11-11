@@ -560,3 +560,341 @@ pub async fn git_sync_disconnect(app_handle: tauri::AppHandle) -> Result<String,
 
     Ok("Disconnected from git remote. Local history is preserved.".to_string())
 }
+
+// ── Source control panel ────────────────────────────────────────────────────
+//
+// Per-file staging, committing, pulling and pushing for the sidebar's git panel.
+// Unlike `git_sync_now`, nothing here stages or commits without being asked.
+
+#[derive(Debug, Serialize, Clone)]
+pub struct GitFileChange {
+    /// Path relative to the Logia root, with forward slashes.
+    pub path: String,
+    /// One git status letter: M, A, D, R, C, T, or U for untracked.
+    pub status: String,
+}
+
+#[derive(Debug, Serialize, Clone)]
+pub struct GitPanelStatus {
+    pub git_available: bool,
+    pub repo: bool,
+    pub root: String,
+    pub branch: String,
+    pub remote: bool,
+    pub ahead: usize,
+    pub behind: usize,
+    pub staged: Vec<GitFileChange>,
+    pub unstaged: Vec<GitFileChange>,
+}
+
+/// Like `run_git_raw`, but stdout is left untrimmed so `-z` output keeps its leading spaces.
+fn run_git_untrimmed(root: &PathBuf, args: &[&str]) -> Result<String, String> {
+    let mut cmd = Command::new("git");
+    cmd.current_dir(root);
+    cmd.args(args);
+    cmd.stdout(std::process::Stdio::piped());
+    cmd.stderr(std::process::Stdio::piped());
+    hide_console(&mut cmd);
+    let output = cmd.output().map_err(|e| format!("Failed to run git: {}", e))?;
+    if output.status.success() {
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    } else {
+        Err(String::from_utf8_lossy(&output.stderr).trim().to_string())
+    }
+}
+
+/// Parse `git status --porcelain=v1 -z` into staged and unstaged lists.
+fn parse_porcelain(raw: &str) -> (Vec<GitFileChange>, Vec<GitFileChange>) {
+    let mut staged = Vec::new();
+    let mut unstaged = Vec::new();
+    let mut entries = raw.split('\0');
+    while let Some(entry) = entries.next() {
+        if entry.len() < 4 {
+            continue;
+        }
+        let mut codes = entry.chars();
+        let x = codes.next().unwrap_or(' ');
+        let y = codes.next().unwrap_or(' ');
+        let path = entry[3..].to_string();
+        // Renames and copies carry the original path as the next entry.
+        if x == 'R' || x == 'C' {
+            entries.next();
+        }
+        match (x, y) {
+            ('!', '!') => {}
+            ('?', '?') => unstaged.push(GitFileChange { path, status: "U".into() }),
+            _ => {
+                if x != ' ' {
+                    staged.push(GitFileChange { path: path.clone(), status: x.to_string() });
+                }
+                if y != ' ' {
+                    unstaged.push(GitFileChange { path, status: y.to_string() });
+                }
+            }
+        }
+    }
+    (staged, unstaged)
+}
+
+/// Paths come from the webview, so only accept plain relative paths inside the repo.
+fn check_paths(paths: &[String]) -> Result<(), String> {
+    if paths.is_empty() {
+        return Err("No files given".into());
+    }
+    for p in paths {
+        let path = std::path::Path::new(p);
+        let escapes = path.components().any(|c| {
+            !matches!(c, std::path::Component::Normal(_) | std::path::Component::CurDir)
+        });
+        if p.is_empty() || path.is_absolute() || escapes {
+            return Err(format!("Refusing path outside the notes folder: {}", p));
+        }
+    }
+    Ok(())
+}
+
+fn has_head(root: &PathBuf) -> bool {
+    run_git_raw(root, &["rev-parse", "--verify", "-q", "HEAD"]).0
+}
+
+/// Build `git --literal-pathspecs <args> -- <paths>`, so a path like `*` or `:(glob)**`
+/// names that one file instead of matching everything.
+fn with_paths<'a>(args: &[&'a str], paths: &'a [String]) -> Vec<&'a str> {
+    let mut all: Vec<&str> = vec!["--literal-pathspecs"];
+    all.extend_from_slice(args);
+    all.push("--");
+    all.extend(paths.iter().map(String::as_str));
+    all
+}
+
+fn record_last_sync(root: &PathBuf) {
+    let mut meta = read_sync_meta(root);
+    if let Some(obj) = meta.as_object_mut() {
+        obj.insert(
+            "last_sync".to_string(),
+            serde_json::Value::String(chrono::Utc::now().to_rfc3339()),
+        );
+    }
+    write_sync_meta(root, &meta);
+}
+
+/// Open the repo the panel works on, or explain why it can't.
+fn panel_repo(app_handle: &tauri::AppHandle) -> Result<PathBuf, String> {
+    if !git_available() {
+        return Err("git not found on PATH".into());
+    }
+    let root = resolve_logia_root(app_handle)?;
+    if !has_git_repo(&root) {
+        return Err("The notes folder isn't a git repository yet.".into());
+    }
+    Ok(root)
+}
+
+#[tauri::command]
+pub async fn git_panel_status(app_handle: tauri::AppHandle) -> Result<GitPanelStatus, String> {
+    let root = resolve_logia_root(&app_handle)?;
+    let mut status = GitPanelStatus {
+        git_available: git_available(),
+        repo: false,
+        root: root.display().to_string(),
+        branch: String::new(),
+        remote: false,
+        ahead: 0,
+        behind: 0,
+        staged: Vec::new(),
+        unstaged: Vec::new(),
+    };
+    if !status.git_available || !has_git_repo(&root) {
+        return Ok(status);
+    }
+    status.repo = true;
+    status.branch = get_branch(&root);
+    status.remote = has_origin(&root);
+    if status.remote {
+        let (ahead, behind) = count_ahead_behind(&root, &status.branch);
+        status.ahead = ahead;
+        status.behind = behind;
+    }
+    let raw = run_git_untrimmed(&root, &["status", "--porcelain=v1", "-z", "--untracked-files=all"])?;
+    let (staged, unstaged) = parse_porcelain(&raw);
+    status.staged = staged;
+    status.unstaged = unstaged;
+    Ok(status)
+}
+
+/// Make the notes folder a git repository with no remote, so history works offline.
+#[tauri::command]
+pub async fn git_panel_init(app_handle: tauri::AppHandle) -> Result<GitPanelStatus, String> {
+    if !git_available() {
+        return Err("git not found on PATH".into());
+    }
+    let root = resolve_logia_root(&app_handle)?;
+    if !has_git_repo(&root) {
+        run_git(&root, &["init"])?;
+        run_git(&root, &["checkout", "-b", "main"])?;
+    }
+    ensure_gitignore(&root)?;
+    if !run_git_raw(&root, &["config", "user.name"]).0 {
+        run_git(&root, &["config", "user.name", "Logia"])?;
+    }
+    if !run_git_raw(&root, &["config", "user.email"]).0 {
+        run_git(&root, &["config", "user.email", "logia@localhost"])?;
+    }
+    git_panel_status(app_handle).await
+}
+
+#[tauri::command]
+pub async fn git_panel_stage(paths: Vec<String>, app_handle: tauri::AppHandle) -> Result<(), String> {
+    let root = panel_repo(&app_handle)?;
+    check_paths(&paths)?;
+    // -A so deleted files are staged as deletions too.
+    run_git(&root, &with_paths(&["add", "-A"], &paths)).map(|_| ())
+}
+
+#[tauri::command]
+pub async fn git_panel_unstage(paths: Vec<String>, app_handle: tauri::AppHandle) -> Result<(), String> {
+    let root = panel_repo(&app_handle)?;
+    check_paths(&paths)?;
+    if has_head(&root) {
+        run_git(&root, &with_paths(&["reset", "-q", "HEAD"], &paths)).map(|_| ())
+    } else {
+        run_git(&root, &with_paths(&["rm", "--cached", "-q", "-r"], &paths)).map(|_| ())
+    }
+}
+
+#[tauri::command]
+pub async fn git_panel_stage_all(app_handle: tauri::AppHandle) -> Result<(), String> {
+    let root = panel_repo(&app_handle)?;
+    run_git(&root, &["add", "-A"]).map(|_| ())
+}
+
+#[tauri::command]
+pub async fn git_panel_unstage_all(app_handle: tauri::AppHandle) -> Result<(), String> {
+    let root = panel_repo(&app_handle)?;
+    if has_head(&root) {
+        run_git(&root, &["reset", "-q"]).map(|_| ())
+    } else {
+        run_git(&root, &["rm", "--cached", "-q", "-r", "."]).map(|_| ())
+    }
+}
+
+/// Throw away unstaged changes: tracked files go back to their staged copy, untracked files are deleted.
+#[tauri::command]
+pub async fn git_panel_discard(paths: Vec<String>, app_handle: tauri::AppHandle) -> Result<(), String> {
+    let root = panel_repo(&app_handle)?;
+    check_paths(&paths)?;
+    let (tracked, untracked): (Vec<String>, Vec<String>) = paths.into_iter().partition(|p| {
+        run_git_raw(&root, &["--literal-pathspecs", "ls-files", "--error-unmatch", "--", p]).0
+    });
+    if !tracked.is_empty() {
+        run_git(&root, &with_paths(&["checkout"], &tracked))?;
+    }
+    if !untracked.is_empty() {
+        run_git(&root, &with_paths(&["clean", "-f", "-q"], &untracked))?;
+    }
+    Ok(())
+}
+
+/// Commit what's staged. With nothing staged and `stage_all`, commit every change instead.
+#[tauri::command]
+pub async fn git_panel_commit(
+    message: String,
+    stage_all: bool,
+    app_handle: tauri::AppHandle,
+) -> Result<String, String> {
+    let root = panel_repo(&app_handle)?;
+    let message = message.trim();
+    if message.is_empty() {
+        return Err("Write a commit message first".into());
+    }
+    let nothing_staged = |root: &PathBuf| run_git_raw(root, &["diff", "--cached", "--quiet"]).0;
+    if stage_all && nothing_staged(&root) {
+        run_git(&root, &["add", "-A"])?;
+    }
+    if nothing_staged(&root) {
+        return Err("Nothing to commit".into());
+    }
+    run_git(&root, &["commit", "-q", "-m", message])?;
+    Ok(run_git(&root, &["rev-parse", "--short", "HEAD"]).unwrap_or_default())
+}
+
+#[tauri::command]
+pub async fn git_panel_pull(app_handle: tauri::AppHandle) -> Result<GitSyncResult, String> {
+    let root = panel_repo(&app_handle)?;
+    if !has_origin(&root) {
+        return Err("No remote set. Add one in Settings → Sync.".into());
+    }
+    let branch = get_branch(&root);
+    let head_before = run_git(&root, &["rev-parse", "HEAD"]).unwrap_or_default();
+    match run_git(&root, &["pull", "--rebase", "--autostash", "origin", &branch]) {
+        Ok(_) => {}
+        Err(e) => {
+            let lower = e.to_lowercase();
+            if lower.contains("couldn't find remote ref") || lower.contains("couldn't find remote branch") {
+                return Ok(GitSyncResult { message: "The remote has nothing to pull yet.".into(), needs_reload: false });
+            }
+            if lower.contains("conflict") || lower.contains("unmerged") {
+                let _ = run_git(&root, &["rebase", "--abort"]);
+                return Err(format!(
+                    "Pull hit a conflict and was undone. Resolve it in {} or use Settings → Sync.\n\n{}",
+                    root.display(),
+                    e
+                ));
+            }
+            return Err(format!("Pull failed: {}", e));
+        }
+    }
+    let head_after = run_git(&root, &["rev-parse", "HEAD"]).unwrap_or_default();
+    record_last_sync(&root);
+    let changed = head_before != head_after;
+    Ok(GitSyncResult {
+        message: if changed { "Pulled new changes.".into() } else { "Already up to date.".into() },
+        needs_reload: changed,
+    })
+}
+
+#[tauri::command]
+pub async fn git_panel_push(app_handle: tauri::AppHandle) -> Result<String, String> {
+    let root = panel_repo(&app_handle)?;
+    if !has_origin(&root) {
+        return Err("No remote set. Add one in Settings → Sync.".into());
+    }
+    if !has_head(&root) {
+        return Err("Nothing to push yet. Commit first.".into());
+    }
+    let branch = get_branch(&root);
+    run_git(&root, &["push", "-q", "-u", "origin", &branch])
+        .map_err(|e| format!("Push failed: {}", e))?;
+    record_last_sync(&root);
+    Ok("Pushed.".into())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn porcelain_splits_staged_unstaged_and_renames() {
+        let raw = "M  notes/a.json\0 M notes/b.json\0MM notes/c.json\0?? notes/new.json\0R  notes/to.json\0notes/from.json\0 D folders/x.json\0";
+        let (staged, unstaged) = parse_porcelain(raw);
+        let s: Vec<_> = staged.iter().map(|c| format!("{}{}", c.status, c.path)).collect();
+        let u: Vec<_> = unstaged.iter().map(|c| format!("{}{}", c.status, c.path)).collect();
+        assert_eq!(s, ["Mnotes/a.json", "Mnotes/c.json", "Rnotes/to.json"]);
+        assert_eq!(u, ["Mnotes/b.json", "Mnotes/c.json", "Unotes/new.json", "Dfolders/x.json"]);
+    }
+
+    #[test]
+    fn rejects_paths_that_leave_the_repo() {
+        assert!(check_paths(&["notes/a.json".into()]).is_ok());
+        assert!(check_paths(&["../etc/passwd".into()]).is_err());
+        assert!(check_paths(&["/etc/passwd".into()]).is_err());
+        assert!(check_paths(&["notes/../../x".into()]).is_err());
+        assert!(check_paths(&[]).is_err());
+    }
+
+    #[test]
+    fn pathspecs_are_literal() {
+        let paths = vec!["*".to_string()];
+        assert_eq!(with_paths(&["clean", "-f"], &paths), ["--literal-pathspecs", "clean", "-f", "--", "*"]);
+    }
+}

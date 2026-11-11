@@ -12,6 +12,7 @@ import { closeAllAgentSessions, refreshAgentDetection } from "./agent/agentSessi
 import { AGENT_TOOLS, type AgentTool } from "../lib/ai/agent-terminal";
 import {
   Sparkles,
+  GitBranch,
   Calendar as CalendarIcon,
   Info,
   AlignLeft,
@@ -28,6 +29,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import { prefersReducedMotion } from "../lib/utils";
 import { IconButton } from "./ui/kit";
 import { useWorkspaceStore } from "./workspace/workspaceStore";
+import { GitPanel } from "./workspace/GitPanel";
+import { isTauri } from "@tauri-apps/api/core";
 
 interface AiSidebarProps {
   isOpen: boolean;
@@ -38,7 +41,6 @@ interface AiSidebarProps {
   onClose: () => void;
 }
 
-type Tab = "chat" | "calendar" | "info";
 
 /** Matches the app's narrow layout: too little room to dock beside the note. */
 const COMPACT_QUERY = "(max-width: 767px)";
@@ -47,7 +49,8 @@ const noNotes: Note[] = [];
 
 const AiSidebar = ({ isOpen, peek = false, onPeekEnter, onPeekLeave, onClose }: AiSidebarProps) => {
   const reduceMotion = prefersReducedMotion();
-  const [activeTab, setActiveTab] = useState<Tab>("chat");
+  const activeTab = useWorkspaceStore((s) => s.aiTab);
+  const setActiveTab = useWorkspaceStore((s) => s.setAiTab);
   const chosenAgent = useSettingsStore((s) => s.activeAgent);
   const firstDetected = useSettingsStore((s) => AGENT_TOOLS.find((tool) => s.cliStatus[tool.id]?.available)?.id);
   const activeAgent: AgentTool = chosenAgent ?? firstDetected ?? "codex";
@@ -191,6 +194,11 @@ const AiSidebar = ({ isOpen, peek = false, onPeekEnter, onPeekLeave, onClose }: 
                 <IconButton label="Note info" active={activeTab === "info"} aria-pressed={activeTab === "info"} onClick={() => setActiveTab("info")}>
                   <Info size={14} />
                 </IconButton>
+                {isTauri() && (
+                  <IconButton label="Source control" active={activeTab === "git"} aria-pressed={activeTab === "git"} onClick={() => setActiveTab("git")}>
+                    <GitBranch size={14} />
+                  </IconButton>
+                )}
                 <IconButton label="Close AI sidebar" hint="Close" onClick={onClose}>
                   <X size={15} />
                 </IconButton>
@@ -296,6 +304,12 @@ const AiSidebar = ({ isOpen, peek = false, onPeekEnter, onPeekLeave, onClose }: 
                         </ul>
                       )}
                     </div>
+                  </div>
+                )}
+
+                {activeTab === "git" && (
+                  <div className="flex min-h-0 flex-1 flex-col pt-1">
+                    <GitPanel />
                   </div>
                 )}
 

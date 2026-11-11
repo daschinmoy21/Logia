@@ -28,7 +28,7 @@ import {
   relativeTime,
   toggleStar,
 } from './actions';
-import { PixelScene } from './PixelScene';
+import { DitherScene } from './DitherScene';
 import { useWorkspaceStore, type HomeFilter, type HomeSort } from './workspaceStore';
 import { isBlockingModalOpen, isEditableTarget, Kbd, SHORTCUTS, shortcutAria, type Shortcut } from './shortcuts';
 
@@ -396,9 +396,10 @@ export function WorkspaceHome() {
   const countLabel = `${results.length} ${results.length === 1 ? 'note' : 'notes'}`;
 
   return (
-    <div className="h-full min-h-0 overflow-y-auto bg-zinc-950">
+    <div className="relative h-full min-h-0 bg-zinc-950">
+      <DitherScene className="absolute inset-x-0 top-0 h-1/2 w-full [mask-image:linear-gradient(to_bottom,black_60%,transparent)]" />
+      <div className="relative h-full min-h-0 overflow-y-auto">
       <div className="relative min-h-full">
-      <PixelScene className="absolute inset-x-0 top-0 h-[240px] w-full sm:h-[400px]" />
       <main className="relative mx-auto w-full max-w-[780px] px-4 pb-16 pt-[140px] sm:px-8 sm:pt-[250px]">
         <header className="text-center">
           <h1 className="text-[24px] font-semibold tracking-tight text-zinc-50 [text-shadow:0_1px_12px_rgb(0_0_0_/_0.7)] sm:text-[28px]">
@@ -583,6 +584,7 @@ export function WorkspaceHome() {
           </>
         )}
       </main>
+      </div>
       </div>
     </div>
   );
