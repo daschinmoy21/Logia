@@ -15,6 +15,7 @@ import { save } from "@tauri-apps/plugin-dialog";
 import { writeTextFile } from "@tauri-apps/plugin-fs";
 import toast from "react-hot-toast";
 import { useVimEditor } from "../hooks/useVimEditor";
+import { renderLiveBlocksForPrint } from "../lib/live-code-blocks";
 import { cachedBacklinks, NoteContextPanel } from "./workspace/NoteContextPanel";
 import { revealBacklinks } from "./workspace/actions";
 import { IconButton, Tip } from "./ui/kit";
@@ -101,6 +102,7 @@ export function NoteEditor() {
 
   const exportAsPDF = async () => {
     if (!editor || !currentNote) return;
+    const toastId = toast.loading('Exporting PDF…', { position: 'bottom-right' });
 
     try {
       const html = await editor.blocksToHTMLLossy(editor.document);
@@ -118,7 +120,7 @@ export function NoteEditor() {
 
       const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
       if (!iframeDoc) {
-        toast.error('Failed to create print preview');
+        toast.error('Failed to create print preview', { id: toastId });
         document.body.removeChild(iframe);
         return;
       }
@@ -151,6 +153,11 @@ export function NoteEditor() {
               table { border-collapse: collapse; width: 100%; margin: 1em 0; }
               th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
               th { background: #f4f4f4; }
+              .logia-print-diagram, .logia-print-artifact { margin: 1em 0; break-inside: avoid; }
+              .logia-print-diagram { text-align: center; }
+              .logia-print-diagram svg { max-width: 100%; height: auto; }
+              .logia-print-artifact { min-height: 120px; padding: 12px; border: 1px solid #27272a; border-radius: 8px; background: #0a0908; overflow: hidden; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+              .logia-print-artifact img { display: block; width: 100%; height: auto; }
               @media print {
                 body { padding: 0; }
               }
@@ -163,6 +170,14 @@ export function NoteEditor() {
       `);
       iframeDoc.close();
 
+      // Swap Mermaid and artifact sources for their rendered output.
+      await renderLiveBlocksForPrint(iframeDoc.body, (done, total) => {
+        toast.loading(`Rendering diagrams and artifacts ${done}/${total}…`, { id: toastId, position: 'bottom-right' });
+      });
+      // Images must be decoded before printing or they can print blank.
+      await Promise.all(Array.from(iframeDoc.images, (img) => img.decode().catch(() => undefined)));
+      toast.success('Opening print dialog…', { id: toastId, position: 'bottom-right' });
+
       // Wait a bit for styles to apply, then print
       setTimeout(() => {
         iframe.contentWindow?.focus();
@@ -173,11 +188,9 @@ export function NoteEditor() {
           document.body.removeChild(iframe);
         }, 1000);
       }, 250);
-
-      toast.success('Opening print dialog...');
     } catch (error) {
       console.error('PDF export failed:', error);
-      toast.error('PDF export failed');
+      toast.error('PDF export failed', { id: toastId, position: 'bottom-right' });
     }
   };
 
